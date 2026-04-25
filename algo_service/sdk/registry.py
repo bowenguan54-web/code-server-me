@@ -16,6 +16,18 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+MODULE_KINDS = {"component", "template", "snippet"}
+
+
+def normalize_module_kind(value: Any) -> str:
+    """Return a supported module kind, defaulting to component."""
+
+    normalized = str(value or "component").strip().lower()
+    if normalized not in MODULE_KINDS:
+        logger.warning("Unsupported module_kind '%s'; falling back to component", value)
+        return "component"
+    return normalized
+
 
 @dataclass
 class PackageFile:
@@ -80,7 +92,7 @@ class AlgorithmEntry:
     call_prefix: str
     namespace: str
     func_name: str
-    type: str  # "component" | "snippet"
+    type: str  # "component" | "template" | "snippet"
     source_file: str
     zh_name: str
     zh_description: str
@@ -144,7 +156,7 @@ class AlgorithmRegistry:
         with open(config_path, "r", encoding="utf-8") as fh:
             config: dict[str, Any] = json.load(fh)
         namespace = str(config.get("namespace", "")).strip()
-        folder_type = str(config.get("type", "component")).strip() or "component"
+        folder_type = normalize_module_kind(config.get("module_kind", config.get("type", "component")))
         if not namespace:
             return
         root = self._find_watch_root(dirpath) or dirpath
@@ -166,9 +178,8 @@ class AlgorithmRegistry:
             config: dict[str, Any] = json.load(fh)
 
         namespace = str(config.get("namespace", "")).strip()
-        folder_type = str(config.get("type", "component")).strip() or "component"
-        published = bool(config.get("published", True))
-        if not namespace or not published:
+        folder_type = normalize_module_kind(config.get("module_kind", config.get("type", "component")))
+        if not namespace:
             return
 
         for filename in filenames:
@@ -246,13 +257,12 @@ class AlgorithmRegistry:
             zh_description=str(manifest.get("zh_description", "")).strip(),
             zh_tags=[str(tag).strip() for tag in manifest.get("zh_tags", []) if str(tag).strip()],
             published=bool(manifest.get("published", True)),
-            module_kind=str(manifest.get("module_kind", "component")).strip() or "component",
+            module_kind=normalize_module_kind(manifest.get("module_kind", manifest.get("type", "component"))),
         )
 
         self._replace_package_entries(package.package_id)
         self._packages[package.package_id] = package
-        if package.published and package.module_kind != "template":
-            self._register_package_entries(package, ast_parser)
+        self._register_package_entries(package, ast_parser)
         return package
 
     def _register_package_entries(self, package: AlgorithmPackage, ast_parser: Any) -> None:
@@ -274,7 +284,7 @@ class AlgorithmRegistry:
             entry = self._build_entry(
                 func_info=func_info,
                 namespace=package.namespace,
-                folder_type="component",
+                folder_type=package.module_kind,
                 file_path=entry_path,
                 dirpath=package.root_path,
                 root_dir=self._find_watch_root(package.root_path) or package.root_path,
@@ -400,7 +410,7 @@ class AlgorithmRegistry:
             "zh_tags": manifest.get("zh_tags", []),
             "dependencies": manifest.get("dependencies", {}),
             "published": bool(manifest.get("published", False)),
-            "module_kind": str(manifest.get("module_kind", "component")).strip() or "component",
+            "module_kind": normalize_module_kind(manifest.get("module_kind", manifest.get("type", "component"))),
         }
         (package_root / "algopack.json").write_text(
             json.dumps(manifest_payload, ensure_ascii=False, indent=2),
@@ -547,6 +557,7 @@ class AlgorithmRegistry:
                 "callSnippet": entry.call_snippet,
                 "snippetBody": entry.snippet_body,
                 "type": entry.type,
+                "moduleKind": entry.type,
                 "zhName": entry.zh_name,
                 "zhDescription": entry.zh_description,
                 "zhTags": entry.zh_tags,

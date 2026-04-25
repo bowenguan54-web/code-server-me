@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import logging
+import shutil
 import sys
 import time
 import types
@@ -22,6 +23,7 @@ from ..sdk.sse_manager import sse_manager
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["algorithms"])
+external_router = APIRouter(prefix="/api/external/v1", tags=["external"])
 
 _registry: AlgorithmRegistry | None = None
 
@@ -38,14 +40,18 @@ def get_registry() -> AlgorithmRegistry:
 
 
 def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
+    publish_status = _read_entry_publish_status(entry)
     return {
         "id": entry.id,
         "callPrefix": entry.call_prefix,
         "callSnippet": entry.call_snippet,
         "snippetBody": entry.snippet_body,
         "type": entry.type,
-        "lifecycleStatus": "published",
+        "moduleKind": entry.type,
+        "lifecycleStatus": publish_status,
+        "publishStatus": publish_status,
         "apiPath": f"/api/v1/invoke/{entry.call_prefix}",
+        "externalApiPath": f"/api/external/v1/{entry.namespace}/{entry.func_name}",
         "zhName": entry.zh_name,
         "zhDescription": entry.zh_description,
         "zhTags": entry.zh_tags,
@@ -55,7 +61,30 @@ def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
         "version": entry.version,
         "funcName": entry.func_name,
         "packageId": entry.package_id,
+        "packageRoot": entry.package_root,
+        "sourceFile": entry.source_file,
     }
+
+
+def _entry_config_path(entry: AlgorithmEntry) -> Path:
+    """Return the manifest path that owns an algorithm entry."""
+
+    if entry.package_root:
+        return Path(entry.package_root) / "algopack.json"
+    return Path(entry.source_file).parent / "folder_config.json"
+
+
+def _read_entry_publish_status(entry: AlgorithmEntry) -> str:
+    """Read an entry publish status from its manifest."""
+
+    config_path = _entry_config_path(entry)
+    if not config_path.exists():
+        return "published"
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "published"
+    return str(config.get("publish_status") or ("published" if config.get("published", True) else "draft"))
 
 
 def _normalize_call_namespace(value: str) -> str:
@@ -169,8 +198,13 @@ def _find_entries_for_docs(registry: AlgorithmRegistry, call_namespace: str) -> 
 
 
 @router.get("/algorithms")
-async def list_algorithms(registry: AlgorithmRegistry = Depends(get_registry)) -> dict[str, Any]:
+async def list_algorithms(
+    module_kind: str | None = Query(None, description="Filter by component/template/snippet"),
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
     entries = registry.get_all()
+    if module_kind:
+        entries = [entry for entry in entries if entry.type == module_kind]
     return {"success": True, "count": len(entries), "algorithms": [_entry_dict(entry) for entry in entries]}
 
 
@@ -180,6 +214,7 @@ async def search_algorithms(
     keyword: str | None = Query(None, description="中文关键词搜索"),
     namespace: str | None = Query(None, description="命名空间过滤"),
     type: str | None = Query(None, description="类型过滤 component/snippet"),
+    module_kind: str | None = Query(None, description="Filter by component/template/snippet"),
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     if prefix:
@@ -193,8 +228,65 @@ async def search_algorithms(
         entries = [entry for entry in entries if entry.namespace == namespace]
     if type:
         entries = [entry for entry in entries if entry.type == type]
+    if module_kind:
+        entries = [entry for entry in entries if entry.type == module_kind]
 
     return {"success": True, "count": len(entries), "algorithms": [_entry_dict(entry) for entry in entries]}
+
+
+@router.post("/algorithms/{algorithm_id:path}/publish-as-component")
+async def publish_template_as_component(
+    algorithm_id: str,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Copy a template directory and register the copy as a component draft."""
+
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    if entry.type != "template":
+        raise HTTPException(status_code=400, detail="Only template entries can be published as component")
+
+    source_dir = Path(entry.package_root) if entry.package_root else Path(entry.source_file).parent
+    target_dir = source_dir.with_name(f"{source_dir.name}_component")
+    if target_dir.exists():
+        raise HTTPException(status_code=409, detail=f"Component directory already exists: {target_dir}")
+
+    try:
+        shutil.copytree(source_dir, target_dir)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to copy template: {exc}") from exc
+
+    manifest_name = "algopack.json" if entry.package_root else "folder_config.json"
+    manifest_path = target_dir / manifest_name
+    if not manifest_path.exists():
+        raise HTTPException(status_code=500, detail=f"{manifest_name} not found in copied component")
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["module_kind"] = "component"
+        manifest["published"] = False
+        manifest["publish_status"] = "draft"
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        registry.scan_directory(str(target_dir.parent))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to update copied component manifest: {exc}") from exc
+
+    target_resolved = target_dir.resolve()
+    candidates = []
+    for item in registry.get_all():
+        try:
+            is_in_target = Path(item.source_file).resolve().is_relative_to(target_resolved)
+        except ValueError:
+            is_in_target = False
+        if is_in_target and item.type == "component" and item.func_name == entry.func_name:
+            candidates.append(item)
+    if not candidates:
+        raise HTTPException(status_code=500, detail="Component copied but could not be registered")
+
+    payload = _entry_dict(candidates[0])
+    payload["source_template_id"] = entry.id
+    return {"success": True, "algorithm": payload, "source_template_id": entry.id}
 
 
 @router.post("/algorithms/reload")
@@ -331,7 +423,13 @@ async def algo_changes_sse(registry: AlgorithmRegistry = Depends(get_registry)) 
         try:
             yield f"event: init\ndata: {init_payload}\n\n"
             async for chunk in sse_manager.event_stream(queue):
-                yield f"event: updated\n{chunk}"
+                event_name = "updated"
+                try:
+                    payload = chunk.removeprefix("data: ").strip()
+                    event_name = str(json.loads(payload).get("event") or "updated")
+                except (json.JSONDecodeError, AttributeError):
+                    event_name = "updated"
+                yield f"event: {event_name}\n{chunk}"
         finally:
             sse_manager.remove_client(queue)
 
@@ -425,4 +523,23 @@ async def invoke_algorithm_by_namespace(
     entry = registry.get_by_id(normalized)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Algorithm not found: {call_namespace}")
+    return _execute_entry(entry, request.args, request.kwargs)
+
+
+@external_router.post("/{namespace}/{func_name}")
+async def invoke_external_algorithm(
+    namespace: str,
+    func_name: str,
+    request: ExecuteRequest,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Invoke a published component through the external API surface."""
+
+    entry = registry.get_by_id(f"{namespace}.{func_name}")
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {namespace}.{func_name}")
+    if entry.type != "component":
+        raise HTTPException(status_code=404, detail=f"Published component not found: {namespace}.{func_name}")
+    if _read_entry_publish_status(entry) != "published":
+        raise HTTPException(status_code=403, detail="Algorithm is not published")
     return _execute_entry(entry, request.args, request.kwargs)

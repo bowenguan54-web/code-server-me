@@ -10,3 +10,6 @@ watch_directories:
 # Restrict CORS if needed; "*" allows any origin (development default).
 cors_origins:
   - "*"
+
+# Admin token used by publish approval/rejection routes.
+admin_token: "change-me-admin-token"
