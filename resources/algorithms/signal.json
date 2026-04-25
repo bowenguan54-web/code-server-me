@@ -1,0 +1,91 @@
+[
+    {
+        "id":  "signal.fft.transform",
+        "name":  "快速傅里叶变换 FFT",
+        "category":  "信号处理",
+        "subCategory":  "频域分析",
+        "tags":  [
+                     "FFT",
+                     "频谱",
+                     "变换"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "对离散信号执行快速傅里叶变换，分析频域分量。",
+        "docMarkdown":  "# 快速傅里叶变换 FFT\n\n## 功能说明\n对离散信号执行快速傅里叶变换，分析频域分量。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于信号处理 / 频域分析 场景。\n- 推荐通过触发词 alg.signal.fft 快速插入。\n\n## 标签\n- FFT / 频谱 / 变换",
+        "triggerPrefix":  "alg.signal.fft",
+        "snippet":  "import numpy as np\n\nfft_values = np.fft.fft(${1:signal})\nfrequencies = np.fft.fftfreq(len(${1:signal}), d=${2:1.0})\n${3:print(fft_values[:10])}",
+        "imports":  [
+                        "import numpy as np"
+                    ],
+        "example":  "fft_values = np.fft.fft(signal)\nprint(fft_values[:10])",
+        "source":  "builtin"
+    },
+    {
+        "id":  "signal.lowpass.filter",
+        "name":  "低通滤波器",
+        "category":  "信号处理",
+        "subCategory":  "滤波",
+        "tags":  [
+                     "低通滤波",
+                     "滤波器",
+                     "去噪"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "构建 Butterworth 低通滤波器，对高频噪声进行抑制。",
+        "docMarkdown":  "# 低通滤波器\n\n## 功能说明\n构建 Butterworth 低通滤波器，对高频噪声进行抑制。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于信号处理 / 滤波 场景。\n- 推荐通过触发词 alg.signal.lowpass 快速插入。\n\n## 标签\n- 低通滤波 / 滤波器 / 去噪",
+        "triggerPrefix":  "alg.signal.lowpass",
+        "snippet":  "from scipy.signal import butter, filtfilt\n\nb, a = butter(${1:4}, ${2:0.2}, btype=\"low\")\nfiltered_signal = filtfilt(b, a, ${3:signal})\n${4:print(filtered_signal[:10])}",
+        "imports":  [
+                        "from scipy.signal import butter, filtfilt"
+                    ],
+        "example":  "filtered_signal = lowpass_filter(signal, cutoff=0.2)\nprint(filtered_signal[:10])",
+        "source":  "builtin"
+    },
+    {
+        "id":  "signal.wavelet.transform",
+        "name":  "小波变换",
+        "category":  "信号处理",
+        "subCategory":  "时频分析",
+        "tags":  [
+                     "小波变换",
+                     "时频分析",
+                     "特征提取"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "使用离散小波变换提取多尺度信号特征。",
+        "docMarkdown":  "# 小波变换\n\n## 功能说明\n使用离散小波变换提取多尺度信号特征。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于信号处理 / 时频分析 场景。\n- 推荐通过触发词 alg.signal.wavelet 快速插入。\n\n## 标签\n- 小波变换 / 时频分析 / 特征提取",
+        "triggerPrefix":  "alg.signal.wavelet",
+        "snippet":  "import pywt\n\ncoeffs = pywt.wavedec(${1:signal}, wavelet=${2:\"db4\"}, level=${3:3})\n${4:print([len(level) for level in coeffs])}",
+        "imports":  [
+                        "import pywt"
+                    ],
+        "example":  "coeffs = pywt.wavedec(signal, wavelet=\"db4\", level=3)\nprint([len(level) for level in coeffs])",
+        "source":  "builtin"
+    },
+    {
+        "id":  "signal.hilbert.transform",
+        "name":  "希尔伯特变换",
+        "category":  "信号处理",
+        "subCategory":  "解析信号",
+        "tags":  [
+                     "希尔伯特变换",
+                     "包络",
+                     "瞬时相位"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "计算解析信号、包络和瞬时相位，用于调制特征分析。",
+        "docMarkdown":  "# 希尔伯特变换\n\n## 功能说明\n计算解析信号、包络和瞬时相位，用于调制特征分析。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于信号处理 / 解析信号 场景。\n- 推荐通过触发词 alg.signal.hilbert 快速插入。\n\n## 标签\n- 希尔伯特变换 / 包络 / 瞬时相位",
+        "triggerPrefix":  "alg.signal.hilbert",
+        "snippet":  "import numpy as np\nfrom scipy.signal import hilbert\n\nanalytic_signal = hilbert(${1:signal})\nenvelope = np.abs(analytic_signal)\nphase = np.unwrap(np.angle(analytic_signal))\n${2:print(envelope[:10], phase[:10])}",
+        "imports":  [
+                        "import numpy as np",
+                        "from scipy.signal import hilbert"
+                    ],
+        "example":  "analytic_signal = hilbert(signal)\nprint(np.abs(analytic_signal)[:10])",
+        "source":  "builtin"
+    }
+]

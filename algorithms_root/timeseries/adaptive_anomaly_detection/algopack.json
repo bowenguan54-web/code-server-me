@@ -1,0 +1,22 @@
+{
+  "name": "adaptive_anomaly_detection",
+  "zh_name": "自适应时序异常检测",
+  "version": "1.0.0",
+  "namespace": "timeseries",
+  "entry": "main.py",
+  "exports": [
+    "detect_adaptive_anomalies",
+    "score_latest_point"
+  ],
+  "zh_description": "基于滚动窗口统计和自适应阈值检测时间序列异常点，适合轻量级在线监控场景。",
+  "zh_tags": [
+    "时序分析",
+    "异常检测",
+    "自适应阈值",
+    "监控"
+  ],
+  "dependencies": {
+    "internal": [],
+    "external": []
+  }
+}

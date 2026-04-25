@@ -1,0 +1,6 @@
+{
+  "namespace": "preprocess",
+  "type": "component",
+  "display_name": "数据预处理",
+  "description": "数据抽样、分割、归一化、标准化、填充、类型转换等预处理算法"
+}

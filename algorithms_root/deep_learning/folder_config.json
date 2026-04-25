@@ -1,0 +1,6 @@
+{
+  "namespace": "deep_learning",
+  "type": "component",
+  "display_name": "深度学习",
+  "description": "支持 TensorFlow、MXNet、Caffe、XGBoost、LightGBM 等深度学习框架的算法组件"
+}

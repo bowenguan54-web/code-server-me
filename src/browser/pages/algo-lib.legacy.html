@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self' data:;"
+    />
+    <title>算法库管理</title>
+    <link rel="icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon-dark-support.svg" />
+    <link rel="alternate icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon.ico" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/algo-lib.css" rel="stylesheet" />
+    <meta id="coder-options" data-settings="{{OPTIONS}}" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="eyebrow">CODE-SERVER +</div>
+          <h1>算法库管理</h1>
+          <p>把模板、片段和算法审核放到一套可持续迭代的管理台里。</p>
+        </div>
+
+        <div class="actor-card">
+          <div class="label">当前身份</div>
+          <div id="actor-name" class="actor-name">加载中</div>
+          <div id="actor-role" class="actor-role"></div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-button active" data-panel="templates">算法模板</button>
+          <button class="nav-button" data-panel="snippets">代码片段</button>
+          <button class="nav-button" data-panel="algorithms">算法与审核</button>
+        </nav>
+
+        <div class="sidebar-actions">
+          <a id="workbench-link" class="secondary-link" href="/">返回工作台</a>
+          <button id="refresh-all" class="ghost-button">刷新数据</button>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section id="error-banner" class="error-banner hidden"></section>
+
+        <section id="panel-templates" class="panel active">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Template Library</div>
+              <h3>算法模板</h3>
+            </div>
+            <div class="toolbar toolbar-wrap">
+              <input id="template-search" type="search" placeholder="检索模板、标签、说明" />
+              <select id="template-filter-category">
+                <option value="">全部分类</option>
+              </select>
+              <select id="template-filter-language">
+                <option value="">全部语言</option>
+              </select>
+              <select id="template-filter-status">
+                <option value="">全部状态</option>
+                <option value="active">启用中</option>
+                <option value="disabled">已停用</option>
+              </select>
+              <select id="template-sort">
+                <option value="updated-desc">最近更新</option>
+                <option value="updated-asc">最早更新</option>
+                <option value="name-asc">名称 A-Z</option>
+                <option value="difficulty-desc">难度从高到低</option>
+                <option value="difficulty-asc">难度从低到高</option>
+              </select>
+              <button id="template-new" class="primary-button">新建模板</button>
+            </div>
+          </div>
+
+          <div class="panel-grid">
+            <div class="list-panel">
+              <div class="subsection">
+                <div class="subsection-header">
+                  <h4>分类树</h4>
+                  <button id="category-new" class="ghost-button">新增分类</button>
+                </div>
+                <div id="category-list" class="item-list compact-list category-tree"></div>
+              </div>
+
+              <div class="subsection">
+                <div class="subsection-header">
+                  <h4>模板列表</h4>
+                  <span id="template-count" class="muted"></span>
+                </div>
+                <div id="template-list" class="item-list"></div>
+              </div>
+            </div>
+
+            <div class="editor-panel">
+              <form id="category-form" class="card compact-form hidden">
+                <div class="card-header">
+                  <h4>分类编辑</h4>
+                  <button type="button" id="category-cancel" class="ghost-button">取消</button>
+                </div>
+                <input type="hidden" name="id" />
+                <input type="hidden" name="level" value="1" />
+                <label>分类名称<input name="name" required /></label>
+                <label>
+                  父分类
+                  <select name="parentId">
+                    <option value="">无父级（一级分类）</option>
+                  </select>
+                </label>
+                <label>排序<input name="sortOrder" type="number" min="1" value="1" /></label>
+                <label>说明<textarea name="description" rows="3"></textarea></label>
+                <div id="category-level-preview" class="inline-note">当前将保存为一级分类</div>
+                <div class="button-row">
+                  <button type="submit" class="primary-button">保存分类</button>
+                  <button type="button" id="category-delete" class="danger-button hidden">删除分类</button>
+                </div>
+              </form>
+
+              <form id="template-form" class="card">
+                <div class="card-header">
+                  <h4>模板详情</h4>
+                  <span id="template-version-badge" class="badge">未选择</span>
+                </div>
+                <input type="hidden" name="id" />
+                <label>模板名称<input name="name" required /></label>
+                <div class="three-column">
+                  <label>分类<select name="categoryId" required></select></label>
+                  <label>难度<input name="difficulty" type="number" min="1" max="5" value="1" /></label>
+                  <label>
+                    状态
+                    <select name="status">
+                      <option value="active">启用中</option>
+                      <option value="disabled">已停用</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="two-column">
+                  <label>语言<input name="language" value="python" required /></label>
+                  <label>标签<input name="tags" placeholder="例如：vision, starter, python" /></label>
+                </div>
+                <label>说明<textarea name="description" rows="3" required></textarea></label>
+                <label>模板内容<textarea name="content" rows="12" class="code-textarea" required></textarea></label>
+                <label>使用示例<textarea name="example" rows="6" class="code-textarea" required></textarea></label>
+                <div class="three-column">
+                  <label>
+                    版本递增
+                    <select name="bumpType">
+                      <option value="patch">补丁 patch</option>
+                      <option value="minor">小版本 minor</option>
+                      <option value="major">大版本 major</option>
+                    </select>
+                  </label>
+                  <label>变更原因<input name="changeReason" required /></label>
+                  <label>变更摘要<input name="changeSummary" required /></label>
+                </div>
+                <div id="template-version-preview" class="inline-note">保存后版本号会在这里预览</div>
+                <div class="button-row">
+                  <button type="submit" class="primary-button">保存模板</button>
+                  <button type="button" id="template-replace" class="secondary-button">从文件替换模板内容</button>
+                  <button type="button" id="template-delete" class="danger-button hidden">删除模板</button>
+                </div>
+                <input id="template-replace-file" type="file" class="hidden" accept=".py,.ts,.js,.json,.txt,.md,.yaml,.yml,.java,.cpp,.c,.h,.go,.rs" />
+              </form>
+
+              <div class="card">
+                <div class="card-header">
+                  <h4>模板版本历史</h4>
+                </div>
+                <div id="template-versions" class="version-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="panel-snippets" class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Snippet Library</div>
+              <h3>代码片段</h3>
+            </div>
+            <div class="toolbar">
+              <input id="snippet-search" type="search" placeholder="检索片段、标签、语言" />
+              <button id="snippet-new" class="primary-button">新建片段</button>
+            </div>
+          </div>
+
+          <div class="panel-grid">
+            <div class="list-panel">
+              <div class="subsection">
+                <div class="subsection-header">
+                  <h4>文件夹</h4>
+                  <button id="snippet-folder-new" class="ghost-button">新增文件夹</button>
+                </div>
+                <div id="snippet-folder-list" class="item-list compact-list"></div>
+              </div>
+
+              <div class="subsection">
+                <div class="subsection-header">
+                  <h4>片段列表</h4>
+                  <span id="snippet-count" class="muted"></span>
+                </div>
+                <div id="snippet-list" class="item-list"></div>
+              </div>
+            </div>
+
+            <div class="editor-panel">
+              <form id="snippet-folder-form" class="card compact-form hidden">
+                <div class="card-header">
+                  <h4>文件夹编辑</h4>
+                  <button type="button" id="snippet-folder-cancel" class="ghost-button">取消</button>
+                </div>
+                <input type="hidden" name="id" />
+                <label>文件夹名称<input name="name" required /></label>
+                <label>
+                  可见范围
+                  <select name="visibility">
+                    <option value="private">私有</option>
+                    <option value="shared">共用</option>
+                  </select>
+                </label>
+                <div class="button-row">
+                  <button type="submit" class="primary-button">保存文件夹</button>
+                  <button type="button" id="snippet-folder-delete" class="danger-button hidden">删除文件夹</button>
+                </div>
+              </form>
+
+              <form id="snippet-form" class="card">
+                <div class="card-header">
+                  <h4>片段详情</h4>
+                  <span id="snippet-version-badge" class="badge">未选择</span>
+                </div>
+                <input type="hidden" name="id" />
+                <label>片段名称<input name="name" required /></label>
+                <div class="three-column">
+                  <label>
+                    可见范围
+                    <select name="visibility">
+                      <option value="private">私有</option>
+                      <option value="shared">共用</option>
+                    </select>
+                  </label>
+                  <label>文件夹<select name="folderId"></select></label>
+                  <label>语言<input name="language" value="typescript" required /></label>
+                </div>
+                <label>标签<input name="tags" placeholder="例如：network, retry, helper" /></label>
+                <label>说明<textarea name="description" rows="3" required></textarea></label>
+                <label>片段内容<textarea name="content" rows="10" class="code-textarea" required></textarea></label>
+                <div class="three-column">
+                  <label>
+                    版本递增
+                    <select name="bumpType">
+                      <option value="patch">补丁 patch</option>
+                      <option value="minor">小版本 minor</option>
+                      <option value="major">大版本 major</option>
+                    </select>
+                  </label>
+                  <label>变更原因<input name="changeReason" required /></label>
+                  <label>变更摘要<input name="changeSummary" required /></label>
+                </div>
+                <div class="button-row">
+                  <button type="submit" class="primary-button">保存片段</button>
+                  <button type="button" id="snippet-delete" class="danger-button hidden">删除片段</button>
+                </div>
+              </form>
+
+              <div class="card">
+                <div class="card-header">
+                  <h4>片段版本历史</h4>
+                </div>
+                <div id="snippet-versions" class="version-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="panel-algorithms" class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Algorithm Workspace</div>
+              <h3>算法与审核</h3>
+            </div>
+            <div class="toolbar">
+              <input id="algorithm-search" type="search" placeholder="检索算法、类型、标签、状态" />
+              <button id="algorithm-new" class="primary-button">新建算法</button>
+            </div>
+          </div>
+
+          <div class="panel-grid">
+            <div class="list-panel">
+              <div class="subsection">
+                <div class="subsection-header">
+                  <h4>文件夹</h4>
+                  <button id="algorithm-folder-new" class="ghost-button">新增文件夹</button>
+                </div>
+                <div id="algorithm-folder-list" class="item-list compact-list"></div>
+              </div>
+
+              <div class="subsection">
+                <div class="subsection-header">
+                  <h4>算法列表</h4>
+                  <span id="algorithm-count" class="muted"></span>
+                </div>
+                <div id="algorithm-list" class="item-list"></div>
+              </div>
+            </div>
+
+            <div class="editor-panel">
+              <form id="algorithm-folder-form" class="card compact-form hidden">
+                <div class="card-header">
+                  <h4>算法文件夹编辑</h4>
+                  <button type="button" id="algorithm-folder-cancel" class="ghost-button">取消</button>
+                </div>
+                <input type="hidden" name="id" />
+                <label>文件夹名称<input name="name" required /></label>
+                <div class="button-row">
+                  <button type="submit" class="primary-button">保存文件夹</button>
+                  <button type="button" id="algorithm-folder-delete" class="danger-button hidden">删除文件夹</button>
+                </div>
+              </form>
+
+              <form id="algorithm-form" class="card">
+                <div class="card-header">
+                  <h4>算法详情</h4>
+                  <span id="algorithm-version-badge" class="badge">未选择</span>
+                </div>
+                <input type="hidden" name="id" />
+                <label>算法名称<input name="name" required /></label>
+                <div class="three-column">
+                  <label>文件夹<select name="folderId"></select></label>
+                  <label>类型<input name="type" value="analytics" required /></label>
+                  <label>标签<input name="tags" placeholder="例如：occupancy, analytics" /></label>
+                </div>
+                <label>功能描述<textarea name="description" rows="3" required></textarea></label>
+                <div class="two-column">
+                  <label>输入规范<textarea name="inputSpec" rows="4" class="code-textarea" required></textarea></label>
+                  <label>输出规范<textarea name="outputSpec" rows="4" class="code-textarea" required></textarea></label>
+                </div>
+                <label>算法内容<textarea name="content" rows="12" class="code-textarea" required></textarea></label>
+                <div class="three-column">
+                  <label>
+                    版本递增
+                    <select name="bumpType">
+                      <option value="patch">补丁 patch</option>
+                      <option value="minor">小版本 minor</option>
+                      <option value="major">大版本 major</option>
+                    </select>
+                  </label>
+                  <label>变更原因<input name="changeReason" required /></label>
+                  <label>变更摘要<input name="changeSummary" required /></label>
+                </div>
+                <div class="button-row">
+                  <button type="submit" class="primary-button">保存算法</button>
+                  <button type="button" id="algorithm-submit" class="secondary-button">提交审核</button>
+                  <button type="button" id="algorithm-delete" class="danger-button hidden">删除算法</button>
+                </div>
+              </form>
+
+              <form id="review-form" class="card hidden">
+                <div class="card-header">
+                  <h4>管理员审核</h4>
+                </div>
+                <label>
+                  审核结论
+                  <select name="decision">
+                    <option value="approved">通过</option>
+                    <option value="rejected">驳回</option>
+                  </select>
+                </label>
+                <label>审核原因<input name="reason" required /></label>
+                <label>审核摘要<input name="summary" required /></label>
+                <label>绑定应用<input name="applications" placeholder="多个应用用逗号分隔" /></label>
+                <div class="button-row">
+                  <button type="submit" class="primary-button">提交审核结果</button>
+                </div>
+              </form>
+
+              <div class="card">
+                <div class="card-header">
+                  <h4>算法版本与审核历史</h4>
+                </div>
+                <div id="algorithm-versions" class="version-list"></div>
+                <div id="algorithm-reviews" class="review-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="diff-modal" class="modal-backdrop hidden" aria-hidden="true">
+      <div class="modal-card">
+        <div class="card-header">
+          <h4 id="diff-modal-title">版本差异</h4>
+          <button type="button" id="diff-modal-close" class="ghost-button">关闭</button>
+        </div>
+        <div id="diff-modal-body" class="diff-modal-body"></div>
+      </div>
+    </div>
+
+    <script src="{{CS_STATIC_BASE}}/src/browser/pages/algo-lib.js"></script>
+  </body>
+</html>

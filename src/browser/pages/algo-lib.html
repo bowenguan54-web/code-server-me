@@ -1,0 +1,1087 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self' data:;"
+    />
+    <title>算法库管理</title>
+    <link rel="icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon-dark-support.svg" />
+    <link rel="alternate icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon.ico" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/algo-lib.css" rel="stylesheet" />
+    <meta id="coder-options" data-settings="{{OPTIONS}}" />
+  </head>
+  <body data-static-base="{{CS_STATIC_BASE}}">
+    <div class="algo-layout algolib-app">
+      <div class="topbar algolib-topbar">
+        <div class="top-brand algolib-topbar-left">
+          <div class="top-brand-icon algolib-brand-mark" aria-hidden="true">
+            <svg class="algolib-svg" viewBox="0 0 24 24" focusable="false">
+              <polyline points="16 18 22 12 16 6"></polyline>
+              <polyline points="8 6 2 12 8 18"></polyline>
+              <line x1="13" y1="4" x2="11" y2="20"></line>
+            </svg>
+          </div>
+          <span class="top-brand-name algolib-brand-name">算法库管理系统</span>
+        </div>
+        <div class="top-tabs algolib-top-tabs" role="tablist" aria-label="主导航">
+          <div class="top-tab algolib-top-tab active" data-panel="algorithms" role="tab" tabindex="0" aria-selected="true">
+            <span class="tab-dot algolib-top-tab-dot" aria-hidden="true"></span>            <span>算法组件</span>
+          </div>
+          <div class="top-tab algolib-top-tab" data-panel="templates" role="tab" tabindex="0" aria-selected="false">
+            <span class="tab-dot algolib-top-tab-dot" aria-hidden="true"></span>            <span>算法模板</span>
+          </div>
+          <div class="top-tab algolib-top-tab" data-panel="snippets" role="tab" tabindex="0" aria-selected="false">
+            <span class="tab-dot algolib-top-tab-dot" aria-hidden="true"></span>
+            <span>代码片段</span>
+          </div>
+        </div>
+        <div class="topbar-spacer"></div>
+        <div class="top-right algolib-topbar-right">
+          <div class="top-clock algolib-top-clock">
+            <span id="header-time">00:00:00</span>
+            <span id="header-date">2026-04-21</span>
+          </div>
+          <div class="top-user algolib-top-user" role="button" tabindex="0">
+            <div class="top-user-avatar algolib-top-user-avatar">管</div>
+            <span id="header-role">身份：管理员</span>
+            <svg class="algolib-top-user-arrow" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4 6.5L8 10.5L12 6.5"></path>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="layout algolib-workspace">
+        <aside class="sidebar algolib-sidebar" aria-label="算法管理模块">
+          <div class="nav-list algolib-sidebar-scroll">
+            <div class="nav-module-title algolib-nav-module-label">功能模块</div>
+
+            <div class="nav-item algolib-nav-item active" data-panel="algorithms" role="button" tabindex="0">
+              <div class="nav-icon algolib-ni-icon" aria-hidden="true">
+                <svg class="algolib-svg" viewBox="0 0 24 24">
+                  <path d="M4 5.5h16v13H4z"></path>
+                  <path d="M8 9.5h8"></path>
+                  <path d="M8 13.5h5"></path>
+                </svg>
+              </div>
+              <span class="nav-label algolib-ni-label">算法组件</span>
+              <div id="template-count-badge" class="nav-badge algolib-ni-badge hidden">28</div>
+              <svg class="nav-expand-icon algolib-ni-arrow" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M3.5 2.5L8 6L3.5 9.5"></path>
+              </svg>
+            </div>
+            <div id="nav-category-list" class="nav-sub-list algolib-nav-sub">
+              <div class="nav-sub-item algolib-nav-sub-item active" data-ui-template-category="数据处理" tabindex="0">数据处理</div>
+              <div class="nav-sub-item algolib-nav-sub-item" data-ui-template-category="机器学习" tabindex="0">机器学习</div>
+              <div class="nav-sub-item algolib-nav-sub-item" data-ui-template-category="统计分析" tabindex="0">统计分析</div>
+              <div class="nav-sub-item algolib-nav-sub-item" data-ui-template-category="深度学习" tabindex="0">深度学习</div>
+              <div class="nav-sub-item algolib-nav-sub-item" data-ui-template-category="数据可视化" tabindex="0">数据可视化</div>
+            </div>
+
+            <div class="nav-item algolib-nav-item" data-panel="templates" role="button" tabindex="0">
+              <div class="nav-icon algolib-ni-icon" aria-hidden="true">
+                <svg class="algolib-svg" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="8" height="8" rx="1"></rect>
+                  <rect x="13" y="3" width="8" height="8" rx="1"></rect>
+                  <rect x="3" y="13" width="8" height="8" rx="1"></rect>
+                  <rect x="13" y="13" width="8" height="8" rx="1"></rect>
+                </svg>
+              </div>
+              <span class="nav-label algolib-ni-label">算法模板</span>
+              <div id="component-gallery-count-badge" class="nav-badge algolib-ni-badge hidden">0</div>
+              <svg class="nav-expand-icon algolib-ni-arrow" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M3.5 2.5L8 6L3.5 9.5"></path>
+              </svg>
+            </div>
+            <div id="algolib-template-nav-sub" class="nav-sub-list algolib-nav-sub"></div>
+            <div class="nav-item algolib-nav-item" data-panel="snippets" role="button" tabindex="0">
+              <div class="nav-icon algolib-ni-icon" aria-hidden="true">
+                <svg class="algolib-svg" viewBox="0 0 24 24">
+                  <path d="M7 5.5h10l3 3v10H7z"></path>
+                  <path d="M14 5.5v3h3"></path>
+                  <path d="M10 12.5h7"></path>
+                  <path d="M10 16.5h5"></path>
+                </svg>
+              </div>
+              <span class="nav-label algolib-ni-label">代码片段</span>
+              <div id="snippet-count-badge" class="nav-badge algolib-ni-badge hidden">14</div>
+              <svg class="nav-expand-icon algolib-ni-arrow" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M3.5 2.5L8 6L3.5 9.5"></path>
+              </svg>
+            </div>
+            <div id="algolib-snippet-nav-sub" class="nav-sub-list algolib-nav-sub">
+              <div class="nav-sub-item algolib-nav-sub-item active" data-ui-snippet-tab="private" tabindex="0">我的收藏</div>
+              <div class="nav-sub-item algolib-nav-sub-item" data-ui-snippet-tab="shared" tabindex="0">共用库</div>
+            </div>
+
+            <div class="nav-item algolib-nav-item hidden" data-panel="component-gallery" role="button" tabindex="0">
+              <div class="nav-icon algolib-ni-icon" aria-hidden="true">
+                <svg class="algolib-svg" viewBox="0 0 24 24">
+                  <path d="M6 18.5h12"></path>
+                  <path d="M9 18.5v-7"></path>
+                  <path d="M15 18.5v-10"></path>
+                  <circle cx="9" cy="8.5" r="2.5"></circle>
+                  <circle cx="15" cy="5.5" r="2.5"></circle>
+                </svg>
+              </div>
+              <span class="nav-label algolib-ni-label">组件注册表</span>
+              <div id="algorithm-review-badge" class="nav-badge warn algolib-ni-badge hidden">3</div>
+              <svg class="nav-expand-icon algolib-ni-arrow" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M3.5 2.5L8 6L3.5 9.5"></path>
+              </svg>
+            </div>
+            <div id="algolib-review-nav-sub" class="nav-sub-list algolib-nav-sub hidden"></div>
+
+            <div class="nav-module-title algolib-nav-module-label">系统</div>
+
+            <div class="nav-item algolib-nav-item algolib-nav-item-static" tabindex="0">
+              <div class="nav-icon algolib-ni-icon" aria-hidden="true">
+                <svg class="algolib-svg" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="2.5"></circle>
+                  <path d="M4.5 12a7.5 7.5 0 0 1 15 0"></path>
+                  <path d="M2.5 12a9.5 9.5 0 0 1 19 0"></path>
+                </svg>
+              </div>
+              <span class="nav-label algolib-ni-label">运行监控</span>
+            </div>
+
+            <div class="nav-item algolib-nav-item algolib-nav-item-static" tabindex="0">
+              <div class="nav-icon algolib-ni-icon" aria-hidden="true">
+                <svg class="algolib-svg" viewBox="0 0 24 24">
+                  <path d="M12 5.5v7"></path>
+                  <circle cx="12" cy="16.5" r="0.75" fill="currentColor" stroke="none"></circle>
+                  <circle cx="12" cy="12" r="8.5"></circle>
+                </svg>
+              </div>
+              <span class="nav-label algolib-ni-label">系统日志</span>
+            </div>
+
+            <div class="nav-item algolib-nav-item algolib-nav-item-static" tabindex="0">
+              <div class="nav-icon algolib-ni-icon" aria-hidden="true">
+                <svg class="algolib-svg" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="3.5"></circle>
+                  <path d="M12 2.5v3"></path>
+                  <path d="M12 18.5v3"></path>
+                  <path d="M2.5 12h3"></path>
+                  <path d="M18.5 12h3"></path>
+                </svg>
+              </div>
+              <span class="nav-label algolib-ni-label">系统设置</span>
+            </div>
+          </div>
+
+          <div class="nav-footer algolib-nav-footer">
+            <div class="nav-footer-icon algolib-nav-footer-avatar">管</div>
+            <div class="nav-footer-info">
+              <div class="nav-footer-name">算法库管理员</div>
+              <div id="actor-role" class="actor-role">身份：加载中...</div>
+            </div>
+          </div>
+          <div id="algolib-left-resize" class="algolib-resize-handle" aria-hidden="true"></div>
+        </aside>
+
+        <main class="content algolib-content-area">
+          <div class="content-header algolib-content-topbar">
+            <div class="content-title algolib-content-title">
+              <div class="content-title-line algolib-content-title-line"></div>
+              <span id="content-panel-title">算法开发管理引擎</span>
+            </div>
+            <div class="algolib-content-header-meta">
+              <div id="algolib-content-actions" class="algolib-content-actions hidden">
+                <button id="category-quick-new" class="ghost-button algolib-btn algolib-btn-ghost" type="button">新增分类</button>
+                <button id="template-quick-new" class="primary-button algolib-btn algolib-btn-accent" type="button">+ 新建模板</button>
+              </div>
+              <span id="algolib-last-updated" class="algolib-content-updated">最近更新：2026-04-20 16:30</span>
+              <button id="algolib-panel-toggle" class="ghost-button algolib-btn algolib-btn-ghost" type="button">详情面板</button>
+            </div>
+          </div>
+
+          <section id="error-banner" class="error-banner hidden"></section>
+          <section id="status-banner" class="status-banner hidden"></section>
+
+          <section id="panel-templates" class="panel active">
+            <div class="module-workspace">
+            <section id="templates-list-view" class="module-view list-view active">
+              <section class="view-filters">
+                <div class="filters-toolbar toolbar">
+                  <input id="template-search" type="search" placeholder="搜索模板名称、标签、说明…" />
+                  <div class="filter-grid">
+                  <select id="template-filter-category">
+                    <option value="">全部分类</option>
+                  </select>
+                  <select id="template-filter-language">
+                    <option value="">全部语言</option>
+                  </select>
+                  <select id="template-sort">
+                    <option value="updated-desc">最近更新</option>
+                    <option value="name-asc">名称 A-Z</option>
+                    <option value="version-desc">版本最新</option>
+                  </select>
+                  </div>
+                  <div class="algolib-btn-spacer"></div>
+                  <button id="template-filter-trigger" class="ghost-button algolib-btn algolib-btn-ghost" type="button">筛选</button>
+                  <button id="template-multifile-new" class="ghost-button algolib-btn algolib-btn-ghost" type="button">+ 多文件模板</button>
+                  <button id="template-new" class="primary-button algolib-btn algolib-btn-accent" type="button">+ 新建模板</button>
+                </div>
+              </section>
+
+              <div class="view-body">
+                <section id="algolib-template-stats" class="algolib-stat-grid stat-bar">
+                  <article class="algolib-stat-card algolib-stat-primary">
+                    <div class="algolib-stat-icon">模</div>
+                    <div class="algolib-stat-main">
+                      <div class="algolib-stat-label">模板总数</div>
+                      <div class="algolib-stat-value">128</div>
+                      <div class="algolib-stat-sub">较上月 +12</div>
+                    </div>
+                  </article>
+                  <article class="algolib-stat-card algolib-stat-success">
+                    <div class="algolib-stat-icon">启</div>
+                    <div class="algolib-stat-main">
+                      <div class="algolib-stat-label">启用中</div>
+                      <div class="algolib-stat-value">112</div>
+                      <div class="algolib-stat-sub">占比 87.5%</div>
+                    </div>
+                  </article>
+                  <article class="algolib-stat-card algolib-stat-warning">
+                    <div class="algolib-stat-icon">调</div>
+                    <div class="algolib-stat-main">
+                      <div class="algolib-stat-label">今日调用</div>
+                      <div class="algolib-stat-value">3,841</div>
+                      <div class="algolib-stat-sub">较昨日 +8.3%</div>
+                    </div>
+                  </article>
+                  <article class="algolib-stat-card algolib-stat-danger">
+                    <div class="algolib-stat-icon">审</div>
+                    <div class="algolib-stat-main">
+                      <div class="algolib-stat-label">待审核</div>
+                      <div class="algolib-stat-value">3</div>
+                      <div class="algolib-stat-sub">需要处理</div>
+                    </div>
+                  </article>
+                </section>
+                <section class="card list-card">
+                  <div class="subsection-header">
+                    <div>
+                      <h4>模板列表</h4>
+                      <p class="muted">按分类分组查看模板，点击卡片在右侧查看详情。</p>
+                    </div>
+                    <div class="action-group">
+                      <button id="category-new" class="ghost-button" type="button">+ 新增分类</button>
+                      <span id="template-count" class="muted"></span>
+                    </div>
+                  </div>
+                  <div id="template-list" class="item-list master-list"></div>
+                </section>
+              </div>
+            </section>
+
+            <section id="templates-category-view" class="module-view detail-view">
+              <header class="detail-header">
+                <button id="category-back" class="ghost-button" type="button">← 返回列表</button>
+                <div class="detail-header-copy">
+                  <h3 id="category-detail-title">新建分类</h3>
+                  <p id="category-detail-version" class="muted">维护模板分类层级、排序与说明。</p>
+                </div>
+                <span class="badge status-badge neutral">分类详情</span>
+              </header>
+
+              <div class="detail-body">
+                <form id="category-form" class="card detail-form" novalidate>
+                  <input type="hidden" name="id" />
+                  <input type="hidden" name="level" value="1" />
+
+                  <section class="detail-section">
+                    <div class="detail-section-header">
+                      <h4>分类信息</h4>
+                    </div>
+                    <label>
+                      分类名称
+                      <input name="name" />
+                    </label>
+                    <div class="field-error" data-error-for="name"></div>
+                    <label>
+                      英文名（算法库引用）
+                      <input name="englishName" type="text" placeholder="如 data_processing（字母/数字/下划线）" />
+                    </label>
+                    <div class="two-column">
+                      <label>
+                        父分类
+                        <select name="parentId">
+                          <option value="">无父级（一级分类）</option>
+                        </select>
+                      </label>
+                      <label>
+                        级别
+                        <input name="levelDisplay" readonly />
+                      </label>
+                    </div>
+                    <div id="category-level-preview" class="inline-note">当前将保存为一级分类</div>
+                    <label>
+                      排序
+                      <input name="sortOrder" type="number" min="1" value="1" />
+                    </label>
+                    <label>
+                      分类说明
+                      <textarea name="description" rows="4"></textarea>
+                    </label>
+                  </section>
+                </form>
+              </div>
+
+              <footer id="category-action-bar" class="detail-actions">
+                <button type="button" id="category-delete" class="danger-link">删除分类</button>
+                <div class="action-group">
+                  <button type="button" id="category-save" class="primary-button">保存分类</button>
+                </div>
+              </footer>
+            </section>
+
+            <section id="templates-detail-view" class="module-view detail-view">
+              <header class="detail-header">
+                <button id="template-back" class="ghost-button" type="button">← 返回列表</button>
+                <div class="detail-header-copy">
+                  <h3 id="template-detail-title">请从左侧列表选择一个模板</h3>
+                  <p id="template-detail-version" class="muted">保存后版本：1.0.0</p>
+                </div>
+                <span id="template-detail-status" class="badge status-badge neutral">模板详情</span>
+              </header>
+
+              <div class="detail-body">
+                <div id="template-empty" class="empty-state hidden">请从左侧列表选择一个模板</div>
+
+                <form id="template-form" class="card detail-form detail-form-compact" novalidate>
+                  <input type="hidden" name="id" />
+                  <input type="hidden" name="packageId" />
+
+                  <section class="detail-section compact-section">
+                    <div class="detail-section-header">
+                      <h4>基本信息</h4>
+                    </div>
+                    <div class="compact-field-row">
+                      <label class="compact-label-full">
+                        <span class="field-label">模板英文名</span>
+                        <input name="name" required />
+                      </label>
+                      <label class="compact-label-full">
+                        <span class="field-label">模板中文名</span>
+                        <input name="zhName" required />
+                      </label>
+                    </div>
+                    <div class="field-error" data-error-for="name"></div>
+                    <div class="compact-field-row five-column">
+                      <label class="compact-label">
+                        <span class="field-label">分类</span>
+                        <select name="categoryId" required></select>
+                      </label>
+                      <label class="compact-label">
+                        <span class="field-label">语言</span>
+                        <input name="language" value="python" required />
+                      </label>
+                      <label class="compact-label">
+                        <span class="field-label">难度</span>
+                        <input name="difficulty" type="number" min="1" max="5" value="1" />
+                      </label>
+                      <label class="compact-label">
+                        <span class="field-label">标签</span>
+                        <input name="tags" placeholder="vision, starter" />
+                      </label>
+                    </div>
+                    <div class="field-error" data-error-for="categoryId"></div>
+                    <div class="compact-field-row">
+                      <label class="compact-label-full">
+                        <span class="field-label">说明</span>
+                        <textarea name="description" rows="2" required></textarea>
+                      </label>
+                    </div>
+                    <div class="field-error" data-error-for="description"></div>
+                  </section>
+
+                  <section class="detail-section compact-section">
+                    <div class="detail-section-header">
+                      <h4>模板骨架</h4>
+                      <button type="button" id="template-replace" class="ghost-button">从文件替换</button>
+                    </div>
+                    <label class="compact-label-full">
+                      <textarea name="content" rows="10" class="code-textarea" required></textarea>
+                    </label>
+                    <div class="field-error" data-error-for="content"></div>
+                  </section>
+
+                  <section class="detail-section compact-section">
+                    <div class="detail-section-header">
+                      <h4>参数结构约定</h4>
+                    </div>
+                    <label class="compact-label-full">
+                      <textarea name="example" rows="5" class="code-textarea" required></textarea>
+                    </label>
+                    <div class="field-error" data-error-for="example"></div>
+                  </section>
+
+                  <section class="detail-section compact-section">
+                    <div class="detail-section-header">
+                      <h4>版本管理</h4>
+                    </div>
+                    <div class="compact-field-row three-column">
+                      <label class="compact-label">
+                        <span class="field-label">版本递增</span>
+                        <select name="bumpType">
+                          <option value="patch">patch</option>
+                          <option value="minor">minor</option>
+                          <option value="major">major</option>
+                        </select>
+                      </label>
+                      <label class="compact-label">
+                        <span class="field-label">变更原因</span>
+                        <input name="changeReason" required />
+                      </label>
+                      <label class="compact-label">
+                        <span class="field-label">变更摘要</span>
+                        <input name="changeSummary" required />
+                      </label>
+                    </div>
+                    <div class="field-error" data-error-for="changeReason"></div>
+                    <div class="field-error" data-error-for="changeSummary"></div>
+                    <div id="template-version-preview" class="inline-note">保存后版本：1.0.0</div>
+                  </section>
+                </form>
+
+                <section class="card detail-section">
+                  <details class="history-details" id="template-history-details">
+                    <summary>版本历史</summary>
+                    <div id="template-versions" class="version-list"></div>
+                  </details>
+                </section>
+              </div>
+
+              <footer id="template-action-bar" class="detail-actions">
+                <button type="button" id="template-delete" class="danger-link">删除模板</button>
+                <div class="action-group">
+                  <button type="button" id="template-multifile" class="ghost-button">多文件编辑</button>
+                  <button type="button" id="template-publish" class="secondary-button">发布为组件</button>
+                  <button type="button" id="template-save" class="primary-button">保存模板</button>
+                </div>
+              </footer>
+
+              <input
+                id="template-replace-file"
+                type="file"
+                class="hidden"
+                accept=".py,.ts,.js,.json,.txt,.md,.yaml,.yml,.java,.cpp,.c,.h,.go,.rs"
+              />
+            </section>
+          </div>
+        </section>
+
+        <section id="panel-snippets" class="panel">
+          <div class="module-workspace">
+            <section id="snippets-list-view" class="module-view list-view active">
+              <section class="view-filters">
+                <div class="scope-tabs" id="snippet-scope-tabs">
+                  <button class="scope-tab active" data-scope="private" type="button">私有片段</button>
+                  <button class="scope-tab" data-scope="shared" type="button">团队共享</button>
+                </div>
+                <div class="filters-toolbar toolbar">
+                  <input id="snippet-search" type="search" placeholder="搜索片段名称、标签…" />
+                  <div class="filter-grid two-filters">
+                    <input id="snippet-filter-tag" type="search" placeholder="全部语言" />
+                    <select id="snippet-filter-folder">
+                      <option value="">全部文件夹</option>
+                    </select>
+                  </div>
+                  <div class="algolib-btn-spacer"></div>
+                  <button id="snippet-import" class="ghost-button algolib-btn algolib-btn-ghost" type="button">导入</button>
+                  <button id="snippet-new" class="primary-button algolib-btn algolib-btn-accent" type="button">+ 新建片段</button>
+                </div>
+              </section>
+
+              <div class="view-body">
+                <section id="algolib-snippet-stats" class="algolib-stat-grid algolib-stat-grid-snippet stat-bar"></section>
+
+                <section class="card list-card">
+                  <div class="subsection-header">
+                    <div>
+                      <h4>文件夹</h4>
+                      <p class="muted">用于整理片段归档与收藏空间。</p>
+                    </div>
+                    <button id="snippet-folder-new" class="ghost-button" type="button">新增文件夹</button>
+                  </div>
+                  <div id="snippet-folder-list" class="item-list compact-list"></div>
+                </section>
+
+                <section class="card list-card">
+                  <div class="subsection-header">
+                    <div class="folder-context-header">
+                      <h4 id="snippet-active-folder-title">片段列表</h4>
+                      <div id="snippet-active-folder-actions" class="folder-context-actions"></div>
+                    </div>
+                    <span id="snippet-count" class="muted"></span>
+                  </div>
+                  <div id="snippet-list" class="item-list master-list"></div>
+                </section>
+              </div>
+            </section>
+
+            <section id="snippets-detail-view" class="module-view detail-view">
+              <header class="detail-header">
+                <button id="snippet-back" class="ghost-button" type="button">← 返回列表</button>
+                <div class="detail-header-copy">
+                  <h3 id="snippet-detail-title">请从左侧列表选择一个片段</h3>
+                  <p id="snippet-detail-version" class="muted">保存后版本：1.0.0</p>
+                </div>
+                <span id="snippet-detail-status" class="badge status-badge neutral">未选择</span>
+              </header>
+
+              <div class="detail-body">
+                <div id="snippet-empty" class="empty-state hidden">请从左侧列表选择一个片段</div>
+
+                <form id="snippet-form" class="card detail-form" novalidate>
+                  <input type="hidden" name="id" />
+
+                  <section class="detail-section">
+                    <div class="detail-section-header">
+                      <h4>基本信息</h4>
+                    </div>
+                    <label>
+                      片段英文名
+                      <input name="name" required />
+                    </label>
+                    <label>
+                      片段中文名
+                      <input name="zhName" required />
+                    </label>
+                    <div class="three-column">
+                      <label>
+                        可见范围
+                        <select name="visibility">
+                          <option value="private">私有</option>
+                          <option value="shared">共用</option>
+                        </select>
+                      </label>
+                      <label>
+                        文件夹
+                        <select name="folderId"></select>
+                      </label>
+                      <label>
+                        语言
+                        <input name="language" value="typescript" required />
+                      </label>
+                    </div>
+                    <label>
+                      标签
+                      <input name="tags" placeholder="例如：network, retry, helper" />
+                    </label>
+                    <label>
+                      说明
+                      <textarea name="description" rows="3" required></textarea>
+                    </label>
+                    <div class="field-error" data-error-for="description"></div>
+                  </section>
+
+                  <section class="detail-section">
+                    <div class="detail-section-header">
+                      <h4>代码内容</h4>
+                    </div>
+                    <label>
+                      代码编辑器
+                      <textarea name="content" rows="10" class="code-textarea" required></textarea>
+                    </label>
+                    <div class="field-error" data-error-for="content"></div>
+                  </section>
+
+                  <section class="detail-section">
+                    <div class="detail-section-header">
+                      <h4>版本管理</h4>
+                    </div>
+                    <label>
+                      版本递增
+                      <select name="bumpType">
+                        <option value="patch">补丁 patch</option>
+                        <option value="minor">次要 minor</option>
+                        <option value="major">主要 major</option>
+                      </select>
+                    </label>
+                    <div id="snippet-version-preview" class="inline-note">保存后版本：1.0.0</div>
+                    <label>
+                      变更原因
+                      <input name="changeReason" required />
+                    </label>
+                    <div class="field-error" data-error-for="changeReason"></div>
+                    <label>
+                      变更摘要
+                      <input name="changeSummary" required />
+                    </label>
+                    <div class="field-error" data-error-for="changeSummary"></div>
+                  </section>
+                </form>
+
+                <section class="card detail-section">
+                  <details class="history-details" id="snippet-history-details">
+                    <summary>版本历史</summary>
+                    <div id="snippet-versions" class="version-list"></div>
+                  </details>
+                </section>
+              </div>
+
+              <footer id="snippet-action-bar" class="detail-actions">
+                <button type="button" id="snippet-delete" class="danger-link">删除片段</button>
+                <div class="action-group">
+                  <button type="button" id="snippet-save" class="primary-button">保存片段</button>
+                </div>
+              </footer>
+            </section>
+          </div>
+        </section>
+
+        <section id="panel-algorithms" class="panel">
+          <div class="module-workspace">
+            <section id="algorithms-list-view" class="module-view list-view active">
+              <section class="view-filters">
+                <div class="scope-tabs" id="algorithm-scope-tabs">
+                  <button class="scope-tab active" data-scope="mine" type="button">我的组件</button>
+                  <button class="scope-tab" data-scope="review" type="button">审核流程</button>
+                  <button class="scope-tab" data-scope="library" type="button">已发布组件</button>
+                </div>
+                <div class="filters-toolbar toolbar">
+                  <input id="algorithm-search" type="search" placeholder="搜索组件名称、命名空间、功能描述" />
+                  <div class="filter-grid one-filter">
+                    <input id="algorithm-filter-tag" type="search" placeholder="按标签筛选" />
+                  </div>
+                  <button id="algorithm-multifile-new" class="ghost-button" type="button">+ 多文件组件</button>
+                  <button id="algorithm-new" class="primary-button" type="button">+ 新建组件</button>
+                </div>
+              </section>
+
+              <div class="view-body">
+                <div id="algolib-algorithm-stats" class="algolib-stat-grid stat-bar hidden"></div>
+                <div id="algolib-review-filter" class="review-toolbar hidden"></div>
+
+                <section class="card list-card">
+                  <div class="subsection-header">
+                    <div>
+                      <h4>文件夹</h4>
+                      <p class="muted">整理个人算法空间与分类。</p>
+                    </div>
+                    <button id="algorithm-folder-new" class="ghost-button" type="button">新增文件夹</button>
+                  </div>
+                  <div id="algorithm-folder-list" class="item-list compact-list"></div>
+                </section>
+
+                <section class="card list-card">
+                  <div class="subsection-header">
+                    <div class="folder-context-header">
+                      <h4 id="algorithm-active-folder-title">组件列表</h4>
+                      <div id="algorithm-active-folder-actions" class="folder-context-actions"></div>
+                    </div>
+                    <span id="algorithm-count" class="muted"></span>
+                  </div>
+                  <div id="algorithm-list" class="item-list master-list"></div>
+                </section>
+              </div>
+            </section>
+
+            <section id="algorithms-detail-view" class="module-view detail-view">
+              <header class="detail-header">
+                <button id="algorithm-back" class="ghost-button" type="button">← 返回列表</button>
+                <div class="detail-header-copy">
+                  <h3 id="algorithm-detail-title">请从左侧列表选择一个组件</h3>
+                  <p id="algorithm-detail-version" class="muted">保存后版本：1.0.0</p>
+                </div>
+                <span id="algorithm-detail-status" class="badge status-badge neutral">未选择</span>
+              </header>
+
+              <div class="detail-body">
+                <div id="algorithm-empty" class="empty-state hidden">请从左侧列表选择一个组件</div>
+
+                <form id="algorithm-form" class="card detail-form" novalidate>
+                  <input type="hidden" name="id" />
+                  <input type="hidden" name="packageId" />
+
+                  <section class="detail-section">
+                    <div class="detail-section-header">
+                      <h4>基本信息</h4>
+                    </div>
+                    <label>
+                      组件英文名
+                      <input name="name" required />
+                    </label>
+                    <label>
+                      组件中文名
+                      <input name="zhName" required />
+                    </label>
+                    <label>
+                      命名空间
+                      <input name="namespace" placeholder="例如：statistics 或 data_utils" />
+                    </label>
+                    <div class="three-column">
+                      <label>
+                        分类文件夹
+                        <select name="folderId"></select>
+                      </label>
+                      <label>
+                        组件类型
+                        <select name="type" required>
+                          <option value="&#27969;&#24335;&#26816;&#27979;">&#27969;&#24335;&#26816;&#27979;</option>
+                          <option value="&#22270;&#20687;&#22788;&#29702;">&#22270;&#20687;&#22788;&#29702;</option>
+                          <option value="&#25968;&#25454;&#39044;&#22788;&#29702;">&#25968;&#25454;&#39044;&#22788;&#29702;</option>
+                          <option value="&#32479;&#35745;&#20998;&#26512;">&#32479;&#35745;&#20998;&#26512;</option>
+                          <option value="&#26426;&#22120;&#23398;&#20064;">&#26426;&#22120;&#23398;&#20064;</option>
+                          <option value="&#26102;&#24207;&#20998;&#26512;">&#26102;&#24207;&#20998;&#26512;</option>
+                          <option value="&#28145;&#24230;&#23398;&#20064;">&#28145;&#24230;&#23398;&#20064;</option>
+                          <option value="&#20449;&#21495;&#22788;&#29702;">&#20449;&#21495;&#22788;&#29702;</option>
+                          <option value="&#20854;&#20182;">&#20854;&#20182;</option>
+                        </select>
+                      </label>
+                      <label>
+                        标签
+                        <input name="tags" placeholder="例如：occupancy, analytics" />
+                      </label>
+                    </div>
+                    <label>
+                      功能描述
+                      <textarea name="description" rows="3" required></textarea>
+                    </label>
+                    <div class="field-error" data-error-for="description"></div>
+                    <div class="field-error" data-error-for="type"></div>
+                    <label>
+                      &#20381;&#36182;&#24211;
+                      <input name="dependencies" placeholder="&#20363;&#22914;&#65306;numpy, pandas, scikit-learn" />
+                    </label>
+                  </section>
+
+                  <section class="detail-section">
+                    <div class="detail-section-header">
+                      <h4>输入输出说明</h4>
+                    </div>
+                    <div class="two-column">
+                      <label>
+                        输入参数说明
+                        <textarea name="inputSpec" rows="4" class="code-textarea" required></textarea>
+                      </label>
+                      <label>
+                        输出参数说明
+                        <textarea name="outputSpec" rows="4" class="code-textarea" required></textarea>
+                      </label>
+                    </div>
+                    <div class="field-error" data-error-for="inputSpec"></div>
+                    <div class="field-error" data-error-for="outputSpec"></div>
+                  </section>
+
+                  <section class="detail-section">
+                    <div class="detail-section-header">
+                      <h4>组件实现</h4>
+                    </div>
+                    <label>
+                      代码编辑器
+                      <textarea name="content" rows="12" class="code-textarea" required></textarea>
+                    </label>
+                    <div class="field-error" data-error-for="content"></div>
+                  </section>
+
+                  <section class="detail-section">
+                    <div class="detail-section-header">
+                      <h4>版本管理</h4>
+                    </div>
+                    <label>
+                      版本递增
+                      <select name="bumpType">
+                        <option value="patch">补丁 patch</option>
+                        <option value="minor">次要 minor</option>
+                        <option value="major">主要 major</option>
+                      </select>
+                    </label>
+                    <div id="algorithm-version-preview" class="inline-note">保存后版本：1.0.0</div>
+                    <label>
+                      变更原因
+                      <input name="changeReason" required />
+                    </label>
+                    <div class="field-error" data-error-for="changeReason"></div>
+                    <label>
+                      变更摘要
+                      <input name="changeSummary" required />
+                    </label>
+                    <div class="field-error" data-error-for="changeSummary"></div>
+                  </section>
+                </form>
+
+                <section class="card detail-section">
+                  <details class="history-details" id="algorithm-history-details">
+                    <summary>版本历史</summary>
+                    <div id="algorithm-versions" class="version-list"></div>
+                  </details>
+                </section>
+
+                <section class="card detail-section">
+                  <details class="history-details" id="algorithm-review-history-details">
+                    <summary>审核记录</summary>
+                    <div id="algorithm-reviews" class="review-list"></div>
+                  </details>
+                </section>
+              </div>
+
+              <footer id="algorithm-action-bar" class="detail-actions">
+                <button type="button" id="algorithm-delete" class="danger-link">删除组件</button>
+                <div class="action-group">
+                  <button type="button" id="algorithm-multifile" class="ghost-button">多文件编辑</button>
+                  <button type="button" id="algorithm-submit" class="secondary-button">提交审核</button>
+                  <button type="button" id="algorithm-approve" class="secondary-button hidden">&#23457;&#26680;&#36890;&#36807;</button>
+                  <button type="button" id="algorithm-reject" class="danger-button hidden">&#23457;&#26680;&#25298;&#32477;</button>
+                  <button type="button" id="algorithm-save" class="primary-button">保存组件</button>
+                </div>
+              </footer>
+            </section>
+          </div>
+        </section>
+          <section id="panel-component-gallery" class="panel">
+            <div class="module-workspace">
+              <section id="component-gallery-view" class="module-view list-view active">
+                <section class="view-filters">
+                  <div class="filters-toolbar toolbar">
+                    <input id="component-gallery-search" type="search" placeholder="搜索算法名称、标签或中文描述…" />
+                    <div class="filter-grid">
+                      <select id="component-gallery-namespace">
+                        <option value="">全部命名空间</option>
+                      </select>
+                      <select id="component-gallery-type">
+                        <option value="">全部类型</option>
+                        <option value="component">算法组件</option>
+                        <option value="snippet">代码片段</option>
+                      </select>
+                    </div>
+                    <div class="algolib-btn-spacer"></div>
+                    <button id="component-gallery-reload" class="ghost-button algolib-btn algolib-btn-ghost" type="button">刷新</button>
+                  </div>
+                </section>
+                <div class="view-body">
+                  <section id="algolib-gallery-stats" class="algolib-stat-grid stat-bar">
+                    <article class="algolib-stat-card algolib-stat-primary">
+                      <div class="algolib-stat-icon">组</div>
+                      <div class="algolib-stat-main">
+                        <div class="algolib-stat-label">组件总数</div>
+                        <div id="gallery-stat-total" class="algolib-stat-value">-</div>
+                        <div class="algolib-stat-sub">已注册算法</div>
+                      </div>
+                    </article>
+                    <article class="algolib-stat-card algolib-stat-success">
+                      <div class="algolib-stat-icon">名</div>
+                      <div class="algolib-stat-main">
+                        <div class="algolib-stat-label">命名空间</div>
+                        <div id="gallery-stat-namespaces" class="algolib-stat-value">-</div>
+                        <div class="algolib-stat-sub">算法分类</div>
+                      </div>
+                    </article>
+                    <article class="algolib-stat-card algolib-stat-warning">
+                      <div class="algolib-stat-icon">调</div>
+                      <div class="algolib-stat-main">
+                        <div class="algolib-stat-label">调用格式</div>
+                        <div class="algolib-stat-value" style="font-size:0.75em">alg.ns.fn()</div>
+                        <div class="algolib-stat-sub">Python 调用方式</div>
+                      </div>
+                    </article>
+                    <article class="algolib-stat-card algolib-stat-danger">
+                      <div class="algolib-stat-icon">服</div>
+                      <div class="algolib-stat-main">
+                        <div class="algolib-stat-label">服务状态</div>
+                        <div id="gallery-stat-status" class="algolib-stat-value">-</div>
+                        <div class="algolib-stat-sub">FastAPI 服务</div>
+                      </div>
+                    </article>
+                  </section>
+                  <section class="card list-card">
+                    <div class="subsection-header">
+                      <div>
+                        <h4>算法组件库</h4>
+                        <p class="muted">可调用的算法组件，在编辑器中输入 <code>alg.</code> 触发自动补全，或点击复制调用代码。</p>
+                      </div>
+                      <span id="component-gallery-count" class="muted"></span>
+                    </div>
+                    <div id="component-gallery-list" class="item-list master-list"></div>
+                  </section>
+                </div>
+              </section>
+            </div>
+          </section>
+        </main>
+
+        <aside id="algolib-right-panel" class="algolib-right-panel" aria-label="详情面板">
+          <div id="algolib-right-resize" class="algolib-right-resize" aria-hidden="true"></div>
+          <div class="algolib-rp-header">
+            <span id="algolib-rp-title">详情信息</span>
+            <button id="algolib-panel-close" class="algolib-rp-close" type="button" aria-label="关闭详情面板">×</button>
+          </div>
+          <div id="algolib-rp-body" class="algolib-rp-body">
+            <section class="algolib-rp-sec">
+              <div class="algolib-rp-sec-title">基本信息</div>
+              <div class="algolib-rp-empty">选择算法组件或代码片段后，这里会展示详细信息。</div>
+            </section>
+          </div>
+        </aside>
+      </div>
+
+      <div id="algolib-statusbar" class="algolib-statusbar">
+        <div id="algolib-statusbar-left" class="algolib-statusbar-left">算法库管理 | 模板总数：128 | 启用中：112 | 待审核：3 | 今日调用：3,841</div>
+        <div id="algolib-statusbar-right" class="algolib-statusbar-right">当前登录身份：管理员</div>
+      </div>
+    </div>
+
+    <div id="diff-modal" class="modal-backdrop hidden" aria-hidden="true">
+      <div class="modal-card">
+        <div class="card-header">
+          <h4 id="diff-modal-title">版本差异</h4>
+          <button type="button" id="diff-modal-close" class="ghost-button">关闭</button>
+        </div>
+        <div id="diff-modal-body" class="diff-modal-body"></div>
+      </div>
+    </div>
+
+    <!-- 文件夹编辑弹窗（片段 & 算法复用） -->
+    <div id="folder-edit-modal" class="modal-backdrop hidden" aria-hidden="true">
+      <div class="modal-card modal-form-card">
+        <div class="card-header">
+          <h4 id="folder-edit-modal-title">文件夹编辑</h4>
+          <button type="button" id="folder-edit-modal-close" class="ghost-button">取消</button>
+        </div>
+        <form id="folder-edit-form" class="dialog-form" novalidate>
+          <input type="hidden" name="type" />
+          <input type="hidden" name="id" />
+          <label>
+            文件夹名称
+            <input name="name" required placeholder="输入文件夹名称" />
+          </label>
+          <div id="folder-edit-visibility-row">
+            <label>
+              可见范围
+              <select name="visibility">
+                <option value="private">私有</option>
+                <option value="shared">共用</option>
+              </select>
+            </label>
+          </div>
+          <div id="folder-edit-callname-row" class="hidden">
+            <label>
+              调用名
+              <input name="callName" placeholder="英文标识符，如 statistics（可选）" pattern="[a-zA-Z_][a-zA-Z0-9_]*" />
+            </label>
+            <div class="field-hint">用于代码补全调用：<code>alg.调用名.函数名()</code></div>
+          </div>
+          <div class="button-row">
+            <button type="button" id="folder-edit-delete" class="danger-button hidden">删除文件夹</button>
+            <div style="flex:1"></div>
+            <button type="button" id="folder-edit-modal-close2" class="ghost-button">取消</button>
+            <button type="submit" class="primary-button">保存文件夹</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="algorithm-submit-modal" class="modal-backdrop hidden" aria-hidden="true">
+      <div class="modal-card modal-form-card">
+        <form id="algorithm-submit-form" novalidate>
+          <div class="card-header">
+            <h4>&#25552;&#20132;&#23457;&#26680;</h4>
+            <button type="button" id="algorithm-submit-close" class="ghost-button">&#20851;&#38381;</button>
+          </div>
+          <div class="dialog-form">
+            <label>
+              &#31639;&#27861;&#21517;&#31216;
+              <input name="name" readonly />
+            </label>
+            <label>
+              &#31639;&#27861;&#31867;&#22411;
+              <select name="type" required>
+                <option value="&#27969;&#24335;&#26816;&#27979;">&#27969;&#24335;&#26816;&#27979;</option>
+                <option value="&#22270;&#20687;&#22788;&#29702;">&#22270;&#20687;&#22788;&#29702;</option>
+                <option value="&#25968;&#25454;&#39044;&#22788;&#29702;">&#25968;&#25454;&#39044;&#22788;&#29702;</option>
+                <option value="&#32479;&#35745;&#20998;&#26512;">&#32479;&#35745;&#20998;&#26512;</option>
+                <option value="&#26426;&#22120;&#23398;&#20064;">&#26426;&#22120;&#23398;&#20064;</option>
+                <option value="&#26102;&#24207;&#20998;&#26512;">&#26102;&#24207;&#20998;&#26512;</option>
+                <option value="&#28145;&#24230;&#23398;&#20064;">&#28145;&#24230;&#23398;&#20064;</option>
+                <option value="&#20449;&#21495;&#22788;&#29702;">&#20449;&#21495;&#22788;&#29702;</option>
+                <option value="&#20854;&#20182;">&#20854;&#20182;</option>
+              </select>
+            </label>
+            <label>
+              &#21151;&#33021;&#25551;&#36848;
+              <textarea name="description" rows="3" required></textarea>
+            </label>
+            <div class="field-error" data-error-for="description"></div>
+            <label>
+              &#36755;&#20837;&#21442;&#25968;&#35828;&#26126;
+              <textarea name="inputSpec" rows="4" required></textarea>
+            </label>
+            <div class="field-error" data-error-for="inputSpec"></div>
+            <label>
+              &#36755;&#20986;&#35828;&#26126;
+              <textarea name="outputSpec" rows="4" required></textarea>
+            </label>
+            <div class="field-error" data-error-for="outputSpec"></div>
+            <label>
+              &#20381;&#36182;&#24211;
+              <input name="dependencies" placeholder="&#20363;&#22914;&#65306;numpy, pandas" />
+            </label>
+            <label>
+              &#25552;&#20132;&#21407;&#22240;
+              <input name="reason" required />
+            </label>
+            <div class="field-error" data-error-for="reason"></div>
+            <label>
+              &#25552;&#20132;&#35828;&#26126;
+              <textarea name="summary" rows="3" required></textarea>
+            </label>
+            <div class="field-error" data-error-for="summary"></div>
+          </div>
+          <div class="detail-actions dialog-actions">
+            <button type="button" id="algorithm-submit-cancel" class="ghost-button">&#21462;&#28040;</button>
+            <button type="submit" class="primary-button">&#30830;&#35748;&#25552;&#20132;</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="algorithm-review-modal" class="modal-backdrop hidden" aria-hidden="true">
+      <div class="modal-card modal-form-card">
+        <form id="algorithm-review-form" novalidate>
+          <input type="hidden" name="decision" value="approved" />
+          <div class="card-header">
+            <h4 id="algorithm-review-modal-title">&#23457;&#26680;&#31639;&#27861;</h4>
+            <button type="button" id="algorithm-review-close" class="ghost-button">&#20851;&#38381;</button>
+          </div>
+          <div class="dialog-form">
+            <div class="dialog-note" id="algorithm-review-modal-note"></div>
+            <label>
+              &#31639;&#27861;&#21517;&#31216;
+              <input name="name" readonly />
+            </label>
+            <label>
+              &#23457;&#26680;&#21407;&#22240;
+              <input name="reason" required />
+            </label>
+            <div class="field-error" data-error-for="reason"></div>
+            <label>
+              &#23457;&#26680;&#25688;&#35201;
+              <textarea name="summary" rows="3" required></textarea>
+            </label>
+            <div class="field-error" data-error-for="summary"></div>
+            <label id="algorithm-review-applications-label">
+              &#32465;&#23450;&#24212;&#29992;&#65288;&#22810;&#20010;&#29992;&#36887;&#21495;&#20998;&#38548;&#65289;
+              <input name="applications" placeholder="&#20363;&#22914;&#65306;&#25925;&#38556;&#20998;&#26512;, &#20581;&#24247;&#30417;&#27979;" />
+            </label>
+          </div>
+          <div class="detail-actions dialog-actions">
+            <button type="button" id="algorithm-review-cancel" class="ghost-button">&#21462;&#28040;</button>
+            <button type="submit" id="algorithm-review-confirm" class="primary-button">&#30830;&#35748;</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="{{CS_STATIC_BASE}}/src/browser/pages/algo-lib.js"></script>
+  </body>
+</html>

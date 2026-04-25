@@ -1,0 +1,5 @@
+{
+  "namespace": "statistics",
+  "type": "component",
+  "description": "统计分析算法集合"
+}
