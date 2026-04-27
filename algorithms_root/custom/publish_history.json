@@ -1,0 +1,32 @@
+[
+  {
+    "status": "reviewing",
+    "operator": "system",
+    "timestamp": "2026-04-27T01:45:41.297189+00:00",
+    "reason": "verify version_change=补丁版本 target_version=1.0.1"
+  },
+  {
+    "status": "reviewing",
+    "operator": "system",
+    "timestamp": "2026-04-27T02:31:10.759813+00:00",
+    "reason": "verify version_change=补丁版本 target_version=1.0.1"
+  },
+  {
+    "status": "rejected",
+    "operator": "admin",
+    "timestamp": "2026-04-27T02:31:10.851127+00:00",
+    "reason": "bad"
+  },
+  {
+    "status": "reviewing",
+    "operator": "system",
+    "timestamp": "2026-04-27T02:32:51.647380+00:00",
+    "reason": "verify version_change=补丁版本 target_version=1.0.1"
+  },
+  {
+    "status": "rejected",
+    "operator": "admin",
+    "timestamp": "2026-04-27T02:32:51.727471+00:00",
+    "reason": "bad"
+  }
+]

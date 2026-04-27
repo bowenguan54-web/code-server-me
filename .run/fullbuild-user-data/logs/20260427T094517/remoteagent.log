@@ -1,0 +1,12 @@
+2026-04-27 09:45:17.584 [info] 
+
+
+
+
+2026-04-27 09:45:18.394 [info] Extension host agent started.
+2026-04-27 09:45:18.411 [error] [127.0.0.1][7013ba3b][ManagementConnection] Unknown reconnection token (never seen).
+2026-04-27 09:47:35.189 [info] [127.0.0.1][cf9afde1][ManagementConnection] New connection established.
+2026-04-27 09:47:35.493 [info] [127.0.0.1][3dc1f4a9][ExtensionHostConnection] New connection established.
+2026-04-27 09:47:36.857 [info] [127.0.0.1][3dc1f4a9][ExtensionHostConnection] <1711> Launched Extension Host Process.
+2026-04-27 09:47:37.862 [info] [127.0.0.1][3dc1f4a9][ExtensionHostConnection] <1711> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+

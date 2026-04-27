@@ -1,0 +1,116 @@
+[
+  {
+    "version_id": "ver_0001",
+    "algorithm_id": "data_utils.deduplicate",
+    "call_prefix": "alg.data_utils.deduplicate",
+    "version": "1.0.0",
+    "action": "metadata.updated",
+    "operator": "system",
+    "timestamp": "2026-04-27T01:12:41.426487+00:00",
+    "note": "Metadata updated",
+    "files": [
+      {
+        "relative_path": "deduplicate.py",
+        "content": "\"\"\"\ndata_utils.transforms - 通用数据处理算法组件\n\n这些函数是算法模板库中“数据工具”分类的真实实现，全部可独立运行，\n也可通过编辑器补全以 alg.data_utils.xxx(...) 的方式调用。\n\"\"\"\nfrom __future__ import annotations\nimport math\nfrom collections.abc import Iterable\nfrom typing import Any\nfrom algo_service.sdk.decorators import algo_meta\nNumber = int | float\ndef _as_float_list(data: Iterable[Number], *, allow_empty: bool = True) -> list[float]:\n    \"\"\"将输入序列转换为 float 列表，并对 None/NaN 做明确校验。\"\"\"\n    values: list[float] = []\n    for index, item in enumerate(data):\n        if item is None:\n            raise ValueError(f\"data[{index}] is None; numeric value expected\")\n        value = float(item)\n        if math.isnan(value):\n            raise ValueError(f\"data[{index}] is NaN; numeric value expected\")\n        values.append(value)\n    if not values and not allow_empty:\n        raise ValueError(\"data must not be empty\")\n    return values\n\n\n@algo_meta(\n    zh_name=\"deduplicate\",\n    zh_description=\"列表去重并保持顺序。\",\n    zh_tags=[\"排序，基础算法\"],\n    version=\"1.0.0\",\n)\ndef deduplicate(data: list[Any], key: str | None = None) -> dict[str, Any]:\n    \"\"\"列表去重并保持顺序。\n\n    Args:\n        data: 输入列表。\n        key: 当元素是 dict 时，可指定字段名作为去重键。\n\n    Returns:\n        deduplicated: 去重后的列表。\n        removed_count: 被移除的重复元素数量。\n        duplicate_keys: 出现过重复的键。\n    \"\"\"\n    seen: set[Any] = set()\n    duplicate_keys: list[Any] = []\n    result: list[Any] = []\n    for item in data:\n        if key and isinstance(item, dict):\n            marker = item.get(key)\n        else:\n            try:\n                marker = item\n                hash(marker)\n            except TypeError:\n                marker = repr(item)\n        if marker in seen:\n            duplicate_keys.append(marker)\n            continue\n        seen.add(marker)\n        result.append(item)\n    return {\n        \"deduplicated\": result,\n        \"input_length\": len(data),\n        \"output_length\": len(result),\n        \"removed_count\": len(data) - len(result),\n        \"duplicate_keys\": duplicate_keys,\n    }\n"
+      }
+    ],
+    "metadata": {
+      "id": "data_utils.deduplicate",
+      "callPrefix": "alg.data_utils.deduplicate",
+      "callSnippet": "alg.data_utils.deduplicate(${1:data}, ${2:key})",
+      "snippetBody": "def deduplicate(data: list[Any], key: str | None = None) -> dict[str, Any]:\n    \"\"\"列表去重并保持顺序。\n\n    Args:\n        data: 输入列表。\n        key: 当元素是 dict 时，可指定字段名作为去重键。\n\n    Returns:\n        deduplicated: 去重后的列表。\n        removed_count: 被移除的重复元素数量。\n        duplicate_keys: 出现过重复的键。\n    \"\"\"\n    seen: set[Any] = set()\n    duplicate_keys: list[Any] = []\n    result: list[Any] = []\n    for item in data:\n        if key and isinstance(item, dict):\n            marker = item.get(key)\n        else:\n            try:\n                marker = item\n                hash(marker)\n            except TypeError:\n                marker = repr(item)\n        if marker in seen:\n            duplicate_keys.append(marker)\n            continue\n        seen.add(marker)\n        result.append(item)\n    return {\n        \"deduplicated\": result,\n        \"input_length\": len(data),\n        \"output_length\": len(result),\n        \"removed_count\": len(data) - len(result),\n        \"duplicate_keys\": duplicate_keys,\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "apiPath": "/api/v1/invoke/alg.data_utils.deduplicate",
+      "externalApiPath": "/api/external/v1/data_utils/deduplicate",
+      "displayNamespace": "alg.data_utils.deduplicate",
+      "zhName": "deduplicate",
+      "zhDescription": "列表去重并保持顺序。",
+      "zhTags": [
+        "排序，基础算法"
+      ],
+      "enDescription": "列表去重并保持顺序。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list[Any]",
+          "default": null,
+          "description": "输入列表。"
+        },
+        {
+          "name": "key",
+          "type": "str | None",
+          "default": "None",
+          "description": "当元素是 dict 时，可指定字段名作为去重键。"
+        }
+      ],
+      "namespace": "data_utils",
+      "categoryZhName": "数据工具",
+      "categoryNamespace": "data_utils",
+      "version": "1.0.0",
+      "funcName": "deduplicate",
+      "packageId": null,
+      "packageRoot": null,
+      "sourceFile": "/home/guan/code-server-me/algorithms_root/data_utils/deduplicate.py"
+    }
+  },
+  {
+    "version_id": "ver_0002",
+    "algorithm_id": "data_utils.deduplicate",
+    "call_prefix": "alg.data_utils.deduplicate",
+    "version": "1.0.0",
+    "action": "snapshot",
+    "operator": "system",
+    "timestamp": "2026-04-27T01:13:02.025634+00:00",
+    "note": "代码保存",
+    "files": [
+      {
+        "relative_path": "deduplicate.py",
+        "content": "\"\"\"\ndata_utils.transforms - 通用数据处理算法组件\n\n这些函数是算法模板库中“数据工具”分类的真实实现，全部可独立运行，\n也可通过编辑器补全以 alg.data_utils.xxx(...) 的方式调用。\n\"\"\"\nfrom __future__ import annotations\nimport math\nfrom collections.abc import Iterable\nfrom typing import Any\nfrom algo_service.sdk.decorators import algo_meta\nNumber = int | float\ndef _as_float_list(data: Iterable[Number], *, allow_empty: bool = True) -> list[float]:\n    \"\"\"将输入序列转换为 float 列表，并对 None/NaN 做明确校验。\"\"\"\n    values: list[float] = []\n    for index, item in enumerate(data):\n        if item is None:\n            raise ValueError(f\"data[{index}] is None; numeric value expected\")\n        value = float(item)\n        if math.isnan(value):\n            raise ValueError(f\"data[{index}] is NaN; numeric value expected\")\n        values.append(value)\n    if not values and not allow_empty:\n        raise ValueError(\"data must not be empty\")\n    return values\n\n\n@algo_meta(\n    zh_name=\"deduplicate\",\n    zh_description=\"列表去重并保持顺序。\",\n    zh_tags=[\"排序，基础算法\"],\n    version=\"1.0.0\",\n)\ndef deduplicate(data: list[Any], key: str | None = None) -> dict[str, Any]:\n    \"\"\"列表去重并保持顺序。\n\n    Args:\n        data: 输入列表。\n        key: 当元素是 dict 时，可指定字段名作为去重键。\n\n    Returns:\n        deduplicated: 去重后的列表。\n        removed_count: 被移除的重复元素数量。\n        duplicate_keys: 出现过重复的键。\n    \"\"\"\n    seen: set[Any] = set()\n    duplicate_keys: list[Any] = []\n    result: list[Any] = []\n    for item in data:\n        if key and isinstance(item, dict):\n            marker = item.get(key)\n        else:\n            try:\n                marker = item\n                hash(marker)\n            except TypeError:\n                marker = repr(item)\n        if marker in seen:\n            duplicate_keys.append(marker)\n            continue\n        seen.add(marker)\n        result.append(item)\n    return {\n        \"deduplicated\": result,\n        \"input_length\": len(data),\n        \"output_length\": len(result),\n        \"removed_count\": len(data) - len(result),\n        \"duplicate_keys\": duplicate_keys,\n    }\n"
+      }
+    ],
+    "metadata": {
+      "id": "data_utils.deduplicate",
+      "callPrefix": "alg.data_utils.deduplicate",
+      "callSnippet": "alg.data_utils.deduplicate(${1:data}, ${2:key})",
+      "snippetBody": "def deduplicate(data: list[Any], key: str | None = None) -> dict[str, Any]:\n    \"\"\"列表去重并保持顺序。\n\n    Args:\n        data: 输入列表。\n        key: 当元素是 dict 时，可指定字段名作为去重键。\n\n    Returns:\n        deduplicated: 去重后的列表。\n        removed_count: 被移除的重复元素数量。\n        duplicate_keys: 出现过重复的键。\n    \"\"\"\n    seen: set[Any] = set()\n    duplicate_keys: list[Any] = []\n    result: list[Any] = []\n    for item in data:\n        if key and isinstance(item, dict):\n            marker = item.get(key)\n        else:\n            try:\n                marker = item\n                hash(marker)\n            except TypeError:\n                marker = repr(item)\n        if marker in seen:\n            duplicate_keys.append(marker)\n            continue\n        seen.add(marker)\n        result.append(item)\n    return {\n        \"deduplicated\": result,\n        \"input_length\": len(data),\n        \"output_length\": len(result),\n        \"removed_count\": len(data) - len(result),\n        \"duplicate_keys\": duplicate_keys,\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "apiPath": "/api/v1/invoke/alg.data_utils.deduplicate",
+      "externalApiPath": "/api/external/v1/data_utils/deduplicate",
+      "displayNamespace": "alg.data_utils.deduplicate",
+      "zhName": "deduplicate",
+      "zhDescription": "列表去重并保持顺序。",
+      "zhTags": [
+        "排序，基础算法"
+      ],
+      "enDescription": "列表去重并保持顺序。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list[Any]",
+          "default": null,
+          "description": "输入列表。"
+        },
+        {
+          "name": "key",
+          "type": "str | None",
+          "default": "None",
+          "description": "当元素是 dict 时，可指定字段名作为去重键。"
+        }
+      ],
+      "namespace": "data_utils",
+      "categoryZhName": "数据工具",
+      "categoryNamespace": "data_utils",
+      "version": "1.0.0",
+      "funcName": "deduplicate",
+      "packageId": null,
+      "packageRoot": null,
+      "sourceFile": "/home/guan/code-server-me/algorithms_root/data_utils/deduplicate.py"
+    }
+  }
+]

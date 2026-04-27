@@ -1,0 +1,7 @@
+{
+  "namespace": "signal_proc",
+  "type": "component",
+  "display_name": "信号处理",
+  "description": "FFT、DFT、DCT、小波变换、卷积、自适应滤波、低通/高通/带通/带阻滤波器等信号处理算法",
+  "zh_name": "信号处理"
+}

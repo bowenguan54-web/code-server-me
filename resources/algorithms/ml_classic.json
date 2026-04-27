@@ -1,0 +1,134 @@
+[
+    {
+        "id":  "ml.randomforest.classifier",
+        "name":  "随机森林分类",
+        "category":  "经典机器学习",
+        "subCategory":  "分类",
+        "tags":  [
+                     "随机森林",
+                     "分类",
+                     "树模型"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "使用随机森林完成分类任务，并输出预测结果与特征重要性。",
+        "docMarkdown":  "# 随机森林分类\n\n## 功能说明\n使用随机森林完成分类任务，并输出预测结果与特征重要性。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于经典机器学习 / 分类 场景。\n- 推荐通过触发词 alg.ml.randomforest 快速插入。\n\n## 标签\n- 随机森林 / 分类 / 树模型",
+        "triggerPrefix":  "alg.ml.randomforest",
+        "snippet":  "from sklearn.ensemble import RandomForestClassifier\n\nmodel = RandomForestClassifier(\n    n_estimators=${1:200},\n    max_depth=${2:None},\n    random_state=${3:42},\n)\nmodel.fit(${4:X_train}, ${5:y_train})\npredictions = model.predict(${6:X_test})\n${7:print(predictions[:5])}",
+        "imports":  [
+                        "from sklearn.ensemble import RandomForestClassifier"
+                    ],
+        "example":  "model = RandomForestClassifier(n_estimators=200, random_state=42)\nmodel.fit(X_train, y_train)\nprint(model.predict(X_test)[:5])",
+        "source":  "builtin"
+    },
+    {
+        "id":  "ml.svm.classifier",
+        "name":  "SVM 分类",
+        "category":  "经典机器学习",
+        "subCategory":  "分类",
+        "tags":  [
+                     "SVM",
+                     "分类",
+                     "支持向量机"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "构建支持向量机分类器，适合中小规模样本的边界分类问题。",
+        "docMarkdown":  "# SVM 分类\n\n## 功能说明\n构建支持向量机分类器，适合中小规模样本的边界分类问题。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于经典机器学习 / 分类 场景。\n- 推荐通过触发词 alg.ml.svm 快速插入。\n\n## 标签\n- SVM / 分类 / 支持向量机",
+        "triggerPrefix":  "alg.ml.svm",
+        "snippet":  "from sklearn.svm import SVC\n\nmodel = SVC(\n    C=${1:1.0},\n    kernel=${2:\"rbf\"},\n    gamma=${3:\"scale\"},\n    probability=${4:True},\n)\nmodel.fit(${5:X_train}, ${6:y_train})\npredictions = model.predict(${7:X_test})\n${8:print(predictions[:5])}",
+        "imports":  [
+                        "from sklearn.svm import SVC"
+                    ],
+        "example":  "model = SVC(C=1.0, kernel=\"rbf\")\nmodel.fit(X_train, y_train)\nprint(model.predict(X_test)[:5])",
+        "source":  "builtin"
+    },
+    {
+        "id":  "ml.logistic.regression",
+        "name":  "逻辑回归",
+        "category":  "经典机器学习",
+        "subCategory":  "分类",
+        "tags":  [
+                     "逻辑回归",
+                     "二分类",
+                     "线性模型"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "使用逻辑回归进行概率预测，适合可解释性较强的分类任务。",
+        "docMarkdown":  "# 逻辑回归\n\n## 功能说明\n使用逻辑回归进行概率预测，适合可解释性较强的分类任务。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于经典机器学习 / 分类 场景。\n- 推荐通过触发词 alg.ml.logistic 快速插入。\n\n## 标签\n- 逻辑回归 / 二分类 / 线性模型",
+        "triggerPrefix":  "alg.ml.logistic",
+        "snippet":  "from sklearn.linear_model import LogisticRegression\n\nmodel = LogisticRegression(\n    max_iter=${1:1000},\n    solver=${2:\"lbfgs\"},\n)\nmodel.fit(${3:X_train}, ${4:y_train})\nprobabilities = model.predict_proba(${5:X_test})\n${6:print(probabilities[:5])}",
+        "imports":  [
+                        "from sklearn.linear_model import LogisticRegression"
+                    ],
+        "example":  "model = LogisticRegression(max_iter=1000)\nmodel.fit(X_train, y_train)\nprint(model.predict_proba(X_test)[:5])",
+        "source":  "builtin"
+    },
+    {
+        "id":  "ml.linear.regression",
+        "name":  "线性回归",
+        "category":  "经典机器学习",
+        "subCategory":  "回归",
+        "tags":  [
+                     "线性回归",
+                     "回归",
+                     "最小二乘"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "构建线性回归模型并输出预测值，用于连续变量估计。",
+        "docMarkdown":  "# 线性回归\n\n## 功能说明\n构建线性回归模型并输出预测值，用于连续变量估计。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于经典机器学习 / 回归 场景。\n- 推荐通过触发词 alg.ml.linear 快速插入。\n\n## 标签\n- 线性回归 / 回归 / 最小二乘",
+        "triggerPrefix":  "alg.ml.linear",
+        "snippet":  "from sklearn.linear_model import LinearRegression\n\nmodel = LinearRegression()\nmodel.fit(${1:X_train}, ${2:y_train})\npredictions = model.predict(${3:X_test})\n${4:print(predictions[:5])}",
+        "imports":  [
+                        "from sklearn.linear_model import LinearRegression"
+                    ],
+        "example":  "model = LinearRegression()\nmodel.fit(X_train, y_train)\nprint(model.predict(X_test)[:5])",
+        "source":  "builtin"
+    },
+    {
+        "id":  "ml.kmeans.cluster",
+        "name":  "K-Means 聚类",
+        "category":  "经典机器学习",
+        "subCategory":  "聚类",
+        "tags":  [
+                     "K-Means",
+                     "聚类",
+                     "无监督"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "执行 K-Means 聚类并返回簇标签和簇中心。",
+        "docMarkdown":  "# K-Means 聚类\n\n## 功能说明\n执行 K-Means 聚类并返回簇标签和簇中心。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于经典机器学习 / 聚类 场景。\n- 推荐通过触发词 alg.ml.kmeans 快速插入。\n\n## 标签\n- K-Means / 聚类 / 无监督",
+        "triggerPrefix":  "alg.ml.kmeans",
+        "snippet":  "from sklearn.cluster import KMeans\n\nmodel = KMeans(\n    n_clusters=${1:3},\n    random_state=${2:42},\n    n_init=${3:\"auto\"},\n)\ncluster_labels = model.fit_predict(${4:X})\n${5:print(cluster_labels[:10])}",
+        "imports":  [
+                        "from sklearn.cluster import KMeans"
+                    ],
+        "example":  "model = KMeans(n_clusters=3, random_state=42, n_init=\"auto\")\nlabels = model.fit_predict(X)\nprint(labels[:10])",
+        "source":  "builtin"
+    },
+    {
+        "id":  "ml.knn.classifier",
+        "name":  "K 近邻分类",
+        "category":  "经典机器学习",
+        "subCategory":  "分类",
+        "tags":  [
+                     "KNN",
+                     "近邻",
+                     "分类"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "使用 KNN 算法执行分类预测，适合局部相似样本判别。",
+        "docMarkdown":  "# K 近邻分类\n\n## 功能说明\n使用 KNN 算法执行分类预测，适合局部相似样本判别。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于经典机器学习 / 分类 场景。\n- 推荐通过触发词 alg.ml.knn 快速插入。\n\n## 标签\n- KNN / 近邻 / 分类",
+        "triggerPrefix":  "alg.ml.knn",
+        "snippet":  "from sklearn.neighbors import KNeighborsClassifier\n\nmodel = KNeighborsClassifier(\n    n_neighbors=${1:5},\n    weights=${2:\"uniform\"},\n)\nmodel.fit(${3:X_train}, ${4:y_train})\npredictions = model.predict(${5:X_test})\n${6:print(predictions[:5])}",
+        "imports":  [
+                        "from sklearn.neighbors import KNeighborsClassifier"
+                    ],
+        "example":  "model = KNeighborsClassifier(n_neighbors=5)\nmodel.fit(X_train, y_train)\nprint(model.predict(X_test)[:5])",
+        "source":  "builtin"
+    }
+]

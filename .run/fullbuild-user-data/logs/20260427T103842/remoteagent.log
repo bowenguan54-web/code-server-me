@@ -1,0 +1,39 @@
+2026-04-27 10:38:43.014 [info] 
+
+
+
+
+2026-04-27 10:38:43.286 [info] Extension host agent started.
+2026-04-27 10:38:44.272 [info] [127.0.0.1][f7b0af2c][ManagementConnection] New connection established.
+2026-04-27 10:38:44.549 [info] [127.0.0.1][9a8ebc33][ExtensionHostConnection] New connection established.
+2026-04-27 10:38:45.198 [info] [127.0.0.1][9a8ebc33][ExtensionHostConnection] <3896> Launched Extension Host Process.
+2026-04-27 10:38:45.870 [info] [127.0.0.1][9a8ebc33][ExtensionHostConnection] <3896> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+2026-04-27 10:38:48.347 [error] #3: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:38:48.707 [error] #1: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:38:50.244 [error] #7: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:38:51.732 [error] #8: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:38:51.876 [error] #10: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:38:54.118 [error] #13: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:38:54.973 [error] #4: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:38:55.179 [error] #5: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:39:05.472 [error] #15: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:39:37.109 [error] #9: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:39:43.768 [error] #18: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:39:51.014 [error] [File Watcher ('parcel')] Unexpected error: inotify_add_watch on '/home/guan/code-server-me/.run/fullbuild-user-data/logs/20260425T154407' failed: No such file or directory (EUNKNOWN) (path: /home/guan/code-server-me)
+2026-04-27 10:39:51.015 [error] [File Watcher (universal)] inotify_add_watch on '/home/guan/code-server-me/.run/fullbuild-user-data/logs/20260425T154407' failed: No such file or directory
+2026-04-27 10:39:52.829 [error] #19: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:39:52.831 [error] #21: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:39:53.717 [error] #22: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:39:54.580 [error] #14: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET Client network socket disconnected before secure TLS connection was established
+2026-04-27 10:40:02.657 [error] #2: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET read ECONNRESET
+2026-04-27 10:40:04.287 [error] #24: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:40:23.576 [error] #11: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET read ETIMEDOUT
+2026-04-27 10:40:25.257 [error] #23: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 
+2026-04-27 10:42:17.768 [info] [127.0.0.1][f7b0af2c][ManagementConnection] The client has disconnected gracefully, so the connection will be disposed.
+2026-04-27 10:42:17.945 [info] [127.0.0.1][9a8ebc33][ExtensionHostConnection] <3896> Extension Host Process exited with code: 0, signal: null.
+2026-04-27 10:42:18.972 [info] [127.0.0.1][1a5ac549][ManagementConnection] New connection established.
+2026-04-27 10:42:18.987 [info] [127.0.0.1][d80b26fc][ExtensionHostConnection] New connection established.
+2026-04-27 10:42:18.992 [info] [127.0.0.1][d80b26fc][ExtensionHostConnection] <4188> Launched Extension Host Process.
+2026-04-27 10:42:19.330 [info] [127.0.0.1][d80b26fc][ExtensionHostConnection] <4188> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+

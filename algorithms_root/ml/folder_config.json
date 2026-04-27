@@ -1,0 +1,7 @@
+{
+  "namespace": "ml",
+  "type": "component",
+  "display_name": "机器学习",
+  "description": "支持向量机、KNN、决策树、随机森林、逻辑回归、线性回归、K-Means、GMM 等机器学习算法",
+  "zh_name": "机器学习"
+}

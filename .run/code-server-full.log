@@ -1,0 +1,24 @@
+[2026-04-27T03:01:46.392Z] info  code-server 0.0.0 4af6408e399e2f795e98b043fd30c16ba31ab0c6
+[2026-04-27T03:01:46.393Z] info  Using user-data-dir /home/guan/code-server-me/.run/fullbuild-user-data
+[2026-04-27T03:01:46.404Z] info  Using config file /home/guan/.config/code-server/config.yaml
+[2026-04-27T03:01:46.404Z] info  HTTP server listening on http://127.0.0.1:8080/
+[2026-04-27T03:01:46.404Z] info    - Authentication is disabled
+[2026-04-27T03:01:46.404Z] info    - Not serving HTTPS
+[2026-04-27T03:01:46.404Z] info  Session server listening on /home/guan/code-server-me/.run/fullbuild-user-data/code-server-ipc.sock
+[2026-04-27T03:01:46.404Z] info  Using custom extensions gallery
+[11:01:48] 
+
+
+
+
+[reconnection-grace-time] No CLI argument provided, using default: 10800000ms (10800s)
+[11:01:49] Extension host agent started.
+[11:01:49] [127.0.0.1][1a5ac549][ManagementConnection] Unknown reconnection token (never seen).
+File not found: /home/guan/code-server-me/release/lib/vscode/node_modules/vsda/rust/web/vsda_bg.wasm
+File not found: /home/guan/code-server-me/release/lib/vscode/node_modules/vsda/rust/web/vsda.js
+[11:04:49] [127.0.0.1][5a27aecd][ManagementConnection] New connection established.
+[11:04:50] [127.0.0.1][b74d5408][ExtensionHostConnection] New connection established.
+[11:04:50] [127.0.0.1][b74d5408][ExtensionHostConnection] <5883> Launched Extension Host Process.
+[11:04:52] [127.0.0.1][b74d5408][ExtensionHostConnection] <5883> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+[11:04:54] #1: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 

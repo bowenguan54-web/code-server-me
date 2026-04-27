@@ -1,0 +1,20 @@
+{
+  "name": "my_algorithm",
+  "zh_name": "复杂算法示例",
+  "version": "1.0.1",
+  "namespace": "custom",
+  "entry": "main.py",
+  "exports": [
+    "my_algorithm"
+  ],
+  "zh_description": "多文件复杂算法入口，演示预处理、模型逻辑和结果封装。",
+  "zh_tags": [
+    "复杂算法",
+    "多文件"
+  ],
+  "dependencies": {},
+  "published": true,
+  "publish_status": "published",
+  "module_kind": "component",
+  "external_api_path": "/api/external/v1/custom/my_algorithm"
+}

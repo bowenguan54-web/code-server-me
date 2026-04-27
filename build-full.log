@@ -1,0 +1,4 @@
+
+> code-server@0.0.0 build
+> ./ci/build/build-code-server.sh
+

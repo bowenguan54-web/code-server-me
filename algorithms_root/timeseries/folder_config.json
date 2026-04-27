@@ -1,0 +1,7 @@
+{
+  "namespace": "timeseries",
+  "type": "component",
+  "display_name": "时序分析",
+  "description": "动态时间规整、时序聚类、自回归、ARMA、Hilbert 变换等时序分析算法",
+  "zh_name": "时间序列"
+}

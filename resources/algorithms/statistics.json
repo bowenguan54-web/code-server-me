@@ -1,0 +1,112 @@
+[
+    {
+        "id":  "statistics.describe.basic",
+        "name":  "基本统计描述",
+        "category":  "统计分析",
+        "subCategory":  "描述统计",
+        "tags":  [
+                     "描述统计",
+                     "均值",
+                     "方差"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "快速输出数据集的基本统计描述，包括均值、标准差和分位数。",
+        "docMarkdown":  "# 基本统计描述\n\n## 功能说明\n快速输出数据集的基本统计描述，包括均值、标准差和分位数。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于统计分析 / 描述统计 场景。\n- 推荐通过触发词 alg.stats.describe 快速插入。\n\n## 标签\n- 描述统计 / 均值 / 方差",
+        "triggerPrefix":  "alg.stats.describe",
+        "snippet":  "import pandas as pd\n\nsummary = ${1:df}[${2:columns}].describe(include=${3:\"all\"})\n${4:print(summary)}",
+        "imports":  [
+                        "import pandas as pd"
+                    ],
+        "example":  "summary = df[[\"age\", \"income\"]].describe()\nprint(summary)",
+        "source":  "builtin"
+    },
+    {
+        "id":  "statistics.correlation.pearson",
+        "name":  "皮尔森相关系数矩阵",
+        "category":  "统计分析",
+        "subCategory":  "相关性分析",
+        "tags":  [
+                     "相关系数",
+                     "皮尔森",
+                     "热力图"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "计算数值列的皮尔森相关系数矩阵，用于变量关联性分析。",
+        "docMarkdown":  "# 皮尔森相关系数矩阵\n\n## 功能说明\n计算数值列的皮尔森相关系数矩阵，用于变量关联性分析。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于统计分析 / 相关性分析 场景。\n- 推荐通过触发词 alg.stats.correlation 快速插入。\n\n## 标签\n- 相关系数 / 皮尔森 / 热力图",
+        "triggerPrefix":  "alg.stats.correlation",
+        "snippet":  "import pandas as pd\n\ncorr_matrix = ${1:df}[${2:columns}].corr(method=\"pearson\")\n${3:print(corr_matrix)}",
+        "imports":  [
+                        "import pandas as pd"
+                    ],
+        "example":  "corr_matrix = df[[\"x1\", \"x2\", \"x3\"]].corr(method=\"pearson\")\nprint(corr_matrix)",
+        "source":  "builtin"
+    },
+    {
+        "id":  "statistics.outlier.iqr",
+        "name":  "孤立点检测 IQR",
+        "category":  "统计分析",
+        "subCategory":  "异常检测",
+        "tags":  [
+                     "异常值",
+                     "IQR",
+                     "离群点"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "基于四分位距 IQR 规则识别离群点并返回布尔掩码。",
+        "docMarkdown":  "# 孤立点检测 IQR\n\n## 功能说明\n基于四分位距 IQR 规则识别离群点并返回布尔掩码。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于统计分析 / 异常检测 场景。\n- 推荐通过触发词 alg.stats.outlier.iqr 快速插入。\n\n## 标签\n- 异常值 / IQR / 离群点",
+        "triggerPrefix":  "alg.stats.outlier.iqr",
+        "snippet":  "import pandas as pd\n\nq1 = ${1:series}.quantile(0.25)\nq3 = ${1:series}.quantile(0.75)\niqr = q3 - q1\noutlier_mask = (${1:series} \u003c q1 - ${2:1.5} * iqr) | (${1:series} \u003e q3 + ${2:1.5} * iqr)\n${3:print(outlier_mask.sum())}",
+        "imports":  [
+                        "import pandas as pd"
+                    ],
+        "example":  "outlier_mask = detect_iqr_outlier(df[\"amount\"], 1.5)\nprint(outlier_mask.sum())",
+        "source":  "builtin"
+    },
+    {
+        "id":  "statistics.normtest.shapiro",
+        "name":  "正态分布检验",
+        "category":  "统计分析",
+        "subCategory":  "分布检验",
+        "tags":  [
+                     "正态性",
+                     "Shapiro",
+                     "假设检验"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "使用 Shapiro-Wilk 检验判断样本是否服从正态分布。",
+        "docMarkdown":  "# 正态分布检验\n\n## 功能说明\n使用 Shapiro-Wilk 检验判断样本是否服从正态分布。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于统计分析 / 分布检验 场景。\n- 推荐通过触发词 alg.stats.normtest 快速插入。\n\n## 标签\n- 正态性 / Shapiro / 假设检验",
+        "triggerPrefix":  "alg.stats.normtest",
+        "snippet":  "from scipy.stats import shapiro\n\nstatistic, p_value = shapiro(${1:series}.dropna())\n${2:print({\"statistic\": statistic, \"p_value\": p_value})}",
+        "imports":  [
+                        "from scipy.stats import shapiro"
+                    ],
+        "example":  "statistic, p_value = shapiro(df[\"score\"].dropna())\nprint(statistic, p_value)",
+        "source":  "builtin"
+    },
+    {
+        "id":  "statistics.plot.boxplot",
+        "name":  "箱型图",
+        "category":  "统计分析",
+        "subCategory":  "统计绘图",
+        "tags":  [
+                     "箱型图",
+                     "分布",
+                     "可视化"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "绘制箱型图查看数据分布和离群点，适合单变量探索分析。",
+        "docMarkdown":  "# 箱型图\n\n## 功能说明\n绘制箱型图查看数据分布和离群点，适合单变量探索分析。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于统计分析 / 统计绘图 场景。\n- 推荐通过触发词 alg.stats.boxplot 快速插入。\n\n## 标签\n- 箱型图 / 分布 / 可视化",
+        "triggerPrefix":  "alg.stats.boxplot",
+        "snippet":  "import matplotlib.pyplot as plt\n\nplt.figure(figsize=${1:(8, 4)})\nplt.boxplot(${2:series}.dropna())\nplt.title(${3:\"Boxplot\"})\nplt.show()",
+        "imports":  [
+                        "import matplotlib.pyplot as plt"
+                    ],
+        "example":  "plt.boxplot(df[\"amount\"].dropna())\nplt.show()",
+        "source":  "builtin"
+    }
+]

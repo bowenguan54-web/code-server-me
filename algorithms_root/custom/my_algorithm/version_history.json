@@ -1,0 +1,68 @@
+[
+  {
+    "version_id": "ver_0001",
+    "algorithm_id": "custom.my_algorithm",
+    "call_prefix": "alg.custom.my_algorithm",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-04-27T01:17:41.226865+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "from algo_service.sdk.decorators import algo_meta\nfrom .preprocess import clean_values\nfrom .model import score_values\n\n\n@algo_meta(\n    zh_name=\"复杂算法示例\",\n    zh_description=\"多文件复杂算法入口，演示预处理、模型逻辑和结果封装。\",\n    zh_tags=[\"复杂算法\", \"多文件\"],\n    version=\"1.0.0\",\n)\ndef my_algorithm(data: list[float], threshold: float = 0.5) -> dict:\n    values = clean_values(data)\n    scores = score_values(values)\n    passed = [value for value, score in zip(values, scores) if score >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"valid_count\": len(values),\n        \"scores\": scores,\n        \"passed\": passed,\n        \"threshold\": threshold,\n    }\n"
+      },
+      {
+        "relative_path": "model.py",
+        "content": "def score_values(values: list[float]) -> list[float]:\n    if not values:\n        return []\n    low = min(values)\n    high = max(values)\n    if low == high:\n        return [1.0 for _ in values]\n    return [round((value - low) / (high - low), 6) for value in values]\n"
+      },
+      {
+        "relative_path": "preprocess.py",
+        "content": "def clean_values(data: list[float]) -> list[float]:\n    values = []\n    for item in data:\n        if item is None:\n            continue\n        values.append(float(item))\n    return values\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algorithm",
+      "callPrefix": "alg.custom.my_algorithm",
+      "callSnippet": "alg.custom.my_algorithm(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algorithm(data: list[float], threshold: float = 0.5) -> dict:\n    values = clean_values(data)\n    scores = score_values(values)\n    passed = [value for value, score in zip(values, scores) if score >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"valid_count\": len(values),\n        \"scores\": scores,\n        \"passed\": passed,\n        \"threshold\": threshold,\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "draft",
+      "publishStatus": "draft",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algorithm",
+      "externalApiPath": "/api/external/v1/custom/my_algorithm",
+      "displayNamespace": "alg.custom.my_algorithm",
+      "zhName": "复杂算法示例",
+      "zhDescription": "多文件复杂算法入口，演示预处理、模型逻辑和结果封装。",
+      "zhTags": [
+        "复杂算法",
+        "多文件"
+      ],
+      "enDescription": "",
+      "params": [
+        {
+          "name": "data",
+          "type": "list[float]",
+          "default": null,
+          "description": ""
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": ""
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algorithm",
+      "packageId": "custom.my_algorithm",
+      "packageRoot": "/home/guan/code-server-me/algorithms_root/custom/my_algorithm",
+      "sourceFile": "/home/guan/code-server-me/algorithms_root/custom/my_algorithm/main.py"
+    }
+  }
+]

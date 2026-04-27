@@ -1,0 +1,9 @@
+2026-04-24 15:31:14.443 [info] 
+
+
+
+
+2026-04-24 15:31:14.443 [info] Extension host agent started.
+2026-04-24 15:31:14.455 [info] Started initializing default profile extensions in extensions installation folder. file:///home/guan/code-server-me/.run/dev-extensions
+2026-04-24 15:31:14.731 [info] Completed initializing default profile extensions in extensions installation folder. file:///home/guan/code-server-me/.run/dev-extensions
+2026-04-24 15:31:15.603 [info] [CSS_DEV] DONE, 335 css modules (1067ms)

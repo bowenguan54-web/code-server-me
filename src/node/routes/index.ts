@@ -21,6 +21,7 @@ import { errorHandler, wsErrorHandler } from "./errors"
 import * as health from "./health"
 import * as login from "./login"
 import * as logout from "./logout"
+import * as algoLib from "./algoLib"
 import * as pathProxy from "./pathProxy"
 import * as update from "./update"
 import * as vscode from "./vscode"
@@ -107,6 +108,10 @@ export const register = async (
     res.send(await fs.readFile(resourcePath))
   })
 
+  app.router.use(express.json())
+  app.router.use(express.urlencoded({ extended: true }))
+
+  app.router.use("/", algoLib.router)
   app.router.use("/", domainProxy.router)
   app.wsRouter.use("/", domainProxy.wsRouter.router)
 
@@ -131,9 +136,6 @@ export const register = async (
       proxyBasePath: args["abs-proxy-base-path"],
     })
   })
-
-  app.router.use(express.json())
-  app.router.use(express.urlencoded({ extended: true }))
 
   app.router.use(
     "/_static",
