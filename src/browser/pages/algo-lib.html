@@ -655,6 +655,7 @@
       snippetResults: [],
       snippetCursor: 0,
       navCollapsed: {},
+      selectedNavNs: "",
       sse: null
     };
 
@@ -793,7 +794,8 @@
           const subs = cats.slice(0, 12).map(cat => {
             const name = cat.zh_name || cat.namespace || "";
             const ns = cat.namespace || "";
-            return `<div class="nav-sub" data-page="${page}" data-ns="${esc(ns)}" title="${esc(name)}">${esc(name)}</div>`;
+            const isActive = state.selectedNavNs === ns && state.page === page;
+            return `<div class="nav-sub${isActive ? " active-sub" : ""}" data-page="${page}" data-ns="${esc(ns)}" title="${esc(name)}">${esc(name)}</div>`;
           });
           return [item, ...subs];
         })
@@ -824,16 +826,13 @@
           event.stopPropagation();
           const page = el.dataset.page;
           const ns = el.dataset.ns;
+          state.selectedNavNs = ns;
           if (state.page !== page) {
             switchPage(page);
-            // filter after data loads
-            window.setTimeout(() => {
-              const filterCat = qs("#filterCategory");
-              if (filterCat) { filterCat.value = ns; applyFilters(); }
-            }, 400);
+            window.setTimeout(() => scrollToSection(ns), 400);
           } else {
-            const filterCat = qs("#filterCategory");
-            if (filterCat) { filterCat.value = ns; applyFilters(); }
+            renderNav();
+            scrollToSection(ns);
           }
         });
       });
@@ -1076,7 +1075,24 @@
       `;
     }
 
-    function applyFilters() { renderCards(state.page); }
+    function applyFilters() { state.selectedNavNs = ""; renderCards(state.page); }
+    function scrollToSection(ns) {
+      const sections = qsa(".folder-section");
+      for (const sec of sections) {
+        const h3 = sec.querySelector("h3");
+        if (!h3) continue;
+        const key = h3.textContent.trim();
+        const cats = state.categories[state.page] || [];
+        const cat = cats.find(c => c.namespace === ns);
+        const label = cat ? (cat.zh_name || cat.namespace) : ns;
+        if (key === label || key === ns) {
+          sec.scrollIntoView({ behavior: "smooth", block: "start" });
+          sec.classList.add("nav-highlight");
+          window.setTimeout(() => sec.classList.remove("nav-highlight"), 1500);
+          return;
+        }
+      }
+    }
     function setQuickFilter(status, page) {
       const filterStatus = qs("#filterStatus");
       if (filterStatus) filterStatus.value = status;
@@ -1261,6 +1277,19 @@
             <button onclick="window.testWorkspaceSource()">测试当前文件</button>
             <button class="primary" onclick="window.saveWorkspaceAlgorithm('${moduleKind}')">保存草稿</button>
           </div>
+          ${page === "templates" ? `<details class="template-usage-details" open>
+            <summary>📖 算法模板说明（点击折叠）</summary>
+            <div class="template-usage-body">
+              <strong>新建算法模板界面使用说明：</strong><br>
+              1. <strong>算法形态</strong>：选择"普通单文件"或"复杂多文件"。单文件模板只有一个 .py 文件；复杂多文件模板为包结构，包含 main.py 和辅助模块。<br>
+              2. <strong>代码模板</strong>：提供预置代码框架，切换后代码区会自动更新。<br>
+              3. <strong>函数/包名</strong>：生成的函数名或包名，只能使用小写字母、数字和下划线。<br>
+              4. <strong>所属分类</strong>：算法模板所属的分类命名空间，可新建分类。<br>
+              5. <strong>测试参数 JSON</strong>：点击"测试当前文件"时使用此处的参数作为函数入参，格式为 JSON 对象。<br>
+              6. <strong>代码编辑区</strong>：直接编辑算法代码。多文件模板可在左侧文件列表切换文件。<br>
+              7. 填写完毕后点击"<strong>保存草稿</strong>"将模板保存到系统，之后可在算法模板列表中进一步编辑和发布。
+            </div>
+          </details>` : ""}
           <div class="new-form-grid">
             <label>算法形态<select id="wsKind" onchange="window.applyWorkspaceTemplate()"><option value="simple">普通单文件</option><option value="complex">复杂多文件</option></select></label>
             <label>代码模板<select id="wsTemplate" onchange="window.applyWorkspaceTemplate()"><option value="basic">基础算法</option><option value="quality">数据质量</option><option value="complex">复杂算法示例</option></select></label>
@@ -1332,6 +1361,8 @@
     async function testWorkspaceSource() {
       updateWorkspaceFileContent();
       const output = qs("#wsOutput");
+      if (!output) { showToast("测试面板未找到，请刷新页面后重试"); return; }
+      if (!qs("#wsKind") || !qs("#wsName") || !qs("#wsKwargs")) { showToast("界面未就绪，请稍后再试"); return; }
       if (qs("#wsKind").value === "complex") {
         output.classList.remove("hidden");
         output.innerHTML = "<pre>复杂多文件算法包含相对导入，请先保存为草稿，然后在组件卡片中点击“测试”。</pre>";
