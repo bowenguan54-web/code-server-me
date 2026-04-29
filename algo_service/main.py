@@ -271,10 +271,10 @@ set_registry(registry)
 app.include_router(packages_router)
 app.include_router(stubs_router)
 app.include_router(snippets_router)
+app.include_router(algorithms_router)
 app.include_router(publish_router)
 app.include_router(apikeys_router)
 app.include_router(monitor_router)
-app.include_router(algorithms_router)
 app.include_router(external_router)
 
 

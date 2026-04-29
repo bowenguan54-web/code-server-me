@@ -104,6 +104,7 @@ class AlgorithmEntry:
     call_snippet: str
     version: str
     folder_path: str
+    input_example: str = ""
     package_id: str | None = None
     package_root: str | None = None
 
@@ -371,6 +372,7 @@ class AlgorithmRegistry:
             snippet_body=func_info.get("snippet_body") or "",
             call_snippet=call_snippet,
             version=version_override or func_info.get("version") or "1.0.0",
+            input_example=func_info.get("input_example") or "",
             folder_path=folder_path,
             package_id=package_id,
             package_root=package_root,

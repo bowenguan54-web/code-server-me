@@ -72,6 +72,7 @@ def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
         "zhName": entry.zh_name,
         "zhDescription": entry.zh_description,
         "zhTags": entry.zh_tags,
+        "inputExample": entry.input_example,
         "enDescription": entry.en_description,
         "params": entry.params,
         "namespace": entry.namespace,
@@ -108,8 +109,9 @@ def _load_review_draft(entry: AlgorithmEntry) -> dict[str, Any] | None:
 def _save_review_draft(entry: AlgorithmEntry, payload: dict[str, Any]) -> None:
     """Persist a pending review draft."""
 
+    p = _review_draft_path(entry)
     try:
-        _review_draft_path(entry).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to save review draft: {exc}") from exc
 
@@ -147,9 +149,27 @@ def _entry_config_path(entry: AlgorithmEntry) -> Path:
     return Path(entry.source_file).parent / "folder_config.json"
 
 
-def _read_entry_publish_status(entry: AlgorithmEntry) -> str:
-    """Read an entry publish status from its manifest."""
+def _per_algo_status_path(entry: AlgorithmEntry) -> Path:
+    """Per-algorithm status override file (prevents flat-file sharing pollution)."""
 
+    safe_id = entry.id.replace(".", "_")
+    return Path(entry.source_file).parent / f".publish_status_{safe_id}.json"
+
+
+def _read_entry_publish_status(entry: AlgorithmEntry) -> str:
+    """Read an entry publish status, preferring the per-algorithm override file."""
+
+    # Non-package entries: check per-algorithm status file first to prevent
+    # multiple algorithms sharing the same folder_config.json from polluting
+    # each other's status.
+    if not entry.package_root:
+        status_path = _per_algo_status_path(entry)
+        if status_path.exists():
+            try:
+                data = json.loads(status_path.read_text(encoding="utf-8"))
+                return str(data.get("publish_status") or "draft")
+            except (OSError, json.JSONDecodeError):
+                pass
     config_path = _entry_config_path(entry)
     if not config_path.exists():
         return "published"
@@ -245,17 +265,21 @@ def _algo_meta_decorator(
     zh_description: str,
     zh_tags: list[str],
     version: str,
+    input_example: str = "",
 ) -> str:
     """Return an @algo_meta decorator string."""
 
-    return (
-        "@algo_meta(\n"
-        f"    zh_name={json.dumps(zh_name, ensure_ascii=False)},\n"
-        f"    zh_description={json.dumps(zh_description, ensure_ascii=False)},\n"
-        f"    zh_tags={json.dumps(zh_tags, ensure_ascii=False)},\n"
-        f"    version={json.dumps(version, ensure_ascii=False)},\n"
-        ")"
-    )
+    lines = [
+        "@algo_meta(",
+        f"    zh_name={json.dumps(zh_name, ensure_ascii=False)},",
+        f"    zh_description={json.dumps(zh_description, ensure_ascii=False)},",
+        f"    zh_tags={json.dumps(zh_tags, ensure_ascii=False)},",
+        f"    version={json.dumps(version, ensure_ascii=False)},",
+    ]
+    if input_example:
+        lines.append(f"    input_example={json.dumps(input_example, ensure_ascii=False)},")
+    lines.append(")")
+    return "\n".join(lines)
 
 
 def _decorator_name(node: ast.AST) -> str:
@@ -349,12 +373,13 @@ def _upsert_algo_meta(source: str, func_name: str, metadata: dict[str, Any]) -> 
         zh_description=str(metadata.get("zh_description") or ""),
         zh_tags=[str(tag).strip() for tag in metadata.get("zh_tags", []) if str(tag).strip()],
         version=str(metadata.get("version") or "1.0.0"),
+        input_example=str(metadata.get("input_example") or ""),
     )
     lines[insert_at:insert_at] = [decorator_text]
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _write_folder_config(folder: Path, namespace: str, module_kind: str, publish_status: str = "draft") -> None:
+def _write_folder_config(folder: Path, namespace: str, module_kind: str, publish_status: str = "draft", zh_name: str = "") -> None:
     """Create or update a folder_config.json file."""
 
     config_path = folder / "folder_config.json"
@@ -364,15 +389,16 @@ def _write_folder_config(folder: Path, namespace: str, module_kind: str, publish
             config = json.loads(config_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             config = {}
-    config.update(
-        {
-            "namespace": namespace,
-            "type": module_kind,
-            "module_kind": module_kind,
-            "published": publish_status == "published",
-            "publish_status": publish_status,
-        }
-    )
+    update: dict[str, Any] = {
+        "namespace": namespace,
+        "type": module_kind,
+        "module_kind": module_kind,
+        "published": publish_status == "published",
+        "publish_status": publish_status,
+    }
+    if zh_name:
+        update["zh_name"] = zh_name
+    config.update(update)
     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -395,13 +421,24 @@ def _ensure_folder_kind_compatible(folder: Path, module_kind: str) -> None:
 
 
 def _category_config_paths(registry: AlgorithmRegistry) -> list[Path]:
-    """Return all folder_config.json paths under watched roots."""
+    """Return all folder_config.json paths under watched roots (deduplicated)."""
 
+    # Filter to top-level roots only (exclude sub-directories of other watch roots)
+    all_roots = [Path(r) for r in registry.watch_roots]
+    top_roots: list[Path] = []
+    for r in all_roots:
+        if not any(r != other and r.is_relative_to(other) for other in all_roots):
+            top_roots.append(r)
+
+    seen: set[Path] = set()
     paths: list[Path] = []
-    for root in registry.watch_roots:
-        root_path = Path(root)
+    for root_path in top_roots:
         if root_path.exists():
-            paths.extend(sorted(root_path.rglob("folder_config.json")))
+            for p in sorted(root_path.rglob("folder_config.json")):
+                resolved = p.resolve()
+                if resolved not in seen:
+                    seen.add(resolved)
+                    paths.append(p)
     return paths
 
 
@@ -414,6 +451,8 @@ def _category_from_config(path: Path, registry: AlgorithmRegistry) -> dict[str, 
         config = {}
     namespace = str(config.get("namespace") or "").strip()
     module_kind = normalize_module_kind(config.get("module_kind", config.get("type", "component")))
+    # Detect folders that belong to an individual algorithm (not a category)
+    is_algo_folder = bool(config.get("name"))
     entries = [
         entry for entry in registry.get_all()
         if entry.type == module_kind and (entry.namespace == namespace or entry.namespace.startswith(f"{namespace}."))
@@ -424,6 +463,7 @@ def _category_from_config(path: Path, registry: AlgorithmRegistry) -> dict[str, 
         "module_kind": module_kind,
         "path": str(path.parent),
         "count": len(entries),
+        "is_algo_folder": is_algo_folder,
     }
 
 
@@ -602,7 +642,7 @@ def _apply_review_draft(entry: AlgorithmEntry, registry: AlgorithmRegistry) -> A
             source_path.write_text(content, encoding="utf-8")
             registry.rescan_file(str(source_path))
     except SyntaxError as exc:
-        raise HTTPException(status_code=400, detail=f"Python syntax error in review draft: {exc}") from exc
+        raise HTTPException(status_code=400, detail=f"审核草稿中存在 Python 语法错误：{exc}") from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to update package manifest: {exc}") from exc
     except OSError as exc:
@@ -796,6 +836,8 @@ async def publish_template_as_component(
             manifest = json.loads(source_manifest.read_text(encoding="utf-8")) if source_manifest.exists() else {}
             target_func_name = _validate_identifier(name, "component name")
             source = Path(entry.source_file).read_text(encoding="utf-8")
+            if payload.code:
+                source = payload.code
             if target_func_name != entry.func_name:
                 source = _rename_function_in_source(source, entry.func_name, target_func_name)
             source = _upsert_algo_meta(
@@ -804,8 +846,9 @@ async def publish_template_as_component(
                 {
                     "zh_name": payload.zh_name or entry.zh_name or target_func_name,
                     "zh_description": payload.description or entry.zh_description,
-                    "zh_tags": entry.zh_tags,
+                    "zh_tags": payload.zh_tags or entry.zh_tags,
                     "version": payload.version or "1.0.0",
+                    "input_example": payload.input_example or entry.input_example,
                 },
             )
             (target_dir / f"{target_func_name}.py").write_text(source, encoding="utf-8")
@@ -883,14 +926,14 @@ async def create_algorithm(
     try:
         function_names = _public_function_names(payload.code)
     except SyntaxError as exc:
-        raise HTTPException(status_code=400, detail=f"Python syntax error: {exc}") from exc
+        raise HTTPException(status_code=400, detail=f"Python 语法错误：{exc}") from exc
     if func_name not in function_names:
-        raise HTTPException(status_code=400, detail=f"Source must define function: {func_name}")
+        raise HTTPException(status_code=400, detail=f"源码中未找到函数定义：{func_name}")
 
     try:
         target_folder.mkdir(parents=True, exist_ok=True)
         _ensure_folder_kind_compatible(target_folder, module_kind)
-        _write_folder_config(target_folder, namespace, module_kind, payload.publish_status or "draft")
+        _write_folder_config(target_folder, namespace, module_kind, payload.publish_status or "draft", payload.category_zh_name or "")
         source = _upsert_algo_meta(
             payload.code,
             func_name,
@@ -899,6 +942,7 @@ async def create_algorithm(
                 "zh_description": payload.zh_description,
                 "zh_tags": payload.zh_tags,
                 "version": payload.version or "1.0.0",
+                "input_example": payload.input_example or "",
             },
         )
         target_file.write_text(source, encoding="utf-8")
@@ -909,6 +953,16 @@ async def create_algorithm(
     entry = registry.get_by_id(f"{namespace}.{func_name}")
     if entry is None:
         raise HTTPException(status_code=500, detail="Algorithm created but could not be registered")
+    # Write per-algorithm status file immediately so this entry's status is
+    # isolated from other algorithms in the same folder_config.json.
+    try:
+        init_status = payload.publish_status or "draft"
+        _per_algo_status_path(entry).write_text(
+            json.dumps({"publish_status": init_status, "published": init_status == "published"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # Non-fatal; status will fall back to folder_config.json
     _append_entry_version(entry, "created", note="Created from frontend")
     sse_manager.broadcast({"event": "updated", "file": str(target_file), "algorithms": registry.to_completion_json()})
     return {"success": True, "algorithm": _entry_dict(entry)}
@@ -924,9 +978,18 @@ async def list_categories(
     categories = [_category_from_config(path, registry) for path in _category_config_paths(registry)]
     if module_kind:
         categories = [item for item in categories if item["module_kind"] == module_kind]
-    categories = [item for item in categories if item.get("namespace")]
-    categories.sort(key=lambda item: (item["module_kind"], item["namespace"]))
-    return {"success": True, "count": len(categories), "categories": categories}
+    # Only include top-level categories: must have a namespace and must NOT be
+    # an algorithm-level folder_config (those have a "name" field = func name).
+    categories = [item for item in categories if item.get("namespace") and not item.get("is_algo_folder")]
+    seen_ns: set[str] = set()
+    deduped: list[dict] = []
+    for item in categories:
+        key = (item["module_kind"], item["namespace"])
+        if key not in seen_ns:
+            seen_ns.add(key)
+            deduped.append(item)
+    deduped.sort(key=lambda item: (item["module_kind"], item["namespace"]))
+    return {"success": True, "count": len(deduped), "categories": deduped}
 
 
 @router.post("/categories")
@@ -1112,6 +1175,7 @@ async def update_algorithm_metadata(
         "zh_description": payload.zh_description if payload.zh_description is not None else entry.zh_description,
         "zh_tags": payload.zh_tags if payload.zh_tags is not None else entry.zh_tags,
         "version": payload.version if payload.version is not None else entry.version,
+        "input_example": payload.input_example if payload.input_example is not None else entry.input_example,
     }
 
     if entry.package_id:
@@ -1245,12 +1309,29 @@ async def get_algorithm_source(
     source_path = Path(entry.source_file)
     if not source_path.exists():
         raise HTTPException(status_code=404, detail=f"Source file not found: {source_path}")
+    # For published/reviewing/rejected algorithms, return draft content if available
+    review_draft = _load_review_draft(entry)
+    if review_draft and review_draft.get("files"):
+        draft_files = review_draft["files"]
+        if not entry.package_id:
+            # Single-file: return draft content as the editable source
+            draft_source = str(draft_files[0].get("content", "")) if draft_files else source_path.read_text(encoding="utf-8")
+            draft_folder_files = [{"filename": f.get("filename", ""), "relative_path": f.get("relative_path", ""), "content": f.get("content", "")} for f in draft_files]
+            return {
+                "success": True,
+                "algorithm": _entry_dict(entry),
+                "source": draft_source,
+                "source_file": str(source_path),
+                "folder_files": draft_folder_files,
+                "is_draft_mode": True,
+            }
     return {
         "success": True,
         "algorithm": _entry_dict(entry),
         "source": source_path.read_text(encoding="utf-8"),
         "source_file": str(source_path),
         "folder_files": _folder_files_for_entry(entry),
+        "is_draft_mode": False,
     }
 
 
@@ -1296,7 +1377,7 @@ async def save_algorithm_review_draft(
         try:
             ast.parse(content)
         except SyntaxError as exc:
-            raise HTTPException(status_code=400, detail=f"Python syntax error in {filename}: {exc}") from exc
+            raise HTTPException(status_code=400, detail=f"{filename} 中存在 Python 语法错误：{exc}") from exc
         normalized_files.append({"filename": filename, "relative_path": filename, "content": content})
     current_status = _read_entry_publish_status(entry)
     existing = _load_review_draft(entry) or {}
@@ -1325,19 +1406,197 @@ async def discard_algorithm_review_draft(
         raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
     draft = _load_review_draft(entry)
     base_status = str((draft or {}).get("base_status") or "draft")
-    config_path = _entry_config_path(entry)
-    if config_path.exists() and _read_entry_publish_status(entry) == "rejected":
-        try:
-            config = json.loads(config_path.read_text(encoding="utf-8"))
-            config["publish_status"] = base_status
-            config["published"] = base_status == "published"
-            config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-        except (OSError, json.JSONDecodeError) as exc:
-            raise HTTPException(status_code=500, detail=f"Failed to restore status: {exc}") from exc
+    current_status = _read_entry_publish_status(entry)
     _delete_review_draft(entry)
-    registry.scan_directory(str(config_path.parent.parent))
+    if current_status == "rejected":
+        refreshed = _update_publish_status(entry, base_status, registry)
+    else:
+        config_path = _entry_config_path(entry)
+        registry.scan_directory(str(config_path.parent.parent if not entry.package_root else Path(entry.package_root).parent))
+        refreshed = registry.get_by_id(entry.id) or entry
+        sse_manager.broadcast({"event": "updated", "file": str(config_path), "algorithms": registry.to_completion_json()})
+    return {"success": True, "algorithm": _entry_dict(refreshed)}
+
+
+def _update_publish_status(entry: AlgorithmEntry, status: str, registry: AlgorithmRegistry) -> AlgorithmEntry:
+    """Write publish_status to the appropriate config and rescan."""
+
+    config_path = _entry_config_path(entry)
+    if not entry.package_root:
+        # For non-package (flat-file) entries write to a per-algorithm status file
+        # so that multiple algorithms in the same folder never share status.
+        status_path = _per_algo_status_path(entry)
+        try:
+            status_path.write_text(
+                json.dumps({"publish_status": status, "published": status == "published"}, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to update algorithm status: {exc}") from exc
+        scan_root = str(config_path.parent.parent)
+    else:
+        # Package entries own their algopack.json exclusively.
+        if config_path.exists():
+            try:
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                config = {}
+        else:
+            config = {"namespace": entry.namespace, "type": entry.type, "module_kind": entry.type}
+        config["publish_status"] = status
+        config["published"] = status == "published"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+        scan_root = str(Path(entry.package_root).parent)
+    registry.scan_directory(scan_root)
     refreshed = registry.get_by_id(entry.id) or entry
     sse_manager.broadcast({"event": "updated", "file": str(config_path), "algorithms": registry.to_completion_json()})
+    return refreshed
+
+
+@router.post("/algorithms/{algorithm_id:path}/submit")
+async def submit_algorithm_review(
+    algorithm_id: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Submit an algorithm for review (draft → reviewing). Snapshots current code."""
+
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    current = _read_entry_publish_status(entry)
+    if current not in ("draft", "rejected", "published"):
+        raise HTTPException(status_code=400, detail=f"Cannot submit from status: {current}")
+    try:
+        body: dict[str, Any] = await request.json()
+    except Exception:
+        body = {}
+    existing = _load_review_draft(entry) or {}
+    # For published algorithms with no draft, snapshot current files
+    if not existing.get("files"):
+        snap_files = _folder_files_for_entry(entry)
+        existing["files"] = [{"filename": f["filename"], "relative_path": f["relative_path"], "content": f["content"]} for f in snap_files]
+    draft: dict[str, Any] = {
+        "algorithm_id": entry.id,
+        "call_prefix": entry.call_prefix,
+        "base_status": existing.get("base_status") or current,
+        "status": "reviewing",
+        "version_bump": str(body.get("version_bump") or ""),
+        "metadata": body.get("metadata") if isinstance(body.get("metadata"), dict) else {},
+        "files": existing["files"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _save_review_draft(entry, draft)
+    refreshed = _update_publish_status(entry, "reviewing", registry)
+    return {"success": True, "algorithm": _entry_dict(refreshed)}
+
+
+@router.post("/algorithms/{algorithm_id:path}/withdraw")
+async def withdraw_algorithm_review(
+    algorithm_id: str,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Withdraw a submitted review (reviewing → original base status)."""
+
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    draft = _load_review_draft(entry) or {}
+    base_status = str(draft.get("base_status") or "draft")
+    # Mark draft as pending (not yet reviewing)
+    if draft:
+        draft["status"] = "pending"
+        _save_review_draft(entry, draft)
+    refreshed = _update_publish_status(entry, base_status, registry)
+    return {"success": True, "algorithm": _entry_dict(refreshed)}
+
+
+@router.post("/algorithms/{algorithm_id:path}/approve")
+async def approve_algorithm_review(
+    algorithm_id: str,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Approve a review (reviewing → approved)."""
+
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    current = _read_entry_publish_status(entry)
+    if current not in ("reviewing", "draft"):
+        raise HTTPException(status_code=400, detail=f"Cannot approve from status: {current}")
+    refreshed = _update_publish_status(entry, "approved", registry)
+    return {"success": True, "algorithm": _entry_dict(refreshed)}
+
+
+@router.post("/algorithms/{algorithm_id:path}/reject")
+async def reject_algorithm_review(
+    algorithm_id: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Reject a review (reviewing → rejected). Updates review draft with reason."""
+
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    try:
+        body: dict[str, Any] = await request.json()
+    except Exception:
+        body = {}
+    reason = str(body.get("reason") or "")
+    # Always persist reject_reason; create a minimal draft if none exists
+    existing = _load_review_draft(entry) or {
+        "algorithm_id": entry.id,
+        "call_prefix": entry.call_prefix,
+        "base_status": _read_entry_publish_status(entry),
+        "metadata": {},
+        "files": [],
+    }
+    existing["status"] = "rejected"
+    existing["reject_reason"] = reason
+    existing["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _save_review_draft(entry, existing)
+    refreshed = _update_publish_status(entry, "rejected", registry)
+    return {"success": True, "algorithm": _entry_dict(refreshed)}
+
+
+@router.post("/algorithms/{algorithm_id:path}/re-review")
+async def re_review_algorithm(
+    algorithm_id: str,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Undo a rejection and put the algorithm back into reviewing state (rejected → reviewing)."""
+
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    current = _read_entry_publish_status(entry)
+    if current != "rejected":
+        raise HTTPException(status_code=400, detail=f"Cannot re-review from status: {current}")
+    draft = _load_review_draft(entry)
+    if draft:
+        draft["status"] = "reviewing"
+        _save_review_draft(entry, draft)
+    refreshed = _update_publish_status(entry, "reviewing", registry)
+    return {"success": True, "algorithm": _entry_dict(refreshed)}
+
+
+@router.post("/algorithms/{algorithm_id:path}/publish")
+async def publish_algorithm(
+    algorithm_id: str,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Publish an approved algorithm (approved → published). Applies any pending review draft."""
+
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    # Apply review draft so code changes actually take effect (e.g. published → revised → approved → published)
+    draft = _load_review_draft(entry)
+    if draft and draft.get("files"):
+        entry = _apply_review_draft(entry, registry)
+    refreshed = _update_publish_status(entry, "published", registry)
     return {"success": True, "algorithm": _entry_dict(refreshed)}
 
 
@@ -1389,10 +1648,32 @@ async def save_algorithm_source(
         raise HTTPException(status_code=404, detail=f"Source file not found: {source_path}")
     try:
         ast.parse(payload.content)
+    except SyntaxError as exc:
+        raise HTTPException(status_code=400, detail=f"Python 语法错误：{exc}") from exc
+    current_status = _read_entry_publish_status(entry)
+    # For published/reviewing algorithms, save to review draft (preserve live file)
+    if current_status in ("published", "reviewing"):
+        filename = Path(entry.source_file).name
+        existing = _load_review_draft(entry) or {}
+        draft: dict[str, Any] = {
+            "algorithm_id": entry.id,
+            "call_prefix": entry.call_prefix,
+            "base_status": existing.get("base_status") or current_status,
+            "status": existing.get("status") or "pending",
+            "metadata": existing.get("metadata") or {},
+            "files": [{"filename": filename, "relative_path": filename, "content": payload.content}],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _save_review_draft(entry, draft)
+        return {
+            "success": True,
+            "algorithm": _entry_dict(entry),
+            "folder_files": [{"filename": filename, "relative_path": filename, "content": payload.content}],
+            "is_draft_mode": True,
+        }
+    try:
         source_path.write_text(payload.content, encoding="utf-8")
         registry.rescan_file(str(source_path))
-    except SyntaxError as exc:
-        raise HTTPException(status_code=400, detail=f"Python syntax error: {exc}") from exc
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to save source: {exc}") from exc
     updated = registry.get_by_id(entry.id) or registry.get_by_id(f"{entry.namespace}.{entry.func_name}")
@@ -1402,6 +1683,7 @@ async def save_algorithm_source(
         "success": True,
         "algorithm": _entry_dict(updated or entry),
         "folder_files": _folder_files_for_entry(updated or entry),
+        "is_draft_mode": False,
     }
 
 

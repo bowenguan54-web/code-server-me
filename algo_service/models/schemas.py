@@ -57,6 +57,9 @@ class PublishAsComponentRequest(BaseModel):
     version: str = "1.0.0"
     category: str = ""
     description: str = ""
+    zh_tags: list[str] = Field(default_factory=list)
+    input_example: str = ""
+    code: str = ""  # if provided, use this code instead of template source
 
 
 class AlgorithmCreateRequest(BaseModel):
@@ -64,6 +67,7 @@ class AlgorithmCreateRequest(BaseModel):
 
     name: str
     category: str
+    category_zh_name: str = ""
     zh_name: str = ""
     zh_description: str = ""
     zh_tags: list[str] = Field(default_factory=list)
@@ -71,6 +75,7 @@ class AlgorithmCreateRequest(BaseModel):
     code: str
     module_kind: str = "component"
     publish_status: str = "draft"
+    input_example: str = ""
 
 
 class AlgorithmMetadataUpdateRequest(BaseModel):
@@ -81,6 +86,7 @@ class AlgorithmMetadataUpdateRequest(BaseModel):
     zh_tags: list[str] | None = None
     version: str | None = None
     namespace: str | None = None
+    input_example: str | None = None
 
 
 class AlgorithmSourceSaveRequest(BaseModel):

@@ -82,6 +82,7 @@ class AstParser:
             "zh_description": meta.get("zh_description") or en_description,
             "zh_tags": meta.get("zh_tags") or [],
             "version": meta.get("version") or "1.0.0",
+            "input_example": meta.get("input_example") or "",
         }
 
     @staticmethod

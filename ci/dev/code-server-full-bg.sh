@@ -227,6 +227,17 @@ start_server() {
   fi
 
   : > "$LOG_FILE"
+
+  # Install algolib extension into extensions dir
+  local ext_src="$ROOT/src/sdk/algolib-extension"
+  local ext_dst="$EXTENSIONS_DIR/coder.algolib-1.0.0"
+  if [[ -d "$ext_src" ]]; then
+    mkdir -p "$ext_dst"
+    cp -f "$ext_src/package.json" "$ext_dst/"
+    cp -f "$ext_src/extension.js" "$ext_dst/"
+    echo "AlgoLib extension installed → $ext_dst"
+  fi
+
   (
     cd "$ROOT"
     export EXTENSIONS_GALLERY

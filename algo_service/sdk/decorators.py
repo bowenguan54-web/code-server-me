@@ -12,6 +12,7 @@ def algo_meta(
     zh_tags: list[str] | None = None,
     version: str = "1.0.0",
     author: str = "",
+    input_example: str = "",
 ) -> Any:
     """
     Decorator to attach Chinese metadata to an algorithm function.
@@ -30,6 +31,7 @@ def algo_meta(
             "zh_tags": zh_tags or [],
             "version": version,
             "author": author,
+            "input_example": input_example,
         }
         func._algo_meta = meta  # type: ignore[attr-defined]
 

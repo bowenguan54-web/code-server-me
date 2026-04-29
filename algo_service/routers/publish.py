@@ -231,13 +231,11 @@ async def withdraw_algorithm(
 async def approve_algorithm(
     algorithm_id: str,
     body: ReasonBody | None = None,
-    x_admin_token: str | None = Header(None, alias="X-Admin-Token"),
     x_operator: str | None = Header(None, alias="X-Operator"),
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Approve a component review."""
 
-    _require_admin_token(x_admin_token)
     entry = _get_entry(registry, algorithm_id)
     algorithm = _set_status(entry, "approved", x_operator or "admin", body.reason if body else "", registry)
     return {"success": True, "algorithm": algorithm}
@@ -247,13 +245,11 @@ async def approve_algorithm(
 async def reject_algorithm(
     algorithm_id: str,
     body: ReasonBody,
-    x_admin_token: str | None = Header(None, alias="X-Admin-Token"),
     x_operator: str | None = Header(None, alias="X-Operator"),
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Reject a component review."""
 
-    _require_admin_token(x_admin_token)
     entry = _get_entry(registry, algorithm_id)
     algorithm = _set_status(entry, "rejected", x_operator or "admin", body.reason, registry)
     return {"success": True, "algorithm": algorithm}

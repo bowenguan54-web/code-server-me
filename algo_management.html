@@ -62,7 +62,7 @@
     .app {
       height: 100vh;
       display: grid;
-      grid-template-columns: 190px 1fr;
+      grid-template-columns: 168px 1fr;
       grid-template-rows: 1fr 28px;
       background: var(--bg-deep);
     }
@@ -495,6 +495,35 @@
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .invalid-field { border-color: var(--danger) !important; }
 
+    .scope-badge {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      background: rgba(7, 22, 43, .92);
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 11px;
+      cursor: default;
+    }
+    .scope-badge.scope-team { color: var(--accent); border: 1px solid rgba(0, 240, 200, .42); }
+    .scope-badge.scope-private { color: var(--text-dim); border: 1px solid var(--line); }
+
+    .nav-sub { overflow: hidden; transition: max-height .2s ease; max-height: 400px; }
+    .nav-sub.collapsed { max-height: 0; }
+    .nav-sub-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 10px 6px 26px;
+      border-radius: 6px;
+      color: var(--text-dim);
+      cursor: pointer;
+      user-select: none;
+      font-size: 13px;
+    }
+    .nav-sub-item:hover, .nav-sub-item.active { background: rgba(30, 144, 255, .12); color: #fff; }
+    .nav-toggle { background: none; border: none; color: var(--text-dim); padding: 0 4px; font-size: 11px; transition: transform .18s; }
+    .nav-item.has-sub { margin-bottom: 0; }
+
     @media (max-width: 900px) {
       .app { grid-template-columns: 1fr; }
       .sidebar { display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; padding: 8px; }
@@ -554,7 +583,9 @@
       snippetCursor: 0,
       workspaceEditor: null,
       workspaceModels: new Map(),
-      sse: null
+      sse: null,
+      navSubExpanded: { components: true, templates: false },
+      navFilter: ""
     };
 
     function qs(selector, root = document) { return root.querySelector(selector); }
@@ -723,6 +754,18 @@
     }
 
     function renderNav() {
+      function renderSubNav(page) {
+        const cats = state.categories[page] || [];
+        if (!cats.length) return "";
+        const expanded = state.navSubExpanded[page] !== false;
+        return `<div class="nav-sub${expanded ? "" : " collapsed"}" id="navSub_${page}">${
+          cats.map(cat => {
+            const ns = cat.namespace;
+            const active = state.page === page && state.navFilter === ns;
+            return `<div class="nav-sub-item${active ? " active" : ""}" onclick="window.switchPageAndFilter('${esc(page)}','${esc(ns)}')">${esc(cat.zh_name || ns)}</div>`;
+          }).join("")
+        }</div>`;
+      }
       const pages = [
         ["components", "算法组件"],
         ["templates", "算法模板"],
@@ -733,13 +776,36 @@
         ["logs", "运行日志"],
         ["settings", "系统设置"]
       ];
+      const hasSub = ["components", "templates"];
       qs("#sidebar").innerHTML = [
         '<div class="brand">Algo<span>Lib</span> 管理平台</div>',
-        ...pages.map(([page, label]) => `<div class="nav-item ${page === state.page ? "active" : ""}" data-page="${page}"><span class="nav-dot"></span>${label}</div>`)
+        ...pages.map(([page, label]) => {
+          const isActive = page === state.page;
+          const withSub = hasSub.includes(page);
+          const expanded = state.navSubExpanded[page] !== false;
+          return `<div class="nav-item${isActive ? " active" : ""}${withSub ? " has-sub" : ""}" data-page="${page}">
+            <span class="nav-dot"></span>${label}
+            ${withSub ? `<button class="nav-toggle" onclick="event.stopPropagation();window.toggleNavSub('${page}')">${expanded ? "▾" : "▸"}</button>` : ""}
+          </div>
+          ${withSub ? renderSubNav(page) : ""}`;
+        })
       ].join("");
       qsa(".nav-item").forEach(item => {
         item.addEventListener("click", () => switchPage(item.dataset.page));
       });
+    }
+
+    function toggleNavSub(page) {
+      state.navSubExpanded[page] = !state.navSubExpanded[page];
+      const sub = qs(`#navSub_${page}`);
+      const btn = qs(`.nav-item[data-page="${page}"] .nav-toggle`);
+      if (sub) sub.classList.toggle("collapsed", !state.navSubExpanded[page]);
+      if (btn) btn.textContent = state.navSubExpanded[page] ? "▾" : "▸";
+    }
+
+    function switchPageAndFilter(page, namespace) {
+      state.navFilter = namespace;
+      switchPage(page);
     }
 
     function switchPage(page) {
@@ -811,7 +877,12 @@
         <section id="list">${skeletonHtml()}</section>
       `;
       loadModuleData(page).then(() => {
+        renderNav();
         hydrateFilters(page);
+        if (state.navFilter) {
+          const sel = qs("#filterCategory");
+          if (sel) sel.value = state.navFilter;
+        }
         renderCards(page);
       }).catch(error => {
         qs("#list").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
@@ -919,14 +990,14 @@
       const visibleTags = (getTags(item) || []).filter(tag => !["多文件", "复杂算法"].includes(String(tag))).slice(0, 2);
       return `
         <article class="algo-card ${kind} ${state.highlightId === id ? "highlight" : ""}" data-id="${esc(id)}">
-          ${page === "components" ? `<span class="tag ${statusClass(status)} status-badge" ${status === "rejected" ? `onclick="window.showReviewDraft('${esc(id)}')" title="查看被驳回的修改内容"` : ""}>${esc(statusLabel(status))}</span>` : ""}
+          ${(page === "components" || page === "templates") ? `<span class="tag ${statusClass(status)} status-badge" ${status === "rejected" ? `onclick="window.showReviewDraft('${esc(id)}')" title="查看被驳回的修改内容"` : ""}>${esc(statusLabel(status))}</span>` : ""}
           <div class="card-title">${esc(getName(item))}</div>
           <div class="card-ns">${esc(getNs(item, page))}</div>
           <div class="desc">${esc(getDesc(item))}</div>
           <div class="tags">
             <span class="tag">${esc(item.language || "python")}</span>
             <span class="tag">v${esc(item.version || "1.0")}</span>
-            ${page === "snippets" ? `<span class="tag">${item.scope === "team" ? "共享" : "私有"}</span>` : ""}
+            ${page === "snippets" ? `<span class="tag scope-badge ${item.scope === 'team' ? 'scope-team' : 'scope-private'}">${item.scope === 'team' ? '共享' : '私有'}</span>` : ""}
             ${visibleTags.map(tag => `<span class="tag">${esc(tag)}</span>`).join("")}
           </div>
           <div class="card-actions">${buttons}</div>
@@ -1098,6 +1169,7 @@
             <button onclick="window.switchPage('${page}')">返回</button>
             <strong>${page === "templates" ? "新建算法模板" : "新建算法"}</strong>
             <span class="spacer"></span>
+            <button onclick="window.openSnippetOverlay()" title="Ctrl+Alt+S">插入片段</button>
             <button onclick="window.testWorkspaceSource()">测试</button>
             <button class="primary" onclick="window.saveWorkspaceAlgorithm('${moduleKind}')">保存草稿</button>
           </div>
@@ -1524,7 +1596,9 @@
             <span class="breadcrumb">${esc(pageTitle(e.page))} / ${esc(getName(e.algo))}</span>
             <button onclick="window.setTestHeight(state.testHeight ? 0 : 240)">测试</button>
             <button onclick="window.editCurrentAlgorithmInfo()">基本信息</button>
-            ${e.page === "components" ? `<button onclick="window.submitReview('${esc(e.id)}')">提交审核</button>` : ""}
+            ${e.page === "components" && ["draft", "rejected"].includes(getStatus(e.algo)) ? `<button onclick="window.submitReview('${esc(e.id)}')">提交审核</button>` : ""}
+            ${e.page === "components" && getStatus(e.algo) === "reviewing" ? `<button onclick="window.withdrawReview('${esc(e.id)}')">撤回审核</button>` : ""}
+            ${e.page === "components" && getStatus(e.algo) === "approved" ? `<button class="success" onclick="window.publishComponent('${esc(e.id)}')">正式发布</button>` : ""}
             <span class="spacer"></span>
             <div class="editor-actions">
             <div class="namespace-edit" id="nsBox">
@@ -1535,6 +1609,7 @@
               <div class="field-error" id="nsErr"></div>
             </div>
             <span id="draftBadge" class="draft-badge hidden">本机暂存</span>
+            <button onclick="window.openSnippetOverlay()" title="Ctrl+Alt+S">插入片段</button>
             <button onclick="window.saveCurrentFile()">暂存代码</button>
             </div>
           </div>
@@ -1819,9 +1894,10 @@
 
     function validateNamespace() {
       const value = qs("#nsInput").value.trim();
+      const hasChinese = /[\u4e00-\u9fa5\uff00-\uffef]/.test(value);
       const ok = /^[a-z_][a-z0-9_]*$/.test(value);
       qs("#nsBox").classList.toggle("invalid", !ok);
-      qs("#nsErr").textContent = ok ? "" : "这里只能编辑函数调用名，例如 lgbm_train";
+      qs("#nsErr").textContent = ok ? "" : hasChinese ? "函数名不能包含中文，请使用小写字母和下划线" : "函数名只能使用小写字母、数字和下划线（如 lgbm_train）";
       return ok;
     }
 
@@ -2208,9 +2284,11 @@
       const name = nameEl.value.trim();
       const newNamespace = nsEl.value.trim();
       nameEl.classList.toggle("invalid-field", !name);
-      nsEl.classList.toggle("invalid-field", !/^alg\.[a-z_]+$/.test(newNamespace));
-      if (!name || !/^alg\.[a-z_]+$/.test(newNamespace)) {
-        showToast("请检查组件名称和命名空间格式");
+      const nsValid = /^alg\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$/.test(newNamespace);
+      const nsHasChinese = /[\u4e00-\u9fa5\uff00-\uffef]/.test(newNamespace);
+      nsEl.classList.toggle("invalid-field", !nsValid);
+      if (!name || !nsValid) {
+        showToast(nsHasChinese ? "命名空间不能包含中文，格式应为 alg.category" : "请检查组件名称和命名空间格式（如 alg.statistics）");
         return;
       }
       const payload = {
@@ -2495,7 +2573,23 @@
     }
 
     async function deleteAlgorithm(id) {
-      if (!confirm("确认删除这个算法文件？")) return;
+      const item = (state.data[state.page] || []).find(entry => entry.id === id);
+      const label = item ? getName(item) : id;
+      qs("#modalRoot").classList.remove("hidden");
+      qs("#modalRoot").innerHTML = `
+        <div class="modal">
+          <h3>确认删除</h3>
+          <p class="desc">即将永久删除算法文件 <strong>${esc(label)}</strong>，此操作不可恢复。</p>
+          <div class="modal-actions">
+            <button onclick="window.closeModal()">取消</button>
+            <button class="danger" onclick="window._confirmDeleteAlgorithm('${esc(id)}')">确认删除</button>
+          </div>
+        </div>
+      `;
+    }
+
+    window._confirmDeleteAlgorithm = async function(id) {
+      closeModal();
       try {
         await api(`/api/v1/algorithms/${safeId(id)}`, { method: "DELETE" });
         showToast("算法已删除");
@@ -2504,7 +2598,7 @@
       } catch (error) {
         showToast(error.message);
       }
-    }
+    };
 
     async function showApiDoc(id) {
       const item = (state.data.components || []).find(entry => entry.id === id);
@@ -3125,6 +3219,8 @@
     window.closeModal = closeModal;
     window.loadCurrentPage = loadCurrentPage;
     window.updateCardNamespace = updateCardNamespace;
+    window.toggleNavSub = toggleNavSub;
+    window.switchPageAndFilter = switchPageAndFilter;
 
     init();
   </script>
