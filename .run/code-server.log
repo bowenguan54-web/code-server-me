@@ -1,0 +1,7 @@
+[2026-04-24T14:26:57.818Z] info  code-server 0.0.0 development
+[2026-04-24T14:26:57.819Z] info  Using user-data-dir /home/guan/code-server-me/.run/dev-user-data
+[2026-04-24T14:26:57.851Z] info  Using config file /home/guan/.config/code-server/config.yaml
+[2026-04-24T14:26:57.851Z] info  HTTP server listening on http://127.0.0.1:8081/
+[2026-04-24T14:26:57.851Z] info    - Authentication is disabled
+[2026-04-24T14:26:57.851Z] info    - Not serving HTTPS
+[2026-04-24T14:26:57.851Z] info  Session server listening on /home/guan/code-server-me/.run/dev-user-data/code-server-ipc.sock

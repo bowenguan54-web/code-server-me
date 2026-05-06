@@ -1,0 +1,10 @@
+{
+  "namespace": "custom",
+  "type": "component",
+  "module_kind": "component",
+  "published": false,
+  "publish_status": "draft",
+  "version": "1.0.1",
+  "pending_version": "1.0.1",
+  "version_change": "补丁版本"
+}

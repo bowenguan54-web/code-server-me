@@ -1,0 +1,9 @@
+{
+  "namespace": "data_utils",
+  "type": "component",
+  "description": "通用数据处理工具集",
+  "zh_name": "数据工具",
+  "module_kind": "component",
+  "published": true,
+  "publish_status": "published"
+}

@@ -1,0 +1,13 @@
+2026-04-25 16:55:09.471 [info] 
+
+
+
+
+2026-04-25 16:55:10.281 [info] Extension host agent started.
+2026-04-25 16:55:12.229 [info] [127.0.0.1][c8cc65fd][ManagementConnection] New connection established.
+2026-04-25 16:55:13.200 [info] [127.0.0.1][4a305214][ExtensionHostConnection] New connection established.
+2026-04-25 16:55:13.547 [info] [127.0.0.1][4a305214][ExtensionHostConnection] <15746> Launched Extension Host Process.
+2026-04-25 16:55:14.566 [info] [127.0.0.1][4a305214][ExtensionHostConnection] <15746> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+2026-04-25 16:55:59.487 [error] [File Watcher ('parcel')] Unexpected error: inotify_add_watch on '/home/guan/code-server-me/.run/fullbuild-user-data/logs/20260425T111701/exthost1' failed: No such file or directory (EUNKNOWN) (path: /home/guan/code-server-me)
+2026-04-25 16:55:59.488 [error] [File Watcher (universal)] inotify_add_watch on '/home/guan/code-server-me/.run/fullbuild-user-data/logs/20260425T111701/exthost1' failed: No such file or directory

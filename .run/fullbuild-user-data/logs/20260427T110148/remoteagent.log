@@ -1,0 +1,13 @@
+2026-04-27 11:01:48.392 [info] 
+
+
+
+
+2026-04-27 11:01:49.214 [info] Extension host agent started.
+2026-04-27 11:01:49.230 [error] [127.0.0.1][1a5ac549][ManagementConnection] Unknown reconnection token (never seen).
+2026-04-27 11:04:49.870 [info] [127.0.0.1][5a27aecd][ManagementConnection] New connection established.
+2026-04-27 11:04:50.161 [info] [127.0.0.1][b74d5408][ExtensionHostConnection] New connection established.
+2026-04-27 11:04:50.688 [info] [127.0.0.1][b74d5408][ExtensionHostConnection] <5883> Launched Extension Host Process.
+2026-04-27 11:04:52.169 [info] [127.0.0.1][b74d5408][ExtensionHostConnection] <5883> [reconnection-grace-time] Extension host: read VSCODE_RECONNECTION_GRACE_TIME=10800000ms (10800s)
+
+2026-04-27 11:04:54.677 [error] #1: https://open-vsx.org/vscode/asset/editorss/antigravity-language-pack-zh-hans/1.41.1/Microsoft.VisualStudio.Code.Manifest?targetPlatform=universal - error GET AggregateError [ETIMEDOUT]: 

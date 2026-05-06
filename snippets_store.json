@@ -1,0 +1,50 @@
+[
+  {
+    "id": "snip_algometa",
+    "name": "algo_meta_component",
+    "zh_name": "算法元信息装饰器",
+    "body": "from algo_service.sdk.decorators import algo_meta\n\n\n@algo_meta(\n    zh_name=\"中文算法名称\",\n    zh_description=\"说明算法用途、输入输出和适用场景。\",\n    zh_tags=[\"分类\", \"业务标签\"],\n    version=\"1.0.0\",\n)\ndef algorithm_name(data: list, threshold: float = 0.5) -> dict:\n    return {\"count\": len(data), \"threshold\": threshold}\n",
+    "language": "python",
+    "tags": ["算法开发", "元信息", "组件"],
+    "scope": "team",
+    "version": "1.0",
+    "created_at": "2026-04-25T00:00:00+00:00",
+    "updated_at": "2026-04-27T00:00:00+00:00"
+  },
+  {
+    "id": "snip_paramcheck",
+    "name": "validate_params",
+    "zh_name": "参数校验片段",
+    "body": "def validate_required(value, name: str):\n    if value is None:\n        raise ValueError(f\"{name} must not be None\")\n    if isinstance(value, (list, dict, str)) and not value:\n        raise ValueError(f\"{name} must not be empty\")\n    return value\n\n\ndef validate_range(value: float, name: str, low: float, high: float) -> float:\n    number = float(value)\n    if number < low or number > high:\n        raise ValueError(f\"{name} must be between {low} and {high}\")\n    return number\n",
+    "language": "python",
+    "tags": ["参数校验", "异常处理"],
+    "scope": "team",
+    "version": "1.0",
+    "created_at": "2026-04-25T00:00:00+00:00",
+    "updated_at": "2026-04-27T00:00:00+00:00"
+  },
+  {
+    "id": "snip_dataframe",
+    "name": "csv_to_records",
+    "zh_name": "CSV 转记录片段",
+    "body": "import csv\nfrom io import StringIO\nfrom typing import Any\n\n\ndef csv_to_records(csv_text: str) -> list[dict[str, Any]]:\n    reader = csv.DictReader(StringIO(csv_text.strip()))\n    return [dict(row) for row in reader]\n",
+    "language": "python",
+    "tags": ["CSV", "数据处理", "DataFrame"],
+    "scope": "private",
+    "version": "1.0",
+    "created_at": "2026-04-25T00:00:00+00:00",
+    "updated_at": "2026-04-27T00:00:00+00:00"
+  },
+  {
+    "id": "snip_result",
+    "name": "standard_result",
+    "zh_name": "标准返回结构",
+    "body": "def standard_result(success: bool, data=None, message: str = \"\", **meta) -> dict:\n    return {\n        \"success\": success,\n        \"data\": data,\n        \"message\": message,\n        \"meta\": meta,\n    }\n",
+    "language": "python",
+    "tags": ["返回结构", "规范"],
+    "scope": "team",
+    "version": "1.0",
+    "created_at": "2026-04-25T00:00:00+00:00",
+    "updated_at": "2026-04-27T00:00:00+00:00"
+  }
+]

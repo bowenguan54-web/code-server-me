@@ -1,0 +1,1705 @@
+{
+  "schemaVersion": 2,
+  "categories": [
+    {
+      "id": 1,
+      "scope": "template",
+      "name": "数据预处理",
+      "level": 1,
+      "sortOrder": 1,
+      "description": "为机器学习提供数据准备和预处理服务，确保数据质量满足要求。",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 2,
+      "scope": "template",
+      "name": "统计分析",
+      "level": 1,
+      "sortOrder": 2,
+      "description": "提供描述性统计、相关性分析、假设检验等统计分析算法。",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 3,
+      "scope": "template",
+      "name": "经典机器学习",
+      "level": 1,
+      "sortOrder": 3,
+      "description": "包含分类、聚类、回归等经典机器学习算法组件。",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 4,
+      "scope": "template",
+      "name": "时序数据分析",
+      "level": 1,
+      "sortOrder": 4,
+      "description": "提供时间序列相似性、分类、聚类、预测与包络分析等算法。",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 5,
+      "scope": "template",
+      "name": "深度学习",
+      "level": 1,
+      "sortOrder": 5,
+      "description": "支持主流深度学习框架，提供模型构建和训练模板。",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 6,
+      "scope": "template",
+      "name": "多算法框架",
+      "level": 1,
+      "sortOrder": 6,
+      "description": "支持 Scikit-learn、PyTorch、OpenCV 等主流算法框架。",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 7,
+      "scope": "template",
+      "name": "信号处理",
+      "level": 1,
+      "sortOrder": 7,
+      "description": "提供时域、频域、时频域信号处理算法模板。",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 8,
+      "scope": "template",
+      "name": "未分类",
+      "level": 1,
+      "sortOrder": 999,
+      "description": "删除分类后的模板会自动迁移到这里，方便后续重新归类。",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 9,
+      "scope": "template",
+      "name": "test-cat",
+      "level": 1,
+      "sortOrder": 10,
+      "createdAt": "2026-04-22T13:00:21.215Z",
+      "updatedAt": "2026-04-22T13:00:21.215Z"
+    },
+    {
+      "id": 10,
+      "scope": "template",
+      "name": "测试分类",
+      "englishName": "test",
+      "level": 1,
+      "sortOrder": 10,
+      "description": "测试功能",
+      "createdAt": "2026-04-22T13:02:26.583Z",
+      "updatedAt": "2026-04-22T13:02:26.583Z"
+    }
+  ],
+  "templates": [
+    {
+      "id": 1,
+      "name": "随机采样器",
+      "categoryId": 1,
+      "difficulty": 1,
+      "language": "python",
+      "description": "从数据集中按指定比例进行随机无放回采样。",
+      "content": "我一个零基础想了解这些内容，进而学习有关软件开发相关的知识，应该从哪学起，帮我推荐课程或者书籍。\n零基础学习软件开发：完整路线图\n首先明确一个重要前提\n在推荐任何资源之前，有一件事情必须说清楚：软件开发的方向非常多，不同方向的学习路径差异很大。你需要先大致了解各个方向，再决定从哪里入手，否则很容易走弯路。主要方向包括：\n\n前端开发：做网页和 App 的界面，用户直接看到和操作的部分（HTML/CSS/JavaScript）\n后端开发：做服务器、数据库、业务逻辑，数据的存储和处理（Python/Java/Go/Node.js 等）\n全栈开发：前端+后端都做\n移动端开发：做手机 App（Android/iOS）\n算法与数据结构：所有方向都需要的底层基础\n运维/DevOps：管理服务器、部署、自动化（你前面问的 npm、CMD、PowerShell 都偏这个方向）\n根据你之前问的问题（npm、CMD、PowerShell、ping），你对计算机基础和开发工具很感兴趣，这是一个非常好的起点，说明你有一定的探索欲。下面我给你规划一条由浅入深、循序渐进的完整路线。\n\n第一阶段：计算机基础（1~2个月）\n这一阶段的目标是建立对计算机的整体认知，很多人跳过这一步直接学编程，结果遇到问题完全不知道为什么，非常痛苦。\n\n推荐资源：\n\n《计算机是怎样跑起来的》—— 矢泽久雄（日），这是一本极其适合零基础的科普书，用大量图示讲解 CPU、内存、硬盘、操作系统、网络是如何工作的，没有任何门槛，读起来像在看故事书，强烈推荐作为第一本书。\n\n《网络是怎样连接的》—— 户根勤（日），同系列的另一本书，专门讲网络原理，从你在浏览器输入一个网址开始，一步步讲清楚数据是怎么走到服务器再回来的，读完之后你对 ping、IP、DNS、HTTP 的理解会上一个台阶。\n\nCS50（哈佛大学公开课），这是全球最著名的计算机入门课，哈佛大学的 David Malan 教授讲课极其生动，课程涵盖计算机基础、C 语言、Python、SQL、Web 开发，完全免费。可以在 B 站搜索\"CS50 中文\"找到有字幕的版本，也可以去官网 cs50.harvard.edu 看英文原版。\n\n第二阶段：选一门编程语言入门（2~3个月）\n计算机基础有了之后，需要学一门真正的编程语言。对于零基础的人，Python 是目前公认最适合入门的语言，原因是语法简洁接近自然语言、不需要关心复杂的内存管理、生态极其丰富（Web/数据分析/AI/自动化都能做），而且学习资源是所有语言里最多的。\n\n推荐书籍：\n\n《Python编程：从入门到实践》—— Eric Matthes，这是目前口碑最好的 Python 入门书，没有之一。全书分为两部分，前半部分讲语言基础（变量、循环、函数、类），后半部分做三个实战项目（游戏、数据可视化、Web 应用），非常适合零基础且想动手实践的人。\n\n《笨办法学Python》—— Zed Shaw，这本书的特点是强迫你手打每一行代码而不是复制粘贴，通过大量重复练习建立肌肉记忆，风格偏硬核，适合喜欢\"死磕\"的人。\n\n推荐课程：\n\n廖雪峰 Python 教程（liaoxuefeng.com），国内最好的免费 Python 中文教程之一，讲解清晰，覆盖面广，从基础到进阶都有，遇到不懂的概念随时可以去查。\n\nB站\"小甲鱼零基础入门学习Python\"，非常适合完全零基础的人，讲解风格轻松幽默，评论区互动活跃，遇到问题很容易找到答案。\n\n第三阶段：计算机核心基础（与编程学习并行，3~6个月）\n学编程的同时，需要逐渐补充几个核心基础知识，这些东西不是一蹴而就的，可以边学边补：\n\n数据结构与算法是所有软件开发的底层基础，理解了数组、链表、栈、队列、树、图、排序算法之后，你写的代码才能从\"能跑起来\"升级到\"跑得好\"。入门推荐**《大话数据结构》—— 程杰**，这本书用非常接地气的比喻和故事讲解抽象概念，是国内少有的把数据结构讲得有趣的书。之后可以在 LeetCode（leetcode.cn）上刷题巩固，从简单题开始。\n\n操作系统基础推荐**《现代操作系统》**作为长期参考书（内容较深，不急着啃），短期内可以先看 B 站上清华大学的操作系统公开课，或者搜索\"操作系统 入门 趣谈\"，有很多质量不错的视频课程。\n\nGit 版本控制是每个开发者必须掌握的工具，它让你可以追踪代码的每一次改动、与他人协作、回滚错误。推荐廖雪峰 Git 教程（免费，liaoxuefeng.com/wiki/896043488029600），一两天就能学会基本用法。\n\n第四阶段：确定方向，深入学习（6个月以后）\n有了前三个阶段的基础之后，你对自己的兴趣会有更清晰的认识，这时候可以选择一个方向深入：\n\n如果选择前端开发，学习路径是 HTML → CSS → JavaScript → React 或 Vue。推荐MDN Web Docs（developer.mozilla.org）作为最权威的参考文档，以及 freeCodeCamp（freecodecamp.org）提供的免费系统课程。书籍推荐**《JavaScript高级程序设计》**（俗称\"红宝书\"），是前端开发者必读经典。\n\n如果选择后端开发，Python 方向可以继续深入学习 Django 或 FastAPI 框架；也可以转学 Java（推荐《Head First Java》入门）或 Go 语言，这两者在国内后端岗位需求量极大。\n\n如果对运维/DevOps 感兴趣（结合你之前的问题，这个方向也很适合你），可以深入学习 Linux 系统管理、Shell 脚本、Docker 容器、Kubernetes，以及云平台（AWS/阿里云/腾讯云）的使用。推荐**《鸟哥的Linux私房菜》**，是国内学 Linux 的必读书籍。\n\n一些非常重要的学习建议\n动手比看书更重要。软件开发是一门手艺，不是知识的堆砌。看完一个概念立刻打开编辑器写代码验证它，哪怕是很小的练习也比多看几遍教程有用得多。一个常见的错误是\"看了很多教程但从不动手\"，这会让你陷入一种\"感觉学了很多但什么也做不出来\"的困境。\n\n遇到报错不要慌。报错是正常的，甚至是学习过程中最有价值的部分。学会看懂报错信息、把报错复制到搜索引擎、在 Stack Overflow 或掘金上找答案，这本身就是开发者最核心的技能之一。\n\n建立一个 GitHub 账号，从第一天就开始把自己写的代码托管上去，哪怕很简单，这既是习惯的培养，也是日后求职时最直接的作品集。\n\n不要追求\"学完再做\"。很多初学者希望把所有基础都学扎实了再开始做项目，但这条路很容易让人半途而废。正确的方式是边学边做，在做项目的过程中遇到不懂的再去补，这样学到的知识印象会深刻得多。",
+      "example": "# 示例数据：10 条记录中抽取 30% 作为训练样本。\nsamples = random_sample(list(range(10)), ratio=0.3, seed=7)",
+      "tags": [
+        "采样",
+        "预处理",
+        "数据准备"
+      ],
+      "currentVersion": "1.1.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-24T08:46:22.394Z",
+      "namespace": "component_lib"
+    },
+    {
+      "id": 2,
+      "name": "缺失值填充器",
+      "categoryId": 1,
+      "difficulty": 2,
+      "language": "python",
+      "description": "支持均值、中位数、众数、固定值四种策略填充缺失数据。",
+      "content": "import pandas as pd\n\ndef fill_missing(df, strategy='mean', fill_value=None):\n    \"\"\"按策略填充 DataFrame 中的缺失值，并返回新副本。\"\"\"\n    result = df.copy()\n    for column in result.columns:\n        series = result[column]\n        if strategy == 'mean' and pd.api.types.is_numeric_dtype(series):\n            result[column] = series.fillna(series.mean())\n        elif strategy == 'median' and pd.api.types.is_numeric_dtype(series):\n            result[column] = series.fillna(series.median())\n        elif strategy == 'mode':\n            mode_value = series.mode().iloc[0] if not series.mode().empty else fill_value\n            result[column] = series.fillna(mode_value)\n        else:\n            result[column] = series.fillna(fill_value)  # 固定值策略或兜底分支。\n    return result",
+      "example": "# 示例数据：对包含空值的设备表格执行中位数填充。\nclean_df = fill_missing(raw_df, strategy='median')",
+      "tags": [
+        "缺失值",
+        "数据清洗",
+        "预处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 3,
+      "name": "归一化处理器",
+      "categoryId": 1,
+      "difficulty": 1,
+      "language": "python",
+      "description": "将数值特征缩放到 [0,1] 区间，支持 Min-Max 归一化。",
+      "content": "def min_max_normalize(values):\n    \"\"\"使用 Min-Max 方法将数值序列缩放到 [0, 1] 区间。\"\"\"\n    if not values:\n        return []\n    min_value = min(values)\n    max_value = max(values)\n    span = max_value - min_value\n    if span == 0:\n        return [0.0 for _ in values]  # 所有值一致时返回全 0。\n    return [(value - min_value) / span for value in values]",
+      "example": "# 示例数据：将三项传感器幅值映射到 0 到 1 范围。\nnormalized = min_max_normalize([12.0, 18.0, 30.0])",
+      "tags": [
+        "归一化",
+        "特征工程",
+        "预处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 4,
+      "name": "相关系数矩阵计算",
+      "categoryId": 2,
+      "difficulty": 2,
+      "language": "python",
+      "description": "计算多变量间的皮尔森相关系数矩阵并输出热力图数据。",
+      "content": "def correlation_matrix(df):\n    \"\"\"计算输入表格的皮尔森相关系数矩阵，并输出热力图数据。\"\"\"\n    corr = df.corr(method='pearson')\n    return {\n        'labels': list(corr.columns),\n        'matrix': corr.round(4).values.tolist(),  # 保留四位小数便于前端展示。\n    }",
+      "example": "# 示例数据：输出多特征相关性热力图的数据结构。\nheatmap_data = correlation_matrix(feature_df)",
+      "tags": [
+        "相关性",
+        "统计",
+        "特征分析"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 5,
+      "name": "孤立点检测器",
+      "categoryId": 2,
+      "difficulty": 2,
+      "language": "python",
+      "description": "基于 IQR 方法检测数值序列中的异常离群点。",
+      "content": "def detect_outliers_iqr(values):\n    \"\"\"使用四分位距（IQR）方法识别序列中的离群点。\"\"\"\n    if len(values) < 4:\n        return []\n    sorted_values = sorted(values)\n    q1 = sorted_values[len(sorted_values) // 4]\n    q3 = sorted_values[(len(sorted_values) * 3) // 4]\n    iqr = q3 - q1\n    lower = q1 - 1.5 * iqr\n    upper = q3 + 1.5 * iqr\n    return [value for value in values if value < lower or value > upper]",
+      "example": "# 示例数据：识别延迟序列中的异常峰值。\noutliers = detect_outliers_iqr([12, 11, 13, 10, 45, 12, 11])",
+      "tags": [
+        "异常检测",
+        "统计",
+        "孤立点"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 6,
+      "name": "正态分布检验",
+      "categoryId": 2,
+      "difficulty": 2,
+      "language": "python",
+      "description": "使用 Shapiro-Wilk 检验判断数据是否符合正态分布。",
+      "content": "from scipy.stats import shapiro\n\ndef normality_test(values, alpha=0.05):\n    \"\"\"使用 Shapiro-Wilk 检验判断样本是否可视为正态分布。\"\"\"\n    statistic, p_value = shapiro(values)\n    return {\n        'statistic': round(statistic, 4),\n        'p_value': round(p_value, 4),\n        'is_normal': p_value >= alpha,  # p 值高于显著性水平时接受正态假设。\n    }",
+      "example": "# 示例数据：对实验测量结果执行正态分布检验。\nresult = normality_test([0.21, 0.23, 0.19, 0.24, 0.22])",
+      "tags": [
+        "假设检验",
+        "正态分布",
+        "统计"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 7,
+      "name": "随机森林分类器",
+      "categoryId": 3,
+      "difficulty": 3,
+      "language": "python",
+      "description": "基于随机森林的多分类模板，含特征重要性输出。",
+      "content": "from sklearn.ensemble import RandomForestClassifier\nfrom sklearn.metrics import classification_report\n\ndef train_random_forest(X_train, y_train, X_valid, y_valid, n_estimators=200, random_state=42):\n    \"\"\"训练随机森林分类器，并返回模型、分类报告和特征重要性。\"\"\"\n    model = RandomForestClassifier(n_estimators=n_estimators, random_state=random_state)\n    model.fit(X_train, y_train)  # 在训练集上完成模型拟合。\n    predictions = model.predict(X_valid)\n    report = classification_report(y_valid, predictions, output_dict=True)\n    return {'model': model, 'report': report, 'feature_importance': model.feature_importances_.tolist()}",
+      "example": "# 示例数据：训练多分类模型并输出特征重要性。\nrf_result = train_random_forest(X_train, y_train, X_valid, y_valid)",
+      "tags": [
+        "分类",
+        "随机森林",
+        "机器学习"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 8,
+      "name": "K-Means 聚类器",
+      "categoryId": 3,
+      "difficulty": 2,
+      "language": "python",
+      "description": "基于 K-Means 算法的数据聚类模板，含肘部法则辅助选 K。",
+      "content": "from sklearn.cluster import KMeans\n\ndef kmeans_cluster(X, n_clusters=3, random_state=42):\n    \"\"\"执行 K-Means 聚类并返回簇标签、聚类中心与惯性指标。\"\"\"\n    model = KMeans(n_clusters=n_clusters, random_state=random_state, n_init='auto')\n    labels = model.fit_predict(X)\n    return {\n        'labels': labels.tolist(),\n        'centers': model.cluster_centers_.tolist(),\n        'inertia': float(model.inertia_),  # 惯性可用于肘部法则辅助选择 K。\n    }",
+      "example": "# 示例数据：对二维用户特征执行 3 类聚类。\ncluster_result = kmeans_cluster(user_features, n_clusters=3)",
+      "tags": [
+        "聚类",
+        "K-Means",
+        "无监督学习"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 9,
+      "name": "逻辑回归分类器",
+      "categoryId": 3,
+      "difficulty": 2,
+      "language": "python",
+      "description": "二分类逻辑回归模板，含模型评估指标输出。",
+      "content": "from sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import accuracy_score, roc_auc_score\n\ndef train_logistic_regression(X_train, y_train, X_valid, y_valid):\n    \"\"\"训练逻辑回归模型并输出准确率与 AUC。\"\"\"\n    model = LogisticRegression(max_iter=300)\n    model.fit(X_train, y_train)\n    probability = model.predict_proba(X_valid)[:, 1]\n    prediction = (probability >= 0.5).astype(int)  # 以 0.5 为阈值生成预测标签。\n    return {'model': model, 'accuracy': accuracy_score(y_valid, prediction), 'auc': roc_auc_score(y_valid, probability)}",
+      "example": "# 示例数据：训练设备故障二分类模型并输出评估指标。\nlr_result = train_logistic_regression(X_train, y_train, X_valid, y_valid)",
+      "tags": [
+        "分类",
+        "逻辑回归",
+        "机器学习"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 10,
+      "name": "动态时间弯曲（DTW）相似性计算",
+      "categoryId": 4,
+      "difficulty": 3,
+      "language": "python",
+      "description": "计算两条时间序列之间的 DTW 距离，用于相似性度量。",
+      "content": "def dtw_distance(series_a, series_b):\n    \"\"\"计算两条时间序列的动态时间弯曲距离。\"\"\"\n    n, m = len(series_a), len(series_b)\n    dp = [[float('inf')] * (m + 1) for _ in range(n + 1)]\n    dp[0][0] = 0.0\n    for i in range(1, n + 1):\n        for j in range(1, m + 1):\n            cost = abs(series_a[i - 1] - series_b[j - 1])\n            dp[i][j] = cost + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])\n    return dp[n][m]",
+      "example": "# 示例数据：比较两条设备振动序列的相似度。\ndistance = dtw_distance([1, 2, 3, 4], [1, 1.5, 3.2, 4])",
+      "tags": [
+        "时序",
+        "DTW",
+        "相似性"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 11,
+      "name": "ARMA 时序预测器",
+      "categoryId": 4,
+      "difficulty": 3,
+      "language": "python",
+      "description": "基于自回归滑动平均模型的时间序列预测模板。",
+      "content": "from statsmodels.tsa.arima.model import ARIMA\n\ndef arma_forecast(series, order=(2, 0, 2), steps=5):\n    \"\"\"使用 ARMA 近似形式对时间序列进行未来步长预测。\"\"\"\n    model = ARIMA(series, order=order)\n    fitted = model.fit()\n    forecast = fitted.forecast(steps=steps)  # 生成未来若干步的预测结果。\n    return forecast.tolist()",
+      "example": "# 示例数据：根据最近 12 个时刻的销量序列预测后续 3 个时刻。\nfuture_values = arma_forecast(monthly_sales, order=(2, 0, 1), steps=3)",
+      "tags": [
+        "时序预测",
+        "ARMA",
+        "统计"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 12,
+      "name": "希尔伯特变换包络分析",
+      "categoryId": 4,
+      "difficulty": 3,
+      "language": "python",
+      "description": "使用希尔伯特变换提取信号的瞬时包络和瞬时频率。",
+      "content": "import numpy as np\nfrom scipy.signal import hilbert\n\ndef hilbert_envelope(signal, sampling_rate):\n    \"\"\"提取信号的瞬时包络和瞬时频率。\"\"\"\n    analytic_signal = hilbert(signal)\n    envelope = np.abs(analytic_signal)  # 解析信号幅值即瞬时包络。\n    phase = np.unwrap(np.angle(analytic_signal))\n    inst_freq = np.diff(phase) * sampling_rate / (2 * np.pi)\n    return {'envelope': envelope.tolist(), 'instantaneous_frequency': inst_freq.tolist()}",
+      "example": "# 示例数据：对轴承振动信号提取包络与瞬时频率。\nanalysis = hilbert_envelope(vibration_signal, sampling_rate=12800)",
+      "tags": [
+        "包络分析",
+        "希尔伯特",
+        "信号处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 13,
+      "name": "TensorFlow 图像分类模板",
+      "categoryId": 5,
+      "difficulty": 4,
+      "language": "python",
+      "description": "基于 TensorFlow/Keras 的 CNN 图像分类基础模板。",
+      "content": "import tensorflow as tf\n\ndef build_image_classifier(input_shape=(128, 128, 3), num_classes=10):\n    \"\"\"构建一个用于图像分类的基础卷积神经网络。\"\"\"\n    model = tf.keras.Sequential([\n        tf.keras.layers.Input(shape=input_shape),\n        tf.keras.layers.Rescaling(1.0 / 255),\n        tf.keras.layers.Conv2D(32, 3, activation='relu'),\n        tf.keras.layers.MaxPool2D(),\n        tf.keras.layers.Conv2D(64, 3, activation='relu'),\n        tf.keras.layers.GlobalAveragePooling2D(),\n        tf.keras.layers.Dense(num_classes, activation='softmax'),\n    ])\n    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])\n    return model",
+      "example": "# 示例数据：创建一个 5 分类图像分类模型，用于后续 fit 训练。\ncnn_model = build_image_classifier(input_shape=(224, 224, 3), num_classes=5)",
+      "tags": [
+        "深度学习",
+        "TensorFlow",
+        "图像分类"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 14,
+      "name": "XGBoost 梯度提升分类器",
+      "categoryId": 5,
+      "difficulty": 3,
+      "language": "python",
+      "description": "基于 XGBoost 的分类模板，含超参数配置和交叉验证。",
+      "content": "from xgboost import XGBClassifier\nfrom sklearn.model_selection import cross_val_score\n\ndef train_xgboost_classifier(X, y, max_depth=6, learning_rate=0.1, cv=5):\n    \"\"\"训练 XGBoost 分类模型并返回交叉验证平均得分。\"\"\"\n    model = XGBClassifier(max_depth=max_depth, learning_rate=learning_rate, n_estimators=200, eval_metric='logloss')\n    scores = cross_val_score(model, X, y, cv=cv, scoring='accuracy')\n    model.fit(X, y)  # 在全量样本上重新训练，便于直接部署。\n    return {'model': model, 'cv_accuracy': float(scores.mean())}",
+      "example": "# 示例数据：训练 XGBoost 分类器并查看平均准确率。\nxgb_result = train_xgboost_classifier(train_features, train_labels, max_depth=4)",
+      "tags": [
+        "深度学习",
+        "XGBoost",
+        "分类"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 15,
+      "name": "OpenCV 图像预处理流水线",
+      "categoryId": 6,
+      "difficulty": 2,
+      "language": "python",
+      "description": "使用 OpenCV 实现图像灰度化、降噪、边缘检测的标准流水线。",
+      "content": "import cv2\n\ndef preprocess_image(image_path):\n    \"\"\"执行图像灰度化、降噪和边缘检测。\"\"\"\n    image = cv2.imread(image_path)\n    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)\n    blur = cv2.GaussianBlur(gray, (5, 5), 0)  # 先降噪再做边缘检测，结果更稳定。\n    edges = cv2.Canny(blur, 50, 150)\n    return {'gray': gray, 'blur': blur, 'edges': edges}",
+      "example": "# 示例数据：读取生产线采集图像，并输出标准预处理结果。\npipeline_result = preprocess_image('sample.jpg')",
+      "tags": [
+        "OpenCV",
+        "图像处理",
+        "预处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 16,
+      "name": "PyTorch 自定义数据集加载器",
+      "categoryId": 6,
+      "difficulty": 3,
+      "language": "python",
+      "description": "基于 PyTorch Dataset 的自定义数据集封装模板。",
+      "content": "from torch.utils.data import Dataset\n\nclass CustomDataset(Dataset):\n    \"\"\"PyTorch 自定义数据集模板，用于封装样本与标签。\"\"\"\n    def __init__(self, samples, labels, transform=None):\n        self.samples = samples\n        self.labels = labels\n        self.transform = transform\n\n    def __len__(self):\n        return len(self.samples)\n\n    def __getitem__(self, index):\n        sample = self.samples[index]\n        if self.transform:\n            sample = self.transform(sample)  # 按需执行数据增强。\n        return sample, self.labels[index]",
+      "example": "# 示例数据：构建一个自定义数据集对象，再交给 DataLoader 批量读取。\ndataset = CustomDataset(image_samples, image_labels, transform=train_transform)",
+      "tags": [
+        "PyTorch",
+        "数据加载",
+        "深度学习"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 17,
+      "name": "滑动窗口尖峰检测器",
+      "categoryId": 7,
+      "difficulty": 2,
+      "language": "python",
+      "description": "基于滑动窗口平均值和阈值系数识别时序尖峰异常。",
+      "content": "from collections import deque\n\ndef detect_spikes(values, window_size=8, sigma=2.0):\n    \"\"\"使用滑动窗口基线检测时序数据中的尖峰异常。\"\"\"\n    history = deque(maxlen=window_size)\n    alerts = []\n    for index, value in enumerate(values):\n        baseline = sum(history) / len(history) if history else value\n        if history and value > baseline * sigma:\n            alerts.append({'index': index, 'value': value, 'baseline': baseline})\n        history.append(value)  # 每次循环后更新窗口。\n    return alerts",
+      "example": "# 示例数据：监测传感器时序中的异常尖峰。\nalerts = detect_spikes([1, 2, 3, 9, 2, 1], window_size=3, sigma=2.0)",
+      "tags": [
+        "尖峰检测",
+        "滑动窗口",
+        "信号处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 18,
+      "name": "帧采样流水线",
+      "categoryId": 7,
+      "difficulty": 2,
+      "language": "python",
+      "description": "对视频流进行定步长抽帧，为后续识别或分析提供输入。",
+      "content": "import cv2\n\ndef sample_frames(video_path, step=10):\n    \"\"\"按固定步长抽取视频帧，便于后续模型处理。\"\"\"\n    capture = cv2.VideoCapture(video_path)\n    index = 0\n    frames = []\n    while capture.isOpened():\n        ok, frame = capture.read()\n        if not ok:\n            break\n        if index % step == 0:\n            frames.append(frame)\n        index += 1\n    capture.release()\n    return frames",
+      "example": "# 示例数据：从演示视频中每隔 15 帧保留一帧。\nframes = sample_frames('demo.mp4', step=15)",
+      "tags": [
+        "视频",
+        "抽帧",
+        "信号处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 19,
+      "name": "快速傅里叶变换（FFT）频谱分析",
+      "categoryId": 7,
+      "difficulty": 2,
+      "language": "python",
+      "description": "对输入信号进行 FFT 变换并输出频谱幅值和主频率。",
+      "content": "import numpy as np\n\ndef fft_spectrum(signal, sampling_rate):\n    \"\"\"计算离散信号的频谱和主频率。\"\"\"\n    spectrum = np.fft.rfft(signal)\n    frequencies = np.fft.rfftfreq(len(signal), d=1.0 / sampling_rate)\n    magnitude = np.abs(spectrum)\n    dominant_frequency = float(frequencies[np.argmax(magnitude)])  # 取幅值最大的频率作为主频。\n    return {'frequencies': frequencies.tolist(), 'magnitude': magnitude.tolist(), 'dominant_frequency': dominant_frequency}",
+      "example": "# 示例数据：分析采样频率为 1000Hz 的振动信号频谱。\nspectrum_result = fft_spectrum(vibration_signal, sampling_rate=1000)",
+      "tags": [
+        "FFT",
+        "频域",
+        "信号处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 20,
+      "name": "低通滤波器",
+      "categoryId": 7,
+      "difficulty": 3,
+      "language": "python",
+      "description": "基于 Butterworth 设计的低通滤波器，滤除高频噪声。",
+      "content": "from scipy.signal import butter, filtfilt\n\ndef lowpass_filter(signal, cutoff_hz, sampling_rate, order=4):\n    \"\"\"设计并应用 Butterworth 低通滤波器。\"\"\"\n    nyquist = 0.5 * sampling_rate\n    normalized_cutoff = cutoff_hz / nyquist\n    b, a = butter(order, normalized_cutoff, btype='low', analog=False)\n    filtered = filtfilt(b, a, signal)  # 双向滤波可减少相位延迟。\n    return filtered.tolist()",
+      "example": "# 示例数据：对采样频率 2000Hz 的信号执行 200Hz 低通滤波。\nfiltered_signal = lowpass_filter(raw_signal, cutoff_hz=200, sampling_rate=2000)",
+      "tags": [
+        "滤波器",
+        "低通",
+        "信号处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    }
+  ],
+  "templateVersions": [
+    {
+      "id": 1,
+      "templateId": 1,
+      "version": "1.0.0",
+      "content": "import random\n\ndef random_sample(data, ratio, seed=42):\n    \"\"\"从输入数据集中按比例执行随机无放回采样。\"\"\"\n    if not data:\n        return []  # 数据为空时直接返回空列表。\n    sample_size = max(1, int(len(data) * ratio))\n    random.seed(seed)  # 固定随机种子，保证结果可复现。\n    sample_size = min(sample_size, len(data))\n    return random.sample(list(data), sample_size)",
+      "example": "# 示例数据：10 条记录中抽取 30% 作为训练样本。\nsamples = random_sample(list(range(10)), ratio=0.3, seed=7)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 2,
+      "templateId": 2,
+      "version": "1.0.0",
+      "content": "import pandas as pd\n\ndef fill_missing(df, strategy='mean', fill_value=None):\n    \"\"\"按策略填充 DataFrame 中的缺失值，并返回新副本。\"\"\"\n    result = df.copy()\n    for column in result.columns:\n        series = result[column]\n        if strategy == 'mean' and pd.api.types.is_numeric_dtype(series):\n            result[column] = series.fillna(series.mean())\n        elif strategy == 'median' and pd.api.types.is_numeric_dtype(series):\n            result[column] = series.fillna(series.median())\n        elif strategy == 'mode':\n            mode_value = series.mode().iloc[0] if not series.mode().empty else fill_value\n            result[column] = series.fillna(mode_value)\n        else:\n            result[column] = series.fillna(fill_value)  # 固定值策略或兜底分支。\n    return result",
+      "example": "# 示例数据：对包含空值的设备表格执行中位数填充。\nclean_df = fill_missing(raw_df, strategy='median')",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 3,
+      "templateId": 3,
+      "version": "1.0.0",
+      "content": "def min_max_normalize(values):\n    \"\"\"使用 Min-Max 方法将数值序列缩放到 [0, 1] 区间。\"\"\"\n    if not values:\n        return []\n    min_value = min(values)\n    max_value = max(values)\n    span = max_value - min_value\n    if span == 0:\n        return [0.0 for _ in values]  # 所有值一致时返回全 0。\n    return [(value - min_value) / span for value in values]",
+      "example": "# 示例数据：将三项传感器幅值映射到 0 到 1 范围。\nnormalized = min_max_normalize([12.0, 18.0, 30.0])",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 4,
+      "templateId": 4,
+      "version": "1.0.0",
+      "content": "def correlation_matrix(df):\n    \"\"\"计算输入表格的皮尔森相关系数矩阵，并输出热力图数据。\"\"\"\n    corr = df.corr(method='pearson')\n    return {\n        'labels': list(corr.columns),\n        'matrix': corr.round(4).values.tolist(),  # 保留四位小数便于前端展示。\n    }",
+      "example": "# 示例数据：输出多特征相关性热力图的数据结构。\nheatmap_data = correlation_matrix(feature_df)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 5,
+      "templateId": 5,
+      "version": "1.0.0",
+      "content": "def detect_outliers_iqr(values):\n    \"\"\"使用四分位距（IQR）方法识别序列中的离群点。\"\"\"\n    if len(values) < 4:\n        return []\n    sorted_values = sorted(values)\n    q1 = sorted_values[len(sorted_values) // 4]\n    q3 = sorted_values[(len(sorted_values) * 3) // 4]\n    iqr = q3 - q1\n    lower = q1 - 1.5 * iqr\n    upper = q3 + 1.5 * iqr\n    return [value for value in values if value < lower or value > upper]",
+      "example": "# 示例数据：识别延迟序列中的异常峰值。\noutliers = detect_outliers_iqr([12, 11, 13, 10, 45, 12, 11])",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 6,
+      "templateId": 6,
+      "version": "1.0.0",
+      "content": "from scipy.stats import shapiro\n\ndef normality_test(values, alpha=0.05):\n    \"\"\"使用 Shapiro-Wilk 检验判断样本是否可视为正态分布。\"\"\"\n    statistic, p_value = shapiro(values)\n    return {\n        'statistic': round(statistic, 4),\n        'p_value': round(p_value, 4),\n        'is_normal': p_value >= alpha,  # p 值高于显著性水平时接受正态假设。\n    }",
+      "example": "# 示例数据：对实验测量结果执行正态分布检验。\nresult = normality_test([0.21, 0.23, 0.19, 0.24, 0.22])",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 7,
+      "templateId": 7,
+      "version": "1.0.0",
+      "content": "from sklearn.ensemble import RandomForestClassifier\nfrom sklearn.metrics import classification_report\n\ndef train_random_forest(X_train, y_train, X_valid, y_valid, n_estimators=200, random_state=42):\n    \"\"\"训练随机森林分类器，并返回模型、分类报告和特征重要性。\"\"\"\n    model = RandomForestClassifier(n_estimators=n_estimators, random_state=random_state)\n    model.fit(X_train, y_train)  # 在训练集上完成模型拟合。\n    predictions = model.predict(X_valid)\n    report = classification_report(y_valid, predictions, output_dict=True)\n    return {'model': model, 'report': report, 'feature_importance': model.feature_importances_.tolist()}",
+      "example": "# 示例数据：训练多分类模型并输出特征重要性。\nrf_result = train_random_forest(X_train, y_train, X_valid, y_valid)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 8,
+      "templateId": 8,
+      "version": "1.0.0",
+      "content": "from sklearn.cluster import KMeans\n\ndef kmeans_cluster(X, n_clusters=3, random_state=42):\n    \"\"\"执行 K-Means 聚类并返回簇标签、聚类中心与惯性指标。\"\"\"\n    model = KMeans(n_clusters=n_clusters, random_state=random_state, n_init='auto')\n    labels = model.fit_predict(X)\n    return {\n        'labels': labels.tolist(),\n        'centers': model.cluster_centers_.tolist(),\n        'inertia': float(model.inertia_),  # 惯性可用于肘部法则辅助选择 K。\n    }",
+      "example": "# 示例数据：对二维用户特征执行 3 类聚类。\ncluster_result = kmeans_cluster(user_features, n_clusters=3)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 9,
+      "templateId": 9,
+      "version": "1.0.0",
+      "content": "from sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import accuracy_score, roc_auc_score\n\ndef train_logistic_regression(X_train, y_train, X_valid, y_valid):\n    \"\"\"训练逻辑回归模型并输出准确率与 AUC。\"\"\"\n    model = LogisticRegression(max_iter=300)\n    model.fit(X_train, y_train)\n    probability = model.predict_proba(X_valid)[:, 1]\n    prediction = (probability >= 0.5).astype(int)  # 以 0.5 为阈值生成预测标签。\n    return {'model': model, 'accuracy': accuracy_score(y_valid, prediction), 'auc': roc_auc_score(y_valid, probability)}",
+      "example": "# 示例数据：训练设备故障二分类模型并输出评估指标。\nlr_result = train_logistic_regression(X_train, y_train, X_valid, y_valid)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 10,
+      "templateId": 10,
+      "version": "1.0.0",
+      "content": "def dtw_distance(series_a, series_b):\n    \"\"\"计算两条时间序列的动态时间弯曲距离。\"\"\"\n    n, m = len(series_a), len(series_b)\n    dp = [[float('inf')] * (m + 1) for _ in range(n + 1)]\n    dp[0][0] = 0.0\n    for i in range(1, n + 1):\n        for j in range(1, m + 1):\n            cost = abs(series_a[i - 1] - series_b[j - 1])\n            dp[i][j] = cost + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])\n    return dp[n][m]",
+      "example": "# 示例数据：比较两条设备振动序列的相似度。\ndistance = dtw_distance([1, 2, 3, 4], [1, 1.5, 3.2, 4])",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 11,
+      "templateId": 11,
+      "version": "1.0.0",
+      "content": "from statsmodels.tsa.arima.model import ARIMA\n\ndef arma_forecast(series, order=(2, 0, 2), steps=5):\n    \"\"\"使用 ARMA 近似形式对时间序列进行未来步长预测。\"\"\"\n    model = ARIMA(series, order=order)\n    fitted = model.fit()\n    forecast = fitted.forecast(steps=steps)  # 生成未来若干步的预测结果。\n    return forecast.tolist()",
+      "example": "# 示例数据：根据最近 12 个时刻的销量序列预测后续 3 个时刻。\nfuture_values = arma_forecast(monthly_sales, order=(2, 0, 1), steps=3)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 12,
+      "templateId": 12,
+      "version": "1.0.0",
+      "content": "import numpy as np\nfrom scipy.signal import hilbert\n\ndef hilbert_envelope(signal, sampling_rate):\n    \"\"\"提取信号的瞬时包络和瞬时频率。\"\"\"\n    analytic_signal = hilbert(signal)\n    envelope = np.abs(analytic_signal)  # 解析信号幅值即瞬时包络。\n    phase = np.unwrap(np.angle(analytic_signal))\n    inst_freq = np.diff(phase) * sampling_rate / (2 * np.pi)\n    return {'envelope': envelope.tolist(), 'instantaneous_frequency': inst_freq.tolist()}",
+      "example": "# 示例数据：对轴承振动信号提取包络与瞬时频率。\nanalysis = hilbert_envelope(vibration_signal, sampling_rate=12800)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 13,
+      "templateId": 13,
+      "version": "1.0.0",
+      "content": "import tensorflow as tf\n\ndef build_image_classifier(input_shape=(128, 128, 3), num_classes=10):\n    \"\"\"构建一个用于图像分类的基础卷积神经网络。\"\"\"\n    model = tf.keras.Sequential([\n        tf.keras.layers.Input(shape=input_shape),\n        tf.keras.layers.Rescaling(1.0 / 255),\n        tf.keras.layers.Conv2D(32, 3, activation='relu'),\n        tf.keras.layers.MaxPool2D(),\n        tf.keras.layers.Conv2D(64, 3, activation='relu'),\n        tf.keras.layers.GlobalAveragePooling2D(),\n        tf.keras.layers.Dense(num_classes, activation='softmax'),\n    ])\n    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])\n    return model",
+      "example": "# 示例数据：创建一个 5 分类图像分类模型，用于后续 fit 训练。\ncnn_model = build_image_classifier(input_shape=(224, 224, 3), num_classes=5)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 14,
+      "templateId": 14,
+      "version": "1.0.0",
+      "content": "from xgboost import XGBClassifier\nfrom sklearn.model_selection import cross_val_score\n\ndef train_xgboost_classifier(X, y, max_depth=6, learning_rate=0.1, cv=5):\n    \"\"\"训练 XGBoost 分类模型并返回交叉验证平均得分。\"\"\"\n    model = XGBClassifier(max_depth=max_depth, learning_rate=learning_rate, n_estimators=200, eval_metric='logloss')\n    scores = cross_val_score(model, X, y, cv=cv, scoring='accuracy')\n    model.fit(X, y)  # 在全量样本上重新训练，便于直接部署。\n    return {'model': model, 'cv_accuracy': float(scores.mean())}",
+      "example": "# 示例数据：训练 XGBoost 分类器并查看平均准确率。\nxgb_result = train_xgboost_classifier(train_features, train_labels, max_depth=4)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 15,
+      "templateId": 15,
+      "version": "1.0.0",
+      "content": "import cv2\n\ndef preprocess_image(image_path):\n    \"\"\"执行图像灰度化、降噪和边缘检测。\"\"\"\n    image = cv2.imread(image_path)\n    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)\n    blur = cv2.GaussianBlur(gray, (5, 5), 0)  # 先降噪再做边缘检测，结果更稳定。\n    edges = cv2.Canny(blur, 50, 150)\n    return {'gray': gray, 'blur': blur, 'edges': edges}",
+      "example": "# 示例数据：读取生产线采集图像，并输出标准预处理结果。\npipeline_result = preprocess_image('sample.jpg')",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 16,
+      "templateId": 16,
+      "version": "1.0.0",
+      "content": "from torch.utils.data import Dataset\n\nclass CustomDataset(Dataset):\n    \"\"\"PyTorch 自定义数据集模板，用于封装样本与标签。\"\"\"\n    def __init__(self, samples, labels, transform=None):\n        self.samples = samples\n        self.labels = labels\n        self.transform = transform\n\n    def __len__(self):\n        return len(self.samples)\n\n    def __getitem__(self, index):\n        sample = self.samples[index]\n        if self.transform:\n            sample = self.transform(sample)  # 按需执行数据增强。\n        return sample, self.labels[index]",
+      "example": "# 示例数据：构建一个自定义数据集对象，再交给 DataLoader 批量读取。\ndataset = CustomDataset(image_samples, image_labels, transform=train_transform)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 17,
+      "templateId": 17,
+      "version": "1.0.0",
+      "content": "from collections import deque\n\ndef detect_spikes(values, window_size=8, sigma=2.0):\n    \"\"\"使用滑动窗口基线检测时序数据中的尖峰异常。\"\"\"\n    history = deque(maxlen=window_size)\n    alerts = []\n    for index, value in enumerate(values):\n        baseline = sum(history) / len(history) if history else value\n        if history and value > baseline * sigma:\n            alerts.append({'index': index, 'value': value, 'baseline': baseline})\n        history.append(value)  # 每次循环后更新窗口。\n    return alerts",
+      "example": "# 示例数据：监测传感器时序中的异常尖峰。\nalerts = detect_spikes([1, 2, 3, 9, 2, 1], window_size=3, sigma=2.0)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 18,
+      "templateId": 18,
+      "version": "1.0.0",
+      "content": "import cv2\n\ndef sample_frames(video_path, step=10):\n    \"\"\"按固定步长抽取视频帧，便于后续模型处理。\"\"\"\n    capture = cv2.VideoCapture(video_path)\n    index = 0\n    frames = []\n    while capture.isOpened():\n        ok, frame = capture.read()\n        if not ok:\n            break\n        if index % step == 0:\n            frames.append(frame)\n        index += 1\n    capture.release()\n    return frames",
+      "example": "# 示例数据：从演示视频中每隔 15 帧保留一帧。\nframes = sample_frames('demo.mp4', step=15)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 19,
+      "templateId": 19,
+      "version": "1.0.0",
+      "content": "import numpy as np\n\ndef fft_spectrum(signal, sampling_rate):\n    \"\"\"计算离散信号的频谱和主频率。\"\"\"\n    spectrum = np.fft.rfft(signal)\n    frequencies = np.fft.rfftfreq(len(signal), d=1.0 / sampling_rate)\n    magnitude = np.abs(spectrum)\n    dominant_frequency = float(frequencies[np.argmax(magnitude)])  # 取幅值最大的频率作为主频。\n    return {'frequencies': frequencies.tolist(), 'magnitude': magnitude.tolist(), 'dominant_frequency': dominant_frequency}",
+      "example": "# 示例数据：分析采样频率为 1000Hz 的振动信号频谱。\nspectrum_result = fft_spectrum(vibration_signal, sampling_rate=1000)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 20,
+      "templateId": 20,
+      "version": "1.0.0",
+      "content": "from scipy.signal import butter, filtfilt\n\ndef lowpass_filter(signal, cutoff_hz, sampling_rate, order=4):\n    \"\"\"设计并应用 Butterworth 低通滤波器。\"\"\"\n    nyquist = 0.5 * sampling_rate\n    normalized_cutoff = cutoff_hz / nyquist\n    b, a = butter(order, normalized_cutoff, btype='low', analog=False)\n    filtered = filtfilt(b, a, signal)  # 双向滤波可减少相位延迟。\n    return filtered.tolist()",
+      "example": "# 示例数据：对采样频率 2000Hz 的信号执行 200Hz 低通滤波。\nfiltered_signal = lowpass_filter(raw_signal, cutoff_hz=200, sampling_rate=2000)",
+      "changeReason": "内置模板初始化",
+      "changeSummary": "写入中文示例模板与详细使用说明。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 21,
+      "templateId": 1,
+      "version": "1.1.0",
+      "content": "我一个零基础想了解这些内容，进而学习有关软件开发相关的知识，应该从哪学起，帮我推荐课程或者书籍。\n零基础学习软件开发：完整路线图\n首先明确一个重要前提\n在推荐任何资源之前，有一件事情必须说清楚：软件开发的方向非常多，不同方向的学习路径差异很大。你需要先大致了解各个方向，再决定从哪里入手，否则很容易走弯路。主要方向包括：\n\n前端开发：做网页和 App 的界面，用户直接看到和操作的部分（HTML/CSS/JavaScript）\n后端开发：做服务器、数据库、业务逻辑，数据的存储和处理（Python/Java/Go/Node.js 等）\n全栈开发：前端+后端都做\n移动端开发：做手机 App（Android/iOS）\n算法与数据结构：所有方向都需要的底层基础\n运维/DevOps：管理服务器、部署、自动化（你前面问的 npm、CMD、PowerShell 都偏这个方向）\n根据你之前问的问题（npm、CMD、PowerShell、ping），你对计算机基础和开发工具很感兴趣，这是一个非常好的起点，说明你有一定的探索欲。下面我给你规划一条由浅入深、循序渐进的完整路线。\n\n第一阶段：计算机基础（1~2个月）\n这一阶段的目标是建立对计算机的整体认知，很多人跳过这一步直接学编程，结果遇到问题完全不知道为什么，非常痛苦。\n\n推荐资源：\n\n《计算机是怎样跑起来的》—— 矢泽久雄（日），这是一本极其适合零基础的科普书，用大量图示讲解 CPU、内存、硬盘、操作系统、网络是如何工作的，没有任何门槛，读起来像在看故事书，强烈推荐作为第一本书。\n\n《网络是怎样连接的》—— 户根勤（日），同系列的另一本书，专门讲网络原理，从你在浏览器输入一个网址开始，一步步讲清楚数据是怎么走到服务器再回来的，读完之后你对 ping、IP、DNS、HTTP 的理解会上一个台阶。\n\nCS50（哈佛大学公开课），这是全球最著名的计算机入门课，哈佛大学的 David Malan 教授讲课极其生动，课程涵盖计算机基础、C 语言、Python、SQL、Web 开发，完全免费。可以在 B 站搜索\"CS50 中文\"找到有字幕的版本，也可以去官网 cs50.harvard.edu 看英文原版。\n\n第二阶段：选一门编程语言入门（2~3个月）\n计算机基础有了之后，需要学一门真正的编程语言。对于零基础的人，Python 是目前公认最适合入门的语言，原因是语法简洁接近自然语言、不需要关心复杂的内存管理、生态极其丰富（Web/数据分析/AI/自动化都能做），而且学习资源是所有语言里最多的。\n\n推荐书籍：\n\n《Python编程：从入门到实践》—— Eric Matthes，这是目前口碑最好的 Python 入门书，没有之一。全书分为两部分，前半部分讲语言基础（变量、循环、函数、类），后半部分做三个实战项目（游戏、数据可视化、Web 应用），非常适合零基础且想动手实践的人。\n\n《笨办法学Python》—— Zed Shaw，这本书的特点是强迫你手打每一行代码而不是复制粘贴，通过大量重复练习建立肌肉记忆，风格偏硬核，适合喜欢\"死磕\"的人。\n\n推荐课程：\n\n廖雪峰 Python 教程（liaoxuefeng.com），国内最好的免费 Python 中文教程之一，讲解清晰，覆盖面广，从基础到进阶都有，遇到不懂的概念随时可以去查。\n\nB站\"小甲鱼零基础入门学习Python\"，非常适合完全零基础的人，讲解风格轻松幽默，评论区互动活跃，遇到问题很容易找到答案。\n\n第三阶段：计算机核心基础（与编程学习并行，3~6个月）\n学编程的同时，需要逐渐补充几个核心基础知识，这些东西不是一蹴而就的，可以边学边补：\n\n数据结构与算法是所有软件开发的底层基础，理解了数组、链表、栈、队列、树、图、排序算法之后，你写的代码才能从\"能跑起来\"升级到\"跑得好\"。入门推荐**《大话数据结构》—— 程杰**，这本书用非常接地气的比喻和故事讲解抽象概念，是国内少有的把数据结构讲得有趣的书。之后可以在 LeetCode（leetcode.cn）上刷题巩固，从简单题开始。\n\n操作系统基础推荐**《现代操作系统》**作为长期参考书（内容较深，不急着啃），短期内可以先看 B 站上清华大学的操作系统公开课，或者搜索\"操作系统 入门 趣谈\"，有很多质量不错的视频课程。\n\nGit 版本控制是每个开发者必须掌握的工具，它让你可以追踪代码的每一次改动、与他人协作、回滚错误。推荐廖雪峰 Git 教程（免费，liaoxuefeng.com/wiki/896043488029600），一两天就能学会基本用法。\n\n第四阶段：确定方向，深入学习（6个月以后）\n有了前三个阶段的基础之后，你对自己的兴趣会有更清晰的认识，这时候可以选择一个方向深入：\n\n如果选择前端开发，学习路径是 HTML → CSS → JavaScript → React 或 Vue。推荐MDN Web Docs（developer.mozilla.org）作为最权威的参考文档，以及 freeCodeCamp（freecodecamp.org）提供的免费系统课程。书籍推荐**《JavaScript高级程序设计》**（俗称\"红宝书\"），是前端开发者必读经典。\n\n如果选择后端开发，Python 方向可以继续深入学习 Django 或 FastAPI 框架；也可以转学 Java（推荐《Head First Java》入门）或 Go 语言，这两者在国内后端岗位需求量极大。\n\n如果对运维/DevOps 感兴趣（结合你之前的问题，这个方向也很适合你），可以深入学习 Linux 系统管理、Shell 脚本、Docker 容器、Kubernetes，以及云平台（AWS/阿里云/腾讯云）的使用。推荐**《鸟哥的Linux私房菜》**，是国内学 Linux 的必读书籍。\n\n一些非常重要的学习建议\n动手比看书更重要。软件开发是一门手艺，不是知识的堆砌。看完一个概念立刻打开编辑器写代码验证它，哪怕是很小的练习也比多看几遍教程有用得多。一个常见的错误是\"看了很多教程但从不动手\"，这会让你陷入一种\"感觉学了很多但什么也做不出来\"的困境。\n\n遇到报错不要慌。报错是正常的，甚至是学习过程中最有价值的部分。学会看懂报错信息、把报错复制到搜索引擎、在 Stack Overflow 或掘金上找答案，这本身就是开发者最核心的技能之一。\n\n建立一个 GitHub 账号，从第一天就开始把自己写的代码托管上去，哪怕很简单，这既是习惯的培养，也是日后求职时最直接的作品集。\n\n不要追求\"学完再做\"。很多初学者希望把所有基础都学扎实了再开始做项目，但这条路很容易让人半途而废。正确的方式是边学边做，在做项目的过程中遇到不懂的再去补，这样学到的知识印象会深刻得多。",
+      "example": "# 示例数据：10 条记录中抽取 30% 作为训练样本。\nsamples = random_sample(list(range(10)), ratio=0.3, seed=7)",
+      "changeReason": "从文件整体替换模板内容",
+      "changeSummary": "导入文件 学习.txt 并替换模板主体内容",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-24T08:46:22.394Z"
+    }
+  ],
+  "snippetFolders": [
+    {
+      "id": 1,
+      "name": "工具函数",
+      "visibility": "shared",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 2,
+      "name": "数据处理",
+      "visibility": "shared",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 3,
+      "name": "信号处理",
+      "visibility": "shared",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 4,
+      "name": "数据预处理",
+      "visibility": "shared",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 5,
+      "name": "我的工具箱",
+      "visibility": "private",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 6,
+      "name": "数据分析",
+      "visibility": "private",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 7,
+      "name": "数据可视化",
+      "visibility": "private",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 8,
+      "name": "数学工具",
+      "visibility": "private",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    }
+  ],
+  "snippets": [
+    {
+      "id": 1,
+      "name": "时间戳格式化工具",
+      "folderId": 1,
+      "visibility": "shared",
+      "language": "python",
+      "description": "将 Unix 时间戳转换为可读的日期时间字符串。",
+      "content": "import datetime\n\ndef format_timestamp(ts, fmt='%Y-%m-%d %H:%M:%S'):\n    # 将时间戳转为本地时间字符串\n    return datetime.datetime.fromtimestamp(ts).strftime(fmt)\n\n# 使用示例：format_timestamp(1700000000)",
+      "tags": [
+        "时间",
+        "格式化",
+        "工具"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 2,
+      "name": "列表去重并保序",
+      "folderId": 2,
+      "visibility": "shared",
+      "language": "python",
+      "description": "去除列表中的重复元素，同时保留原始顺序。",
+      "content": "def deduplicate(lst):\n    # 使用字典保序去重\n    seen = {}\n    return [seen.setdefault(x, x) for x in lst if x not in seen]\n\n# 使用示例：deduplicate([1, 2, 2, 3, 1, 4])",
+      "tags": [
+        "列表",
+        "去重",
+        "工具"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 3,
+      "name": "计算信号均方根（RMS）",
+      "folderId": 3,
+      "visibility": "shared",
+      "language": "python",
+      "description": "计算一维信号数组的均方根值，用于评估信号强度。",
+      "content": "import numpy as np\n\ndef rms(signal):\n    # 计算均方根：sqrt(mean(x^2))\n    return np.sqrt(np.mean(np.square(signal)))\n\n# 使用示例：rms(np.array([1.0, -2.0, 3.0, -1.5]))",
+      "tags": [
+        "信号",
+        "RMS",
+        "统计"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 4,
+      "name": "滑动窗口均值计算",
+      "folderId": 3,
+      "visibility": "shared",
+      "language": "python",
+      "description": "对序列进行滑动窗口平均，用于信号平滑处理。",
+      "content": "import numpy as np\n\ndef moving_average(data, window):\n    # 使用卷积实现滑动均值\n    return np.convolve(data, np.ones(window)/window, mode='valid')\n\n# 使用示例：moving_average([1,2,3,4,5,6], window=3)",
+      "tags": [
+        "滑动窗口",
+        "均值",
+        "平滑"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 5,
+      "name": "数据标准化（Z-Score）",
+      "folderId": 4,
+      "visibility": "shared",
+      "language": "python",
+      "description": "对数组进行 Z-Score 标准化，使均值为0、标准差为1。",
+      "content": "import numpy as np\n\ndef zscore_normalize(data):\n    # Z-Score 标准化\n    mean = np.mean(data)\n    std = np.std(data)\n    return (data - mean) / std if std != 0 else data - mean\n\n# 使用示例：zscore_normalize(np.array([2, 4, 4, 4, 5, 5, 7, 9]))",
+      "tags": [
+        "标准化",
+        "Z-Score",
+        "预处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "system",
+      "updatedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 6,
+      "name": "批量重命名文件",
+      "folderId": 5,
+      "visibility": "private",
+      "ownerId": "local-user",
+      "language": "python",
+      "description": "批量为指定目录下的文件添加前缀。",
+      "content": "import os\n\ndef batch_rename(folder, prefix):\n    # 遍历文件夹，为每个文件添加前缀\n    for fname in os.listdir(folder):\n        src = os.path.join(folder, fname)\n        dst = os.path.join(folder, prefix + fname)\n        os.rename(src, dst)\n\n# 使用示例：batch_rename('./data', 'processed_')",
+      "tags": [
+        "文件",
+        "批处理",
+        "工具"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 7,
+      "name": "读取 CSV 并输出统计摘要",
+      "folderId": 6,
+      "visibility": "private",
+      "ownerId": "local-user",
+      "language": "python",
+      "description": "读取 CSV 文件并输出各列的基本统计信息。",
+      "content": "import pandas as pd\n\ndef csv_summary(filepath):\n    # 读取并输出描述性统计\n    df = pd.read_csv(filepath)\n    print(df.describe())\n    return df\n\n# 使用示例：csv_summary('./data/sample.csv')",
+      "tags": [
+        "CSV",
+        "pandas",
+        "统计"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 8,
+      "name": "绘制折线图",
+      "folderId": 7,
+      "visibility": "private",
+      "ownerId": "local-user",
+      "language": "python",
+      "description": "使用 matplotlib 快速绘制单条折线图。",
+      "content": "import matplotlib.pyplot as plt\n\ndef plot_line(x, y, title='折线图', xlabel='X', ylabel='Y'):\n    plt.figure(figsize=(10, 4))\n    plt.plot(x, y, color='#3990f1', linewidth=1.5)\n    plt.title(title)\n    plt.xlabel(xlabel)\n    plt.ylabel(ylabel)\n    plt.grid(True, alpha=0.3)\n    plt.show()\n\n# 使用示例：plot_line(range(10), [i**2 for i in range(10)])",
+      "tags": [
+        "matplotlib",
+        "折线图",
+        "可视化"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 9,
+      "name": "字典列表按字段排序",
+      "folderId": 5,
+      "visibility": "private",
+      "ownerId": "local-user",
+      "language": "python",
+      "description": "对字典列表按指定字段升序或降序排序。",
+      "content": "def sort_dicts(data, key, reverse=False):\n    # 按指定字段对字典列表排序\n    return sorted(data, key=lambda x: x.get(key), reverse=reverse)\n\n# 使用示例：\ndata = [{'name': '张三', 'age': 25}, {'name': '李四', 'age': 22}]\nsort_dicts(data, 'age')",
+      "tags": [
+        "字典",
+        "排序",
+        "工具"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 10,
+      "name": "计算两点欧氏距离",
+      "folderId": 8,
+      "visibility": "private",
+      "ownerId": "local-user",
+      "language": "python",
+      "description": "计算 n 维空间中两点之间的欧氏距离。",
+      "content": "import math\n\ndef euclidean_distance(p1, p2):\n    # 计算欧氏距离：sqrt(sum((x1-x2)^2))\n    return math.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2)))\n\n# 使用示例：euclidean_distance([1, 2, 3], [4, 6, 3])",
+      "tags": [
+        "距离",
+        "几何",
+        "数学"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 11,
+      "name": "测试片段",
+      "visibility": "private",
+      "ownerId": "local-user",
+      "language": "python",
+      "description": "用于测试功能",
+      "content": "test",
+      "tags": [
+        "test"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "active",
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "createdAt": "2026-04-23T11:27:04.257Z",
+      "updatedAt": "2026-04-23T11:27:04.257Z"
+    }
+  ],
+  "snippetVersions": [
+    {
+      "id": 1,
+      "snippetId": 1,
+      "version": "1.0.0",
+      "content": "import datetime\n\ndef format_timestamp(ts, fmt='%Y-%m-%d %H:%M:%S'):\n    # 将时间戳转为本地时间字符串\n    return datetime.datetime.fromtimestamp(ts).strftime(fmt)\n\n# 使用示例：format_timestamp(1700000000)",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 2,
+      "snippetId": 2,
+      "version": "1.0.0",
+      "content": "def deduplicate(lst):\n    # 使用字典保序去重\n    seen = {}\n    return [seen.setdefault(x, x) for x in lst if x not in seen]\n\n# 使用示例：deduplicate([1, 2, 2, 3, 1, 4])",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 3,
+      "snippetId": 3,
+      "version": "1.0.0",
+      "content": "import numpy as np\n\ndef rms(signal):\n    # 计算均方根：sqrt(mean(x^2))\n    return np.sqrt(np.mean(np.square(signal)))\n\n# 使用示例：rms(np.array([1.0, -2.0, 3.0, -1.5]))",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 4,
+      "snippetId": 4,
+      "version": "1.0.0",
+      "content": "import numpy as np\n\ndef moving_average(data, window):\n    # 使用卷积实现滑动均值\n    return np.convolve(data, np.ones(window)/window, mode='valid')\n\n# 使用示例：moving_average([1,2,3,4,5,6], window=3)",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 5,
+      "snippetId": 5,
+      "version": "1.0.0",
+      "content": "import numpy as np\n\ndef zscore_normalize(data):\n    # Z-Score 标准化\n    mean = np.mean(data)\n    std = np.std(data)\n    return (data - mean) / std if std != 0 else data - mean\n\n# 使用示例：zscore_normalize(np.array([2, 4, 4, 4, 5, 5, 7, 9]))",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "system",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 6,
+      "snippetId": 6,
+      "version": "1.0.0",
+      "content": "import os\n\ndef batch_rename(folder, prefix):\n    # 遍历文件夹，为每个文件添加前缀\n    for fname in os.listdir(folder):\n        src = os.path.join(folder, fname)\n        dst = os.path.join(folder, prefix + fname)\n        os.rename(src, dst)\n\n# 使用示例：batch_rename('./data', 'processed_')",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 7,
+      "snippetId": 7,
+      "version": "1.0.0",
+      "content": "import pandas as pd\n\ndef csv_summary(filepath):\n    # 读取并输出描述性统计\n    df = pd.read_csv(filepath)\n    print(df.describe())\n    return df\n\n# 使用示例：csv_summary('./data/sample.csv')",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 8,
+      "snippetId": 8,
+      "version": "1.0.0",
+      "content": "import matplotlib.pyplot as plt\n\ndef plot_line(x, y, title='折线图', xlabel='X', ylabel='Y'):\n    plt.figure(figsize=(10, 4))\n    plt.plot(x, y, color='#3990f1', linewidth=1.5)\n    plt.title(title)\n    plt.xlabel(xlabel)\n    plt.ylabel(ylabel)\n    plt.grid(True, alpha=0.3)\n    plt.show()\n\n# 使用示例：plot_line(range(10), [i**2 for i in range(10)])",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 9,
+      "snippetId": 9,
+      "version": "1.0.0",
+      "content": "def sort_dicts(data, key, reverse=False):\n    # 按指定字段对字典列表排序\n    return sorted(data, key=lambda x: x.get(key), reverse=reverse)\n\n# 使用示例：\ndata = [{'name': '张三', 'age': 25}, {'name': '李四', 'age': 22}]\nsort_dicts(data, 'age')",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 10,
+      "snippetId": 10,
+      "version": "1.0.0",
+      "content": "import math\n\ndef euclidean_distance(p1, p2):\n    # 计算欧氏距离：sqrt(sum((x1-x2)^2))\n    return math.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2)))\n\n# 使用示例：euclidean_distance([1, 2, 3], [4, 6, 3])",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文代码片段示例。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 11,
+      "snippetId": 11,
+      "version": "1.0.0",
+      "content": "test",
+      "changeReason": "新建用于测试",
+      "changeSummary": "测试",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-23T11:27:04.257Z"
+    }
+  ],
+  "algorithmFolders": [
+    {
+      "id": 1,
+      "name": "生理信号分析",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 2,
+      "name": "设备健康监测",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 3,
+      "name": "数据质量处理",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 4,
+      "name": "特征工程",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 5,
+      "name": "工况识别",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 6,
+      "name": "预测模型",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 7,
+      "name": "视觉检测",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 8,
+      "name": "异常检测",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 9,
+      "name": "相似性分析",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 10,
+      "name": "假设检验",
+      "ownerId": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    }
+  ],
+  "algorithms": [
+    {
+      "id": 1,
+      "name": "实时心率异常检测器",
+      "ownerId": "local-user",
+      "folderId": 1,
+      "type": "流式检测",
+      "description": "基于滑动窗口 Z-Score 方法对实时心率数据流进行异常检测，当心率偏离均值超过阈值时触发告警。",
+      "inputSpec": "values: List[float] - 心率时序数据\nwindow: int - 滑动窗口大小\nsigma: float - 告警阈值倍数",
+      "outputSpec": "List[dict] - 告警列表，每项包含时间索引、当前值和基准值",
+      "dependencies": "numpy",
+      "content": "import numpy as np\n\ndef detect_heart_rate_anomaly(values, window=30, sigma=2.5):\n    alerts = []\n    for index in range(window, len(values)):\n        baseline = values[index - window:index]\n        mean = float(np.mean(baseline))\n        std = float(np.std(baseline)) or 1e-6\n        score = abs(values[index] - mean) / std\n        if score >= sigma:\n            alerts.append({'index': index, 'value': values[index], 'baseline': round(mean, 3)})\n    return alerts",
+      "tags": [
+        "心率",
+        "异常检测",
+        "实时"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "approved",
+      "packageFile": "实时心率异常检测器.json",
+      "linkedApplications": [
+        "健康监测"
+      ],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "reviewerId": "local-user",
+      "submittedAt": "2026-04-15T07:24:58.239Z",
+      "approvedAt": "2026-04-15T07:24:58.239Z",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 2,
+      "name": "设备振动频谱分析器",
+      "ownerId": "local-user",
+      "folderId": 2,
+      "type": "信号处理",
+      "description": "对设备振动传感器采集的时域信号进行 FFT 变换，提取主频率成分用于设备健康状态评估。",
+      "inputSpec": "signal: np.ndarray - 振动时域信号\nsample_rate: int - 采样率（Hz）",
+      "outputSpec": "dict - 包含频率数组、幅值数组和主频率的字典",
+      "dependencies": "numpy",
+      "content": "import numpy as np\n\ndef vibration_spectrum(signal, sample_rate):\n    spectrum = np.fft.rfft(signal)\n    magnitude = np.abs(spectrum)\n    freqs = np.fft.rfftfreq(len(signal), d=1.0 / sample_rate)\n    peak_index = int(np.argmax(magnitude))\n    return {'frequencies': freqs.tolist(), 'magnitudes': magnitude.tolist(), 'dominant_frequency': float(freqs[peak_index])}",
+      "tags": [
+        "振动",
+        "FFT",
+        "频谱"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "approved",
+      "packageFile": "设备振动频谱分析器.json",
+      "linkedApplications": [
+        "设备健康监测"
+      ],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "reviewerId": "local-user",
+      "submittedAt": "2026-04-15T07:24:58.239Z",
+      "approvedAt": "2026-04-15T07:24:58.239Z",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 3,
+      "name": "传感器数据缺失值插补器",
+      "ownerId": "local-user",
+      "folderId": 3,
+      "type": "数据预处理",
+      "description": "对传感器时序数据中的缺失值进行线性插值补全，支持设置最大连续缺失点数阈值。",
+      "inputSpec": "data: pd.Series - 含缺失值的时序数据\nmax_gap: int - 最大允许插值的连续缺失点数",
+      "outputSpec": "pd.Series - 插值补全后的时序数据",
+      "dependencies": "pandas,numpy",
+      "content": "import pandas as pd\n\ndef interpolate_sensor_series(data, max_gap=3):\n    result = data.copy()\n    mask = result.isna()\n    if mask.sum() == 0:\n        return result\n    result = result.interpolate(limit=max_gap, limit_direction='both')\n    return result",
+      "tags": [
+        "缺失值",
+        "插值",
+        "传感器"
+      ],
+      "currentVersion": "1.2.0",
+      "status": "approved",
+      "packageFile": "传感器数据缺失值插补器.json",
+      "linkedApplications": [
+        "数据质量看板"
+      ],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "reviewerId": "local-user",
+      "submittedAt": "2026-04-15T07:24:58.239Z",
+      "approvedAt": "2026-04-15T07:24:58.239Z",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 4,
+      "name": "多变量相关性快速筛选",
+      "ownerId": "local-user",
+      "folderId": 4,
+      "type": "统计分析",
+      "description": "计算多变量数据集中所有特征对之间的皮尔森相关系数，筛选出相关性超过阈值的特征对供分析人员参考。",
+      "inputSpec": "df: pd.DataFrame - 多变量数据集\nthreshold: float - 相关性筛选阈值（0~1）",
+      "outputSpec": "List[tuple] - 高相关特征对列表，每项为(特征A, 特征B, 相关系数)",
+      "dependencies": "pandas,numpy",
+      "content": "def select_high_correlations(df, threshold=0.8):\n    corr = df.corr(method='pearson').abs()\n    pairs = []\n    columns = list(corr.columns)\n    for i, left in enumerate(columns):\n        for right in columns[i + 1:]:\n            score = float(corr.loc[left, right])\n            if score >= threshold:\n                pairs.append((left, right, round(score, 4)))\n    return pairs",
+      "tags": [
+        "相关性",
+        "特征筛选",
+        "统计"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "submitted",
+      "packageFile": "多变量相关性快速筛选.json",
+      "linkedApplications": [],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "submittedAt": "2026-04-15T07:24:58.239Z",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 5,
+      "name": "工况分类随机森林模型",
+      "ownerId": "local-user",
+      "folderId": 5,
+      "type": "机器学习",
+      "description": "基于设备运行参数（转速、温度、压力等）对设备当前工况进行多分类识别。",
+      "inputSpec": "X_train: np.ndarray - 训练特征矩阵\ny_train: np.ndarray - 训练标签\nn_estimators: int - 决策树数量",
+      "outputSpec": "sklearn模型对象 - 训练完成的随机森林分类器",
+      "dependencies": "scikit-learn,numpy",
+      "content": "from sklearn.ensemble import RandomForestClassifier\n\ndef train_condition_classifier(X_train, y_train, n_estimators=200):\n    model = RandomForestClassifier(n_estimators=n_estimators, random_state=42)\n    model.fit(X_train, y_train)\n    return model",
+      "tags": [
+        "随机森林",
+        "分类",
+        "工况识别"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "submitted",
+      "packageFile": "工况分类随机森林模型.json",
+      "linkedApplications": [],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "submittedAt": "2026-04-15T07:24:58.239Z",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 6,
+      "name": "LSTM时序预测器",
+      "ownerId": "local-user",
+      "folderId": 6,
+      "type": "时序分析",
+      "description": "基于 LSTM 网络对单变量时间序列进行多步预测，适用于设备参数趋势预测场景。",
+      "inputSpec": "series: np.ndarray - 历史时序数据\nlook_back: int - 回看窗口大小\npredict_steps: int - 预测步数",
+      "outputSpec": "np.ndarray - 未来N步的预测值数组",
+      "dependencies": "tensorflow,numpy",
+      "content": "import numpy as np\n\ndef lstm_forecast(series, look_back=24, predict_steps=6):\n    # 此处保留模型封装接口，具体训练逻辑由框架实现。\n    windows = [series[i:i + look_back] for i in range(len(series) - look_back)]\n    return np.array(windows[-predict_steps:])",
+      "tags": [
+        "LSTM",
+        "时序预测",
+        "深度学习"
+      ],
+      "currentVersion": "0.9.0",
+      "status": "rejected",
+      "linkedApplications": [],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "reviewerId": "local-user",
+      "reviewComment": "模型未提供归一化反变换逻辑，预测输出值域不正确，请修正后重新提交。",
+      "submittedAt": "2026-04-15T07:24:58.239Z",
+      "rejectedAt": "2026-04-15T07:24:58.239Z",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 7,
+      "name": "图像目标区域提取器",
+      "ownerId": "local-user",
+      "folderId": 7,
+      "type": "图像处理",
+      "description": "使用自适应阈值和形态学操作从工业相机图像中提取感兴趣目标区域的边界框。",
+      "inputSpec": "image: np.ndarray - BGR格式输入图像\nmin_area: int - 最小目标面积（像素）",
+      "outputSpec": "List[tuple] - 边界框列表，每项为(x, y, w, h)",
+      "dependencies": "opencv-python,numpy",
+      "content": "import cv2\n\ndef extract_target_regions(image, min_area=120):\n    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)\n    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 3)\n    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)\n    boxes = []\n    for contour in contours:\n        x, y, w, h = cv2.boundingRect(contour)\n        if w * h >= min_area:\n            boxes.append((x, y, w, h))\n    return boxes",
+      "tags": [
+        "OpenCV",
+        "目标提取",
+        "图像处理"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "draft",
+      "linkedApplications": [],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 8,
+      "name": "孤立森林异常评分器",
+      "ownerId": "local-user",
+      "folderId": 8,
+      "type": "机器学习",
+      "description": "使用孤立森林算法对多维传感器数据进行无监督异常评分，输出每个样本的异常得分。",
+      "inputSpec": "X: np.ndarray - 多维特征矩阵\ncontamination: float - 预估异常比例（0~0.5）",
+      "outputSpec": "np.ndarray - 每个样本的异常得分数组",
+      "dependencies": "scikit-learn,numpy",
+      "content": "from sklearn.ensemble import IsolationForest\n\ndef isolation_scores(X, contamination=0.05):\n    model = IsolationForest(contamination=contamination, random_state=42)\n    model.fit(X)\n    return -model.score_samples(X)",
+      "tags": [
+        "孤立森林",
+        "异常检测",
+        "无监督"
+      ],
+      "currentVersion": "2.0.0",
+      "status": "approved",
+      "packageFile": "孤立森林异常评分器.json",
+      "linkedApplications": [
+        "异常中心"
+      ],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "reviewerId": "local-user",
+      "submittedAt": "2026-04-15T07:24:58.239Z",
+      "approvedAt": "2026-04-15T07:24:58.239Z",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 9,
+      "name": "DTW序列相似度计算器",
+      "ownerId": "local-user",
+      "folderId": 9,
+      "type": "时序分析",
+      "description": "计算两条等长或不等长时间序列之间的动态时间弯曲距离，用于设备运行模式的相似性比对。",
+      "inputSpec": "seq1: List[float] - 第一条时序\nseq2: List[float] - 第二条时序",
+      "outputSpec": "float - DTW距离值（越小越相似）",
+      "dependencies": "numpy",
+      "content": "import numpy as np\n\ndef dtw_distance(seq1, seq2):\n    n, m = len(seq1), len(seq2)\n    dp = np.full((n + 1, m + 1), np.inf)\n    dp[0, 0] = 0\n    for i in range(1, n + 1):\n        for j in range(1, m + 1):\n            cost = abs(seq1[i - 1] - seq2[j - 1])\n            dp[i, j] = cost + min(dp[i - 1, j], dp[i, j - 1], dp[i - 1, j - 1])\n    return float(dp[n, m])",
+      "tags": [
+        "DTW",
+        "相似度",
+        "时序"
+      ],
+      "currentVersion": "1.0.0",
+      "status": "draft",
+      "linkedApplications": [],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 10,
+      "name": "卡方独立性检验工具",
+      "ownerId": "local-user",
+      "folderId": 10,
+      "type": "统计分析",
+      "description": "对两个分类变量进行卡方独立性检验，判断两变量之间是否存在显著统计关联。",
+      "inputSpec": "observed: np.ndarray - 观测频数列联表\nalpha: float - 显著性水平（默认0.05）",
+      "outputSpec": "dict - 包含卡方统计量、p值和检验结论的字典",
+      "dependencies": "scipy,numpy",
+      "content": "from scipy.stats import chi2_contingency\n\ndef chi_square_test(observed, alpha=0.05):\n    statistic, p_value, _, _ = chi2_contingency(observed)\n    return {'statistic': float(statistic), 'p_value': float(p_value), 'is_related': p_value < alpha}",
+      "tags": [
+        "卡方检验",
+        "独立性",
+        "统计"
+      ],
+      "currentVersion": "1.1.0",
+      "status": "approved",
+      "packageFile": "卡方独立性检验工具.json",
+      "linkedApplications": [
+        "统计分析"
+      ],
+      "createdBy": "local-user",
+      "updatedBy": "local-user",
+      "reviewerId": "local-user",
+      "submittedAt": "2026-04-15T07:24:58.239Z",
+      "approvedAt": "2026-04-15T07:24:58.239Z",
+      "createdAt": "2026-04-15T07:24:58.239Z",
+      "updatedAt": "2026-04-15T07:24:58.239Z"
+    }
+  ],
+  "algorithmVersions": [
+    {
+      "id": 1,
+      "algorithmId": 1,
+      "version": "1.0.0",
+      "content": "import numpy as np\n\ndef detect_heart_rate_anomaly(values, window=30, sigma=2.5):\n    alerts = []\n    for index in range(window, len(values)):\n        baseline = values[index - window:index]\n        mean = float(np.mean(baseline))\n        std = float(np.std(baseline)) or 1e-6\n        score = abs(values[index] - mean) / std\n        if score >= sigma:\n            alerts.append({'index': index, 'value': values[index], 'baseline': round(mean, 3)})\n    return alerts",
+      "inputSpec": "values: List[float] - 心率时序数据\nwindow: int - 滑动窗口大小\nsigma: float - 告警阈值倍数",
+      "outputSpec": "List[dict] - 告警列表，每项包含时间索引、当前值和基准值",
+      "dependencies": "numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 2,
+      "algorithmId": 2,
+      "version": "1.0.0",
+      "content": "import numpy as np\n\ndef vibration_spectrum(signal, sample_rate):\n    spectrum = np.fft.rfft(signal)\n    magnitude = np.abs(spectrum)\n    freqs = np.fft.rfftfreq(len(signal), d=1.0 / sample_rate)\n    peak_index = int(np.argmax(magnitude))\n    return {'frequencies': freqs.tolist(), 'magnitudes': magnitude.tolist(), 'dominant_frequency': float(freqs[peak_index])}",
+      "inputSpec": "signal: np.ndarray - 振动时域信号\nsample_rate: int - 采样率（Hz）",
+      "outputSpec": "dict - 包含频率数组、幅值数组和主频率的字典",
+      "dependencies": "numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 3,
+      "algorithmId": 3,
+      "version": "1.2.0",
+      "content": "import pandas as pd\n\ndef interpolate_sensor_series(data, max_gap=3):\n    result = data.copy()\n    mask = result.isna()\n    if mask.sum() == 0:\n        return result\n    result = result.interpolate(limit=max_gap, limit_direction='both')\n    return result",
+      "inputSpec": "data: pd.Series - 含缺失值的时序数据\nmax_gap: int - 最大允许插值的连续缺失点数",
+      "outputSpec": "pd.Series - 插值补全后的时序数据",
+      "dependencies": "pandas,numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 4,
+      "algorithmId": 4,
+      "version": "1.0.0",
+      "content": "def select_high_correlations(df, threshold=0.8):\n    corr = df.corr(method='pearson').abs()\n    pairs = []\n    columns = list(corr.columns)\n    for i, left in enumerate(columns):\n        for right in columns[i + 1:]:\n            score = float(corr.loc[left, right])\n            if score >= threshold:\n                pairs.append((left, right, round(score, 4)))\n    return pairs",
+      "inputSpec": "df: pd.DataFrame - 多变量数据集\nthreshold: float - 相关性筛选阈值（0~1）",
+      "outputSpec": "List[tuple] - 高相关特征对列表，每项为(特征A, 特征B, 相关系数)",
+      "dependencies": "pandas,numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 5,
+      "algorithmId": 5,
+      "version": "1.0.0",
+      "content": "from sklearn.ensemble import RandomForestClassifier\n\ndef train_condition_classifier(X_train, y_train, n_estimators=200):\n    model = RandomForestClassifier(n_estimators=n_estimators, random_state=42)\n    model.fit(X_train, y_train)\n    return model",
+      "inputSpec": "X_train: np.ndarray - 训练特征矩阵\ny_train: np.ndarray - 训练标签\nn_estimators: int - 决策树数量",
+      "outputSpec": "sklearn模型对象 - 训练完成的随机森林分类器",
+      "dependencies": "scikit-learn,numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 6,
+      "algorithmId": 6,
+      "version": "0.9.0",
+      "content": "import numpy as np\n\ndef lstm_forecast(series, look_back=24, predict_steps=6):\n    # 此处保留模型封装接口，具体训练逻辑由框架实现。\n    windows = [series[i:i + look_back] for i in range(len(series) - look_back)]\n    return np.array(windows[-predict_steps:])",
+      "inputSpec": "series: np.ndarray - 历史时序数据\nlook_back: int - 回看窗口大小\npredict_steps: int - 预测步数",
+      "outputSpec": "np.ndarray - 未来N步的预测值数组",
+      "dependencies": "tensorflow,numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 7,
+      "algorithmId": 7,
+      "version": "1.0.0",
+      "content": "import cv2\n\ndef extract_target_regions(image, min_area=120):\n    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)\n    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 3)\n    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)\n    boxes = []\n    for contour in contours:\n        x, y, w, h = cv2.boundingRect(contour)\n        if w * h >= min_area:\n            boxes.append((x, y, w, h))\n    return boxes",
+      "inputSpec": "image: np.ndarray - BGR格式输入图像\nmin_area: int - 最小目标面积（像素）",
+      "outputSpec": "List[tuple] - 边界框列表，每项为(x, y, w, h)",
+      "dependencies": "opencv-python,numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 8,
+      "algorithmId": 8,
+      "version": "2.0.0",
+      "content": "from sklearn.ensemble import IsolationForest\n\ndef isolation_scores(X, contamination=0.05):\n    model = IsolationForest(contamination=contamination, random_state=42)\n    model.fit(X)\n    return -model.score_samples(X)",
+      "inputSpec": "X: np.ndarray - 多维特征矩阵\ncontamination: float - 预估异常比例（0~0.5）",
+      "outputSpec": "np.ndarray - 每个样本的异常得分数组",
+      "dependencies": "scikit-learn,numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 9,
+      "algorithmId": 9,
+      "version": "1.0.0",
+      "content": "import numpy as np\n\ndef dtw_distance(seq1, seq2):\n    n, m = len(seq1), len(seq2)\n    dp = np.full((n + 1, m + 1), np.inf)\n    dp[0, 0] = 0\n    for i in range(1, n + 1):\n        for j in range(1, m + 1):\n            cost = abs(seq1[i - 1] - seq2[j - 1])\n            dp[i, j] = cost + min(dp[i - 1, j], dp[i, j - 1], dp[i - 1, j - 1])\n    return float(dp[n, m])",
+      "inputSpec": "seq1: List[float] - 第一条时序\nseq2: List[float] - 第二条时序",
+      "outputSpec": "float - DTW距离值（越小越相似）",
+      "dependencies": "numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    },
+    {
+      "id": 10,
+      "algorithmId": 10,
+      "version": "1.1.0",
+      "content": "from scipy.stats import chi2_contingency\n\ndef chi_square_test(observed, alpha=0.05):\n    statistic, p_value, _, _ = chi2_contingency(observed)\n    return {'statistic': float(statistic), 'p_value': float(p_value), 'is_related': p_value < alpha}",
+      "inputSpec": "observed: np.ndarray - 观测频数列联表\nalpha: float - 显著性水平（默认0.05）",
+      "outputSpec": "dict - 包含卡方统计量、p值和检验结论的字典",
+      "dependencies": "scipy,numpy",
+      "changeReason": "初始化内置示例",
+      "changeSummary": "写入中文算法示例与审核状态。",
+      "changedBy": "local-user",
+      "createdAt": "2026-04-15T07:24:58.239Z"
+    }
+  ],
+  "algorithmReviews": [],
+  "auditLogs": [
+    {
+      "id": 1,
+      "actorId": "local-user",
+      "action": "category.create",
+      "resourceType": "category",
+      "resourceId": 9,
+      "detail": {
+        "name": "test-cat"
+      },
+      "createdAt": "2026-04-22T13:00:21.215Z"
+    },
+    {
+      "id": 2,
+      "actorId": "local-user",
+      "action": "category.create",
+      "resourceType": "category",
+      "resourceId": 10,
+      "detail": {
+        "name": "测试分类"
+      },
+      "createdAt": "2026-04-22T13:02:26.583Z"
+    },
+    {
+      "id": 3,
+      "actorId": "local-user",
+      "action": "snippet.create",
+      "resourceType": "snippet",
+      "resourceId": 11,
+      "detail": {
+        "name": "测试片段",
+        "visibility": "private"
+      },
+      "createdAt": "2026-04-23T11:27:04.257Z"
+    },
+    {
+      "id": 4,
+      "actorId": "local-user",
+      "action": "template.update",
+      "resourceType": "template",
+      "resourceId": 1,
+      "detail": {
+        "version": "1.1.0"
+      },
+      "createdAt": "2026-04-24T08:46:22.394Z"
+    }
+  ],
+  "counters": {
+    "categories": 10,
+    "templates": 20,
+    "templateVersions": 21,
+    "snippetFolders": 8,
+    "snippets": 11,
+    "snippetVersions": 11,
+    "algorithmFolders": 10,
+    "algorithms": 10,
+    "algorithmVersions": 10,
+    "algorithmReviews": 8,
+    "auditLogs": 4
+  }
+}

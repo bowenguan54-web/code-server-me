@@ -1,0 +1,13 @@
+{
+  "namespace": "custom",
+  "type": "template",
+  "module_kind": "component",
+  "published": false,
+  "publish_status": "draft",
+  "zh_name": "模板发布测试",
+  "name": "tmp_from_template_1777259025",
+  "version": "1.0.0",
+  "category": "",
+  "description": "verify",
+  "zh_description": "verify"
+}

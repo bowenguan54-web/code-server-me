@@ -1,0 +1,55 @@
+2026-04-27 09:11:30.719 [info] [main] Log level: Info
+2026-04-27 09:11:30.719 [info] [main] Validating found git in: "git"
+2026-04-27 09:11:30.719 [info] [main] Using git "2.34.1" from "git"
+2026-04-27 09:11:30.719 [info] [Model][doInitialScan] Initial repository scan started
+2026-04-27 09:11:30.719 [info] > git rev-parse --show-toplevel [61ms]
+2026-04-27 09:11:30.815 [info] > git rev-parse --git-dir --git-common-dir --show-superproject-working-tree [168ms]
+2026-04-27 09:11:30.832 [info] [Model][openRepository] Opened repository (path): /home/guan/code-server-me
+2026-04-27 09:11:30.832 [info] [Model][openRepository] Opened repository (real path): /home/guan/code-server-me
+2026-04-27 09:11:30.832 [info] [Model][openRepository] Opened repository (kind): repository
+2026-04-27 09:11:30.854 [info] > git rev-parse --show-toplevel [8ms]
+2026-04-27 09:11:30.855 [info] > git config --get commit.template [15ms]
+2026-04-27 09:11:30.865 [info] > git rev-parse --show-toplevel [3ms]
+2026-04-27 09:11:30.874 [info] > git rev-parse --show-toplevel [3ms]
+2026-04-27 09:11:30.896 [info] > git rev-parse --show-toplevel [13ms]
+2026-04-27 09:11:30.905 [info] > git rev-parse --show-toplevel [2ms]
+2026-04-27 09:11:30.913 [info] > git rev-parse --show-toplevel [2ms]
+2026-04-27 09:11:30.920 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:30.928 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:30.936 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:30.944 [info] > git rev-parse --show-toplevel [2ms]
+2026-04-27 09:11:30.951 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:30.959 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:30.967 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:30.975 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:30.982 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:30.990 [info] > git rev-parse --show-toplevel [2ms]
+2026-04-27 09:11:30.997 [info] > git rev-parse --show-toplevel [2ms]
+2026-04-27 09:11:31.003 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:31.010 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:31.017 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:11:31.019 [info] [Model][doInitialScan] Initial repository scan completed - repositories (1), closed repositories (0), parent repositories (0), unsafe repositories (0)
+2026-04-27 09:11:31.167 [info] > git for-each-ref --format %(refname)%00%(objectname)%00%(*objectname) refs/tags [314ms]
+2026-04-27 09:11:31.255 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [74ms]
+2026-04-27 09:11:31.384 [info] > git check-ignore -v -z --stdin [2ms]
+2026-04-27 09:11:31.932 [info] > git status -z -uall [758ms]
+2026-04-27 09:11:31.993 [info] > git config --get commit.template [3ms]
+2026-04-27 09:11:32.005 [info] > git for-each-ref --format %(refname)%00%(objectname)%00%(*objectname) refs/tags [6ms]
+2026-04-27 09:11:32.027 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [8ms]
+2026-04-27 09:11:32.236 [info] > git status -z -uall [225ms]
+2026-04-27 09:11:32.753 [info] > git rev-parse --show-toplevel [3ms]
+2026-04-27 09:11:32.972 [info] > git rev-parse --git-dir --git-common-dir --show-superproject-working-tree [209ms]
+2026-04-27 09:11:32.981 [info] [Model][openRepository] Opened repository (path): /home/guan/code-server-me/lib/vscode
+2026-04-27 09:11:32.981 [info] [Model][openRepository] Opened repository (real path): /home/guan/code-server-me/lib/vscode
+2026-04-27 09:11:32.981 [info] [Model][openRepository] Opened repository (kind): submodule
+2026-04-27 09:11:32.996 [info] > git config --get commit.template [8ms]
+2026-04-27 09:11:33.522 [info] > git check-ignore -v -z --stdin [4ms]
+2026-04-27 09:12:09.082 [info] > git for-each-ref --format %(refname)%00%(objectname)%00%(*objectname) refs/tags [36088ms]
+2026-04-27 09:12:09.139 [info] > git status -z -uall [51ms]
+2026-04-27 09:12:13.826 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [4730ms]
+2026-04-27 09:12:13.895 [info] > git config --get commit.template [2ms]
+2026-04-27 09:12:13.913 [info] > git for-each-ref --format %(refname)%00%(objectname)%00%(*objectname) refs/tags [12ms]
+2026-04-27 09:12:13.993 [info] > git status -z -uall [74ms]
+2026-04-27 09:12:14.017 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [89ms]
+2026-04-27 09:12:14.528 [info] > git rev-parse --show-toplevel [1ms]
+2026-04-27 09:12:14.528 [info] fatal: this operation must be run in a work tree

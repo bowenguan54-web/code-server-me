@@ -1,0 +1,91 @@
+[
+    {
+        "id":  "timeseries.lstm.forecast",
+        "name":  "LSTM 时序预测",
+        "category":  "时序分析",
+        "subCategory":  "深度预测",
+        "tags":  [
+                     "LSTM",
+                     "时序预测",
+                     "深度学习"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "构建简单 LSTM 预测模型，用于时间序列回归预测。",
+        "docMarkdown":  "# LSTM 时序预测\n\n## 功能说明\n构建简单 LSTM 预测模型，用于时间序列回归预测。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于时序分析 / 深度预测 场景。\n- 推荐通过触发词 alg.ts.lstm 快速插入。\n\n## 标签\n- LSTM / 时序预测 / 深度学习",
+        "triggerPrefix":  "alg.ts.lstm",
+        "snippet":  "from tensorflow.keras.models import Sequential\nfrom tensorflow.keras.layers import LSTM, Dense\n\nmodel = Sequential([\n    LSTM(${1:64}, input_shape=${2:(lookback, feature_dim)}),\n    Dense(${3:1}),\n])\nmodel.compile(optimizer=${4:\"adam\"}, loss=${5:\"mse\"})\n${6:model.summary()}",
+        "imports":  [
+                        "from tensorflow.keras.models import Sequential",
+                        "from tensorflow.keras.layers import LSTM, Dense"
+                    ],
+        "example":  "model = build_lstm_model(lookback=24, feature_dim=8)\nmodel.summary()",
+        "source":  "builtin"
+    },
+    {
+        "id":  "timeseries.arima.forecast",
+        "name":  "ARIMA 预测",
+        "category":  "时序分析",
+        "subCategory":  "统计预测",
+        "tags":  [
+                     "ARIMA",
+                     "时间序列",
+                     "预测"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "基于 ARIMA 模型进行时间序列预测，适合平稳序列建模。",
+        "docMarkdown":  "# ARIMA 预测\n\n## 功能说明\n基于 ARIMA 模型进行时间序列预测，适合平稳序列建模。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于时序分析 / 统计预测 场景。\n- 推荐通过触发词 alg.ts.arima 快速插入。\n\n## 标签\n- ARIMA / 时间序列 / 预测",
+        "triggerPrefix":  "alg.ts.arima",
+        "snippet":  "from statsmodels.tsa.arima.model import ARIMA\n\nmodel = ARIMA(${1:series}, order=${2:(1, 1, 1)})\nresult = model.fit()\nforecast = result.forecast(steps=${3:12})\n${4:print(forecast)}",
+        "imports":  [
+                        "from statsmodels.tsa.arima.model import ARIMA"
+                    ],
+        "example":  "result = ARIMA(series, order=(1, 1, 1)).fit()\nprint(result.forecast(steps=12))",
+        "source":  "builtin"
+    },
+    {
+        "id":  "timeseries.dtw.similarity",
+        "name":  "DTW 相似性",
+        "category":  "时序分析",
+        "subCategory":  "相似度计算",
+        "tags":  [
+                     "DTW",
+                     "时序相似度",
+                     "距离"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "计算两条时间序列的动态时间规整距离，衡量波形相似度。",
+        "docMarkdown":  "# DTW 相似性\n\n## 功能说明\n计算两条时间序列的动态时间规整距离，衡量波形相似度。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于时序分析 / 相似度计算 场景。\n- 推荐通过触发词 alg.ts.dtw 快速插入。\n\n## 标签\n- DTW / 时序相似度 / 距离",
+        "triggerPrefix":  "alg.ts.dtw",
+        "snippet":  "from dtaidistance import dtw\n\ndistance = dtw.distance(${1:series_a}, ${2:series_b})\n${3:print(distance)}",
+        "imports":  [
+                        "from dtaidistance import dtw"
+                    ],
+        "example":  "distance = dtw.distance(series_a, series_b)\nprint(distance)",
+        "source":  "builtin"
+    },
+    {
+        "id":  "timeseries.movingavg.smooth",
+        "name":  "滑动平均",
+        "category":  "时序分析",
+        "subCategory":  "平滑处理",
+        "tags":  [
+                     "滑动平均",
+                     "平滑",
+                     "趋势"
+                 ],
+        "language":  "python",
+        "version":  "v1.0.0",
+        "description":  "对时间序列执行滑动平均平滑，降低局部噪声波动。",
+        "docMarkdown":  "# 滑动平均\n\n## 功能说明\n对时间序列执行滑动平均平滑，降低局部噪声波动。\n\n## 参数说明\n- `${1}`: 主输入数据对象或数组。\n- `${2}`: 可选配置参数，按实际业务调整。\n\n## 适用场景\n- 适用于时序分析 / 平滑处理 场景。\n- 推荐通过触发词 alg.ts.movingavg 快速插入。\n\n## 标签\n- 滑动平均 / 平滑 / 趋势",
+        "triggerPrefix":  "alg.ts.movingavg",
+        "snippet":  "import pandas as pd\n\nsmoothed = ${1:series}.rolling(window=${2:5}, min_periods=1).mean()\n${3:print(smoothed.tail())}",
+        "imports":  [
+                        "import pandas as pd"
+                    ],
+        "example":  "smoothed = series.rolling(window=5, min_periods=1).mean()\nprint(smoothed.tail())",
+        "source":  "builtin"
+    }
+]

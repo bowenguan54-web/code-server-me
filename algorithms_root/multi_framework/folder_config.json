@@ -1,0 +1,7 @@
+{
+  "namespace": "multi_framework",
+  "type": "component",
+  "display_name": "多算法框架",
+  "description": "集成 Scikit-learn、PyTorch、TensorFlow、OpenCV、MXNet、XGBoost 等主流算法框架",
+  "zh_name": "多框架算法"
+}

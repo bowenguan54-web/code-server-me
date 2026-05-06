@@ -1,0 +1,61 @@
+[
+  {
+    "version_id": "ver_0001",
+    "algorithm_id": "测试算法模板功能.test_modules",
+    "call_prefix": "alg.测试算法模板功能.test_modules",
+    "version": "1.0.0",
+    "action": "created",
+    "operator": "system",
+    "timestamp": "2026-04-27T03:08:16.543522+00:00",
+    "note": "Created from frontend",
+    "files": [
+      {
+        "relative_path": "test_modules.py",
+        "content": "from algo_service.sdk.decorators import algo_meta\n@algo_meta(\n    zh_name=\"test-算法模板\",\n    zh_description=\"说明算法用途、输入输出和适用场景。\",\n    zh_tags=[\"测试，算法模板\"],\n    version=\"1.0.0\",\n)\ndef test_modules(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n        \"passed\": passed,\n    }\n"
+      }
+    ],
+    "metadata": {
+      "id": "测试算法模板功能.test_modules",
+      "callPrefix": "alg.测试算法模板功能.test_modules",
+      "callSnippet": "alg.测试算法模板功能.test_modules(${1:data}, ${2:threshold})",
+      "snippetBody": "def test_modules(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n        \"passed\": passed,\n    }",
+      "type": "template",
+      "moduleKind": "template",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.测试算法模板功能.test_modules",
+      "externalApiPath": "/api/external/v1/测试算法模板功能/test_modules",
+      "displayNamespace": "alg.测试算法模板功能.test_modules",
+      "zhName": "test-算法模板",
+      "zhDescription": "说明算法用途、输入输出和适用场景。",
+      "zhTags": [
+        "测试，算法模板"
+      ],
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。"
+        }
+      ],
+      "namespace": "测试算法模板功能",
+      "categoryZhName": "",
+      "categoryNamespace": "测试算法模板功能",
+      "version": "1.0.0",
+      "funcName": "test_modules",
+      "packageId": null,
+      "packageRoot": null,
+      "sourceFile": "/home/guan/code-server-me/algorithms_root/测试算法模板功能/test_modules.py"
+    }
+  }
+]

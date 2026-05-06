@@ -1,0 +1,3 @@
+#!/bin/sh
+unset NODE_OPTIONS
+ELECTRON_RUN_AS_NODE=1 "/home/guan/code-server-me/release/lib/node" "/home/guan/code-server-me/.run/fullbuild-user-data/User/globalStorage/redhat.devspaces-copilot-chat-integration/debugCommand/copilotDebugCommand.js" "code-oss://github.copilot-chat" "code --openExternal " "$@"

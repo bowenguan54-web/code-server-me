@@ -32,7 +32,19 @@
     "lint:ts": "eslint --max-warnings=0 --fix $(git ls-files '*.ts' '*.js' | grep -v 'lib/vscode')",
     "test": "echo 'Run npm run test:unit or npm run test:e2e' && exit 1",
     "watch": "VSCODE_DEV=1 VSCODE_IPC_HOOK_CLI= NODE_OPTIONS='--max_old_space_size=32384 --trace-warnings' ts-node ./ci/dev/watch.ts",
-    "icons": "./ci/dev/gen_icons.sh"
+    "dev:bg": "bash ./ci/dev/code-server-bg.sh start",
+    "dev:bg:stop": "bash ./ci/dev/code-server-bg.sh stop",
+    "dev:bg:restart": "bash ./ci/dev/code-server-bg.sh restart",
+    "dev:bg:status": "bash ./ci/dev/code-server-bg.sh status",
+    "dev:bg:logs": "bash ./ci/dev/code-server-bg.sh logs",
+    "full:bg": "bash ./ci/dev/code-server-full-bg.sh start",
+    "full:bg:stop": "bash ./ci/dev/code-server-full-bg.sh stop",
+    "full:bg:restart": "bash ./ci/dev/code-server-full-bg.sh restart",
+    "full:bg:status": "bash ./ci/dev/code-server-full-bg.sh status",
+    "full:bg:logs": "bash ./ci/dev/code-server-full-bg.sh logs",
+    "full:bg:install-lang": "bash ./ci/dev/code-server-full-bg.sh install-lang",
+    "icons": "./ci/dev/gen_icons.sh",
+    "sync:wsl:pull": "powershell -ExecutionPolicy Bypass -File ./ci/dev/sync-from-wsl.ps1"
   },
   "main": "out/node/entry.js",
   "devDependencies": {

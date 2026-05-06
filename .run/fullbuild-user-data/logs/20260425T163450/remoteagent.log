@@ -1,0 +1,7 @@
+2026-04-25 16:34:50.673 [info] 
+
+
+
+
+2026-04-25 16:34:50.943 [info] Extension host agent started.
+2026-04-25 16:34:50.958 [error] [127.0.0.1][3a97fcc2][ManagementConnection] Unknown reconnection token (never seen).
