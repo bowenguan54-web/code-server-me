@@ -6,6 +6,8 @@ server:
 # Paths are relative to the project root (where config.yaml lives).
 watch_directories:
   - "./algorithms_root"
+  - "./algorithms_root/library"
+  - "./algorithms_root/users"
 
 # Restrict CORS if needed; "*" allows any origin (development default).
 cors_origins:
@@ -13,3 +15,6 @@ cors_origins:
 
 # Admin token used by publish approval/rejection routes.
 admin_token: "change-me-admin-token"
+
+# JWT secret (override with ALGOLIB_JWT_SECRET env var in production)
+jwt_secret: "algolib-dev-secret"

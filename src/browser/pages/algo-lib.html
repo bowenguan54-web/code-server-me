@@ -120,7 +120,8 @@
       user-select: none;
     }
     .nav-sub:hover { color: #fff; background: rgba(30, 144, 255, .10); }
-    .nav-sub.active-sub { color: var(--accent); }
+    .nav-sub.active-sub { color: var(--accent); font-weight: 600; }
+    .folder-section.nav-highlight { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
     .nav-collapse-btn {
       margin-left: auto;
       background: none;
@@ -614,7 +615,23 @@
   </style>
 </head>
 <body>
-  <div class="app">
+  <div id="loginPage" style="position:fixed;inset:0;z-index:9999;background:var(--bg-deep);align-items:center;justify-content:center;display:none">
+    <div style="width:340px;background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:36px 32px;box-shadow:var(--shadow)">
+      <div style="font-size:20px;font-weight:700;margin-bottom:6px;color:#fff">AlgoLib 管理平台</div>
+      <div style="color:var(--text-dim);font-size:13px;margin-bottom:24px">请登录以继续</div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:13px;margin-bottom:5px;color:var(--text-dim)">用户名</label>
+        <input id="loginUsername" type="text" placeholder="admin" autocomplete="username" />
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:13px;margin-bottom:5px;color:var(--text-dim)">密码</label>
+        <input id="loginPassword" type="password" placeholder="密码" autocomplete="current-password" />
+      </div>
+      <div id="loginError" style="display:none;color:var(--danger);font-size:13px;margin-bottom:12px"></div>
+      <button class="primary" style="width:100%" onclick="window.doLogin()">登 录</button>
+    </div>
+  </div>
+  <div class="app" id="appShell" style="display:none">
     <aside class="sidebar" id="sidebar"></aside>
     <main class="main" id="main"></main>
     <div class="statusbar" id="statusbar">
@@ -656,7 +673,8 @@
       snippetCursor: 0,
       navCollapsed: {},
       selectedNavNs: "",
-      sse: null
+      sse: null,
+      currentUser: null
     };
 
     function qs(selector, root = document) { return root.querySelector(selector); }
@@ -685,6 +703,8 @@
     async function api(path, options = {}) {
       const headers = { ...(options.headers || {}) };
       if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      const token = localStorage.getItem("algolib_token");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
       let response;
       try {
         response = await fetch(BASE + path, { ...options, headers, signal: AbortSignal.timeout(30000) });
@@ -693,6 +713,13 @@
       }
       let data = null;
       try { data = await response.json(); } catch (error) { data = { detail: response.statusText }; }
+      if (response.status === 401) {
+        localStorage.removeItem("algolib_token");
+        localStorage.removeItem("algolib_user");
+        state.currentUser = null;
+        showLoginPage();
+        throw new Error("登录已过期，请重新登录");
+      }
       if (!response.ok) throw new Error(data.detail || data.error || response.statusText);
       return data;
     }
@@ -770,11 +797,13 @@
         ["components", "算法组件"],
         ["templates", "算法模板"],
         ["snippets", "代码片段"],
+        ...(state.currentUser ? [["my-algos", "我的算法"], ["my-submissions", "我的提交记录"]] : []),
         ["review", "算法审核"],
         ["api", "API 管理"],
         ["monitor", "调用监控"],
         ["logs", "运行日志"],
-        ["settings", "系统设置"]
+        ["settings", "系统设置"],
+        ...(state.currentUser && state.currentUser.role === "admin" ? [["users", "用户管理"]] : [])
       ];
       const subPages = ["components", "templates"];
       qs("#sidebar").innerHTML = [
@@ -798,7 +827,12 @@
             return `<div class="nav-sub${isActive ? " active-sub" : ""}" data-page="${page}" data-ns="${esc(ns)}" title="${esc(name)}">${esc(name)}</div>`;
           });
           return [item, ...subs];
-        })
+        }),
+        state.currentUser ? `<div style="margin-top:auto;padding:10px 8px 0;border-top:1px solid var(--line);font-size:12px;color:var(--text-dim)">
+          <div style="color:var(--text);font-weight:600">${esc(state.currentUser.display_name || state.currentUser.username)}</div>
+          <div style="margin:2px 0 6px">${esc(state.currentUser.role === "admin" ? "管理员" : "普通用户")}</div>
+          <button class="ghost" style="font-size:12px;padding:4px 8px" onclick="window.doLogout()">退出登录</button>
+        </div>` : ""
       ].join("");
       qsa(".nav-item").forEach(el => {
         el.addEventListener("click", (evt) => {
@@ -847,6 +881,18 @@
     function renderPage(page) {
       if (page === "components" || page === "templates" || page === "snippets") {
         renderModulePage(page);
+        return;
+      }
+      if (page === "users") {
+        renderUsersPage();
+        return;
+      }
+      if (page === "my-algos") {
+        renderMyAlgorithmsPage();
+        return;
+      }
+      if (page === "my-submissions") {
+        renderMySubmissionsPage();
         return;
       }
       if (page === "api") {
@@ -1342,7 +1388,11 @@
     }
 
     function renderWorkspaceFiles() {
-      qs("#wsFileList").innerHTML = newAlgoState.files.map(file => `<button class="${file.relative_path === newAlgoState.currentFile ? "active" : ""}" onclick="window.switchWorkspaceFile('${esc(file.relative_path)}')">${esc(file.relative_path)}</button>`).join("");
+      qs("#wsFileList").innerHTML = newAlgoState.files.map(file => `
+        <div style="display:flex;align-items:center;gap:2px">
+          <button class="${file.relative_path === newAlgoState.currentFile ? "active" : ""}" style="flex:1;text-align:left" onclick="window.switchWorkspaceFile('${esc(file.relative_path)}')">${esc(file.relative_path)}</button>
+          <button class="ghost" style="font-size:11px;padding:2px 5px;flex-shrink:0" onclick="window.renameWorkspaceFile('${esc(file.relative_path)}')" title="重命名">改</button>
+        </div>`).join("");
       const file = newAlgoState.files.find(item => item.relative_path === newAlgoState.currentFile);
       qs("#wsCode").value = file?.content || "";
     }
@@ -1757,6 +1807,9 @@
             <div class="more-menu-wrap" style="position:relative">
               <button onclick="this.nextElementSibling.classList.toggle('hidden')">更多 ▾</button>
               <div class="more-menu hidden" style="position:absolute;top:100%;right:0;z-index:200;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;min-width:120px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,.4)">
+                <div class="more-menu-item" onclick="window.formatCurrentFile();this.closest('.more-menu').classList.add('hidden')">格式化代码</div>
+                <div class="more-menu-item" onclick="window.checkSyntax();this.closest('.more-menu').classList.add('hidden')">检查语法</div>
+                <div class="more-menu-item" onclick="window.renameEntryFile();this.closest('.more-menu').classList.add('hidden')">重命名当前文件</div>
                 <div class="more-menu-item" onclick="window.openSnippetOverlay();this.closest('.more-menu').classList.add('hidden')">插入片段</div>
                 <div class="more-menu-item" onclick="window.showVersions('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">版本历史</div>
                 ${e.page === "components" && getStatus(e.algo) === "rejected" ? `<div class="more-menu-item" onclick="window.viewRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">查看驳回内容</div><div class="more-menu-item danger" onclick="window.discardRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">放弃修改</div>` : ""}
@@ -1906,7 +1959,10 @@
           const names = (file.functions || []).map(fn => fn.func_name || fn.name).filter(Boolean);
           return `
             <div class="file-item ${file.filename === state.currentFile ? "active" : ""}" onclick="window.switchFile('${esc(file.filename)}')">
-              <div class="file-name">${esc(file.filename)}${file.isEntry ? " · entry" : ""}</div>
+              <div class="file-name" style="display:flex;align-items:center;gap:4px">
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(file.filename)}${file.isEntry ? " · entry" : ""}</span>
+                ${!file.isEntry ? `<button class="ghost" style="font-size:11px;padding:1px 5px;flex-shrink:0" onclick="event.stopPropagation();window.renameSourceFile('${esc(file.filename)}')" title="重命名">改名</button>` : ""}
+              </div>
               <div class="file-functions">${names.length ? `def ${esc(names.join(", "))}` : "无函数"}</div>
             </div>
           `;
@@ -1962,6 +2018,110 @@
       } catch (error) {
         showToast(error.message);
       }
+    }
+
+    async function renameSourceFile(oldName) {
+      const newName = window.prompt("请输入新文件名（如 helpers.py）", oldName);
+      if (!newName || newName.trim() === oldName) return;
+      const clean = newName.trim();
+      if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]*\.py$/.test(clean)) {
+        showToast("文件名格式不正确，必须以 .py 结尾");
+        return;
+      }
+      try {
+        const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/rename-file`, {
+          method: "PATCH",
+          body: JSON.stringify({ old_name: oldName, new_name: clean })
+        });
+        const files = result.folder_files || [];
+        state.editing.source.folder_files = files;
+        const m = state.monaco || window.monaco;
+        if (m) {
+          // 更新 Monaco model
+          const oldModel = state.models.get(oldName);
+          if (oldModel) {
+            const content = oldModel.getValue();
+            oldModel.dispose();
+            state.models.delete(oldName);
+            const uri = m.Uri.parse(`inmemory://algolib/${encodeURIComponent(state.editing.id)}/${encodeURIComponent(clean)}`);
+            const existing = m.editor.getModel(uri);
+            if (existing && !existing.isDisposed()) existing.dispose();
+            const newModel = m.editor.createModel(content, "python", uri);
+            state.models.set(clean, newModel);
+          }
+        }
+        state.fileMeta.delete(oldName);
+        const updated = files.find(f => (f.relative_path || f.filename) === clean);
+        if (updated) {
+          state.fileMeta.set(clean, {
+            filename: clean,
+            content: updated.content || "",
+            isEntry: !!updated.is_entry,
+            functions: normalizeFunctions(updated.functions || [])
+          });
+        }
+        if (state.currentFile === oldName) {
+          state.currentFile = clean;
+          if (state.editor) state.editor.setModel(state.models.get(clean));
+        }
+        renderFileTree();
+        showToast(`文件已重命名为 ${clean}`);
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    function renameEntryFile() {
+      if (!state.currentFile) { showToast("未选中文件"); return; }
+      renameSourceFile(state.currentFile);
+    }
+
+    function formatCurrentFile() {
+      if (!state.editor) { showToast("编辑器未就绪"); return; }
+      const action = state.editor.getAction("editor.action.formatDocument");
+      if (action) {
+        action.run().then(() => showToast("格式化完成")).catch(() => showToast("格式化失败"));
+      } else {
+        // 无内置 formatter，执行简单缩进格式化
+        showToast("当前环境不支持自动格式化，请手动整理代码");
+      }
+    }
+
+    async function checkSyntax() {
+      if (!state.editor || !state.editing || !state.currentFile) { showToast("编辑器未就绪"); return; }
+      const content = state.editor.getValue();
+      try {
+        const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/check-syntax`, {
+          method: "POST",
+          body: JSON.stringify({ content, filename: state.currentFile })
+        });
+        if (result.valid) {
+          showToast("✅ 语法检查通过，未发现错误");
+        } else {
+          const msgs = result.errors.map(e => `第 ${e.line} 行：${e.message}`).join("\n");
+          showToast(`❌ 发现 ${result.errors.length} 个语法错误\n${msgs}`);
+        }
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    // workspace textarea 界面的文件重命名（新建算法时）
+    function renameWorkspaceFile(oldPath) {
+      const newName = window.prompt("请输入新文件名（如 helpers.py）", oldPath);
+      if (!newName || newName.trim() === oldPath) return;
+      const clean = newName.trim();
+      if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]*\.py$/.test(clean)) {
+        showToast("文件名格式不正确，必须以 .py 结尾");
+        return;
+      }
+      const file = newAlgoState.files.find(f => f.relative_path === oldPath);
+      if (!file) return;
+      updateWorkspaceFileContent();
+      file.relative_path = clean;
+      if (newAlgoState.currentFile === oldPath) newAlgoState.currentFile = clean;
+      renderWorkspaceFiles();
+      showToast(`已重命名为 ${clean}`);
     }
 
     async function saveCurrentFile() {
@@ -2634,9 +2794,23 @@
             code
           })
         });
-        showToast("✅ 已基于模板创建组件草稿");
+        const newComponentId = result.algorithm?.id;
+        // 提交审核：将新建的草稿组件直接进入审核流程
+        if (newComponentId) {
+          try {
+            await api(`/api/v1/algorithms/${safeId(newComponentId)}/submit`, {
+              method: "POST",
+              body: JSON.stringify({ version_bump: "none", zh_name: zhName, description: desc })
+            });
+            showToast("✅ 已基于模板创建组件并提交审核");
+          } catch (_submitErr) {
+            showToast("✅ 组件已创建（提交审核失败，请在组件列表手动提交）");
+          }
+        } else {
+          showToast("✅ 已基于模板创建组件草稿");
+        }
         closeModal();
-        state.highlightId = result.algorithm?.id || "";
+        state.highlightId = newComponentId || "";
         await loadModuleData("components");
         switchPage("components");
         window.setTimeout(() => {
@@ -3454,11 +3628,18 @@
       }
       source.addEventListener("updated", handle);
       source.addEventListener("namespace.changed", handle);
+      source.addEventListener("algorithm_published", handle);
+      source.addEventListener("submission_rejected", handle);
+      source.addEventListener("submission_created", () => {
+        if (state.currentUser && state.currentUser.role === "admin") loadCurrentPage();
+      });
       source.onmessage = handle;
     }
 
     async function loadCurrentPage() {
       try {
+        // 如果我的算法编辑器打开中，跳过 SSE 刷新，避免销毁未保存内容
+        if (qs("#myeditor-code")) return;
         if (["components", "templates", "snippets"].includes(state.page)) {
           await loadModuleData(state.page);
           renderNav();
@@ -3501,6 +3682,500 @@
           qsa(".more-menu").forEach(m => m.classList.add("hidden"));
         }
       });
+    }
+
+    function showLoginPage() {
+      const lp = qs("#loginPage");
+      const app = qs("#appShell");
+      lp.style.display = "flex";
+      if (app) app.style.display = "none";
+    }
+
+    function hideLoginPage() {
+      const lp = qs("#loginPage");
+      const app = qs("#appShell");
+      lp.style.display = "none";
+      if (app) app.style.display = "";
+    }
+
+    async function doLogin() {
+      const username = qs("#loginUsername").value.trim();
+      const password = qs("#loginPassword").value;
+      const errEl = qs("#loginError");
+      errEl.style.display = "none";
+      if (!username || !password) { errEl.textContent = "请输入用户名和密码"; errEl.style.display = "block"; return; }
+      try {
+        const resp = await fetch(BASE + "/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.detail || "登录失败");
+        localStorage.setItem("algolib_token", data.token);
+        localStorage.setItem("algolib_user", JSON.stringify(data.user));
+        state.currentUser = data.user;
+        hideLoginPage();
+        renderNav();
+        switchPage("components");
+        connectSse();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = "block";
+      }
+    }
+
+    async function doLogout() {
+      try { await api("/api/v1/auth/logout", { method: "POST" }); } catch (_) { /* ignore */ }
+      localStorage.removeItem("algolib_token");
+      localStorage.removeItem("algolib_user");
+      state.currentUser = null;
+      if (state.sse) { state.sse.close(); state.sse = null; }
+      showLoginPage();
+    }
+
+    document.addEventListener("keydown", ev => {
+      if (ev.key === "Enter" && qs("#loginPage") && qs("#loginPage").style.display !== "none") doLogin();
+    });
+
+    // ─── 我的算法页面 ────────────────────────────────────────────────
+    async function renderMyAlgorithmsPage() {
+      qs("#main").innerHTML = `
+        <h1>我的算法</h1>
+        <div class="toolbar">
+          <span class="spacer"></span>
+          <button class="primary" onclick="window.openNewAlgoModal()">＋ 新建算法</button>
+        </div>
+        <section id="my-algo-list"><div class="skeleton"></div></section>
+      `;
+      await refreshMyAlgoList();
+    }
+
+    async function refreshMyAlgoList() {
+      const listEl = qs("#my-algo-list");
+      if (!listEl) return;
+      try {
+        const data = await api("/api/v1/user/algorithms");
+        const algos = data.algorithms || [];
+        if (algos.length === 0) {
+          listEl.innerHTML = '<div class="empty">暂无私有算法，点击右上角"新建算法"开始</div>';
+          return;
+        }
+        listEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:4px 0">
+          ${algos.map(a => {
+            const ps = a.publishStatus || "draft";
+            const statusCls = statusClass(ps);
+            const statusTxt = { draft: "草稿", reviewing: "审核中", rejected: "已拒绝", approved: "已批准", published: "已发布" }[ps] || ps;
+            const canEdit = ps === "draft" || ps === "rejected";
+            const canSubmit = ps === "draft" || ps === "rejected";
+            const canWithdraw = ps === "reviewing";
+            const canDelete = ps === "draft" || ps === "rejected";
+            return `<div class="card" style="position:relative;padding:16px">
+              <span class="tag ${statusCls} status-badge">${esc(statusTxt)}</span>
+              <div style="font-weight:600;margin-bottom:4px;padding-right:60px">${esc(a.zhName || a.callPrefix || a.id)}</div>
+              <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">${esc(a.callPrefix || a.id)}</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                ${canEdit ? `<button style="font-size:12px;padding:4px 10px" onclick="window.openMyAlgoEditor('${esc(a.id)}')">编辑</button>` : `<button style="font-size:12px;padding:4px 10px" onclick="window.openMyAlgoEditor('${esc(a.id)}')">查看</button>`}
+                ${canSubmit ? `<button class="primary" style="font-size:12px;padding:4px 10px" onclick="window.openSubmitReviewModal('${esc(a.id)}')">提交审核</button>` : ""}
+                ${canWithdraw ? `<button style="font-size:12px;padding:4px 10px" onclick="window.withdrawMyAlgoReview('${esc(a.id)}')">撤回提交</button>` : ""}
+                ${canDelete ? `<button class="danger" style="font-size:12px;padding:4px 10px" onclick="window.deleteMyAlgo('${esc(a.id)}')">删除</button>` : ""}
+              </div>
+            </div>`;
+          }).join("")}
+        </div>`;
+      } catch (err) {
+        listEl.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+      }
+    }
+
+    function openNewAlgoModal() {
+      openModal(`
+        <h2 style="margin:0 0 18px">新建算法</h2>
+        <div class="form-group"><label>算法名称（英文，小写字母/数字/下划线）</label><input id="na_name" placeholder="my_algorithm" /></div>
+        <div class="form-group"><label>中文名称</label><input id="na_zhname" placeholder="我的算法" /></div>
+        <div class="form-group"><label>所属文件夹（英文，可选）</label><input id="na_folder" placeholder="custom" value="custom" /></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+          <button onclick="window.closeModal()">取消</button>
+          <button class="primary" onclick="window.doCreateMyAlgo()">创建</button>
+        </div>
+      `);
+    }
+
+    async function doCreateMyAlgo() {
+      const name = qs("#na_name").value.trim();
+      const zh_name = qs("#na_zhname").value.trim();
+      const folder = qs("#na_folder").value.trim() || "custom";
+      if (!name) { showToast("算法名称不能为空"); return; }
+      if (!/^[a-z][a-z0-9_]*$/.test(name)) { showToast("算法名称只能包含小写字母、数字和下划线，且须以字母开头"); return; }
+      try {
+        const data = await api("/api/v1/user/algorithms", {
+          method: "POST",
+          body: JSON.stringify({ name, zh_name, folder }),
+        });
+        closeModal();
+        showToast("算法已创建");
+        if (data.algorithm && data.algorithm.id) {
+          openMyAlgoEditor(data.algorithm.id);
+        } else {
+          renderMyAlgorithmsPage();
+        }
+      } catch (err) { showToast(err.message); }
+    }
+
+    // ─── 我的算法编辑器 ────────────────────────────────────────────
+    async function openMyAlgoEditor(algoId) {
+      const main = qs("#main");
+      main.innerHTML = `<div style="padding:16px 0">
+        <button onclick="window.switchPage('my-algos')" style="margin-bottom:12px">← 返回我的算法</button>
+        <div id="myeditor-header" style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <span id="myeditor-title" style="font-weight:600;font-size:16px">加载中…</span>
+          <span id="myeditor-status" class="tag"></span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px" id="myeditor-actions"></div>
+        <div style="position:relative">
+          <textarea id="myeditor-code" spellcheck="false" style="width:100%;min-height:420px;font-family:monospace;font-size:13px;background:var(--surface-2,#1e1e1e);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:12px;box-sizing:border-box;resize:vertical;tab-size:4;outline:none" placeholder="// 加载中…"></textarea>
+          <span id="myeditor-saved" style="position:absolute;bottom:8px;right:12px;font-size:11px;color:var(--text-dim);pointer-events:none"></span>
+        </div>
+        <div style="margin-top:16px">
+          <div style="font-weight:600;margin-bottom:6px">运行测试</div>
+          <textarea id="mytest-input" spellcheck="false" style="width:100%;height:80px;font-family:monospace;font-size:12px;background:var(--surface-2,#1e1e1e);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px;box-sizing:border-box;resize:vertical" placeholder='{"a": 1, "b": 2}'></textarea>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button onclick="window.runMyAlgoTest('${esc(algoId)}')">▶ 运行</button>
+          </div>
+          <pre id="mytest-output" style="margin-top:8px;background:var(--surface-2,#1e1e1e);border:1px solid var(--line);border-radius:6px;padding:10px;font-size:12px;min-height:60px;white-space:pre-wrap;overflow:auto;max-height:300px"></pre>
+        </div>
+      </div>`;
+
+      // 绑定 Ctrl+S
+      const codeEl = qs("#myeditor-code");
+      codeEl.addEventListener("keydown", async (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+          e.preventDefault();
+          await saveMyAlgoSource(algoId);
+        }
+        // Tab 键插入空格
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const start = codeEl.selectionStart;
+          const end = codeEl.selectionEnd;
+          codeEl.value = codeEl.value.slice(0, start) + "    " + codeEl.value.slice(end);
+          codeEl.selectionStart = codeEl.selectionEnd = start + 4;
+        }
+      });
+
+      // 加载源码
+      try {
+        const src = await api(`/api/v1/algorithm-source/${encodeURIComponent(algoId)}`);
+        const algo = src.algorithm || {};
+        const ps = algo.publishStatus || "draft";
+        const statusTxt = { draft: "草稿", reviewing: "审核中", rejected: "已拒绝", approved: "已批准", published: "已发布" }[ps] || ps;
+        qs("#myeditor-title").textContent = algo.zhName || algo.callPrefix || algoId;
+        const statusEl = qs("#myeditor-status");
+        statusEl.textContent = statusTxt;
+        statusEl.className = `tag ${statusClass(ps)}`;
+
+        // 动作按钮
+        const actionsEl = qs("#myeditor-actions");
+        const canSubmit = ps === "draft" || ps === "rejected";
+        const canWithdraw = ps === "reviewing";
+        const isReadonly = ps === "published" || ps === "reviewing" || ps === "approved";
+        if (isReadonly) codeEl.readOnly = true;
+        if (canSubmit) {
+          actionsEl.innerHTML += `<button class="primary" onclick="window.openSubmitReviewModal('${esc(algoId)}')">提交审核</button>`;
+        }
+        if (canWithdraw) {
+          actionsEl.innerHTML += `<button onclick="window.withdrawMyAlgoReview('${esc(algoId)}')">撤回提交</button>`;
+        }
+        if (!isReadonly) {
+          actionsEl.innerHTML += `<button onclick="window.saveMyAlgoSource('${esc(algoId)}')">保存 (Ctrl+S)</button>`;
+        }
+        if (algo.rejectReason || (src.reviewDraft && src.reviewDraft.reject_reason)) {
+          const reason = algo.rejectReason || src.reviewDraft.reject_reason;
+          actionsEl.innerHTML += `<span style="color:var(--danger,#f55);font-size:12px;align-self:center">驳回原因：${esc(reason)}</span>`;
+        }
+
+        codeEl.value = src.source || "";
+      } catch (err) {
+        codeEl.value = `# 加载失败: ${err.message}`;
+      }
+    }
+
+    async function saveMyAlgoSource(algoId) {
+      const codeEl = qs("#myeditor-code");
+      if (!codeEl) return;
+      const savedEl = qs("#myeditor-saved");
+      if (savedEl) savedEl.textContent = "保存中…";
+      try {
+        await api(`/api/v1/algorithm-source/${encodeURIComponent(algoId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ content: codeEl.value }),
+        });
+        if (savedEl) savedEl.textContent = "已保存 ✓";
+        window.setTimeout(() => { if (savedEl) savedEl.textContent = ""; }, 2000);
+      } catch (err) {
+        showToast("保存失败：" + err.message);
+        if (savedEl) savedEl.textContent = "";
+      }
+    }
+
+    async function runMyAlgoTest(algoId) {
+      const inputEl = qs("#mytest-input");
+      const outputEl = qs("#mytest-output");
+      const codeEl = qs("#myeditor-code");
+      outputEl.textContent = "运行中…";
+      try {
+        let params = {};
+        try { params = JSON.parse(inputEl.value || "{}"); } catch { showToast("输入参数 JSON 格式错误"); return; }
+        const data = await api("/api/v1/run-source", {
+          method: "POST",
+          body: JSON.stringify({ content: codeEl.value, kwargs: params }),
+        });
+        outputEl.textContent = JSON.stringify(data.result ?? data, null, 2);
+      } catch (err) {
+        outputEl.textContent = "错误：" + err.message;
+      }
+    }
+
+    // ─── 提交审核弹窗 ────────────────────────────────────────────────
+    function openSubmitReviewModal(algoId) {
+      openModal(`
+        <h2 style="margin:0 0 18px">提交算法审核</h2>
+        <div class="form-group"><label>功能描述</label><textarea id="sr_desc" rows="3" style="width:100%;box-sizing:border-box" placeholder="简要描述该算法的功能和用途"></textarea></div>
+        <div class="form-group"><label>输入参数说明</label><textarea id="sr_input" rows="2" style="width:100%;box-sizing:border-box" placeholder="描述输入参数类型、格式及含义"></textarea></div>
+        <div class="form-group"><label>输出格式说明</label><input id="sr_output" style="width:100%;box-sizing:border-box" placeholder="例：返回 float 类型的计算结果" /></div>
+        <div class="form-group"><label>算法类型</label>
+          <select id="sr_type" style="width:100%;box-sizing:border-box">
+            <option value="数学计算">数学计算</option>
+            <option value="信号处理">信号处理</option>
+            <option value="机器学习">机器学习</option>
+            <option value="深度学习">深度学习</option>
+            <option value="时序分析">时序分析</option>
+            <option value="数据预处理">数据预处理</option>
+            <option value="统计分析">统计分析</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+        <div class="form-group"><label>目标应用场景（可选）</label><input id="sr_apps" style="width:100%;box-sizing:border-box" placeholder="例：振动分析、故障诊断" /></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+          <button onclick="window.closeModal()">取消</button>
+          <button class="primary" onclick="window.doSubmitReview('${esc(algoId)}')">提交审核</button>
+        </div>
+      `);
+    }
+
+    async function doSubmitReview(algoId) {
+      const description = qs("#sr_desc").value.trim();
+      const input_params = qs("#sr_input").value.trim();
+      const output_format = qs("#sr_output").value.trim();
+      const algo_type = qs("#sr_type").value;
+      const target_apps = qs("#sr_apps").value.trim();
+      if (!description) { showToast("请填写功能描述"); return; }
+      try {
+        await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}/submit`, {
+          method: "POST",
+          body: JSON.stringify({ metadata: { description, input_params, output_format, algo_type, target_apps } }),
+        });
+        closeModal();
+        showToast("已提交审核");
+        if (qs("#my-algo-list")) {
+          refreshMyAlgoList();
+        } else {
+          switchPage("my-algos");
+        }
+      } catch (err) { showToast(err.message); }
+    }
+
+    async function withdrawMyAlgoReview(algoId) {
+      if (!confirm("确定撤回审核提交？算法将返回草稿状态。")) return;
+      try {
+        await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}/withdraw`, { method: "POST" });
+        showToast("已撤回提交");
+        if (qs("#my-algo-list")) refreshMyAlgoList();
+        else switchPage("my-algos");
+      } catch (err) { showToast(err.message); }
+    }
+
+    async function deleteMyAlgo(algoId) {
+      if (!confirm("确定删除该算法？此操作不可恢复。")) return;
+      try {
+        await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}`, { method: "DELETE" });
+        showToast("算法已删除");
+        refreshMyAlgoList();
+      } catch (err) { showToast(err.message); }
+    }
+
+    // ─── 我的提交记录页面 ─────────────────────────────────────────────
+    async function renderMySubmissionsPage() {
+      qs("#main").innerHTML = `
+        <h1>我的提交记录</h1>
+        <section id="my-submissions-list"><div class="skeleton"></div></section>
+      `;
+      try {
+        const data = await api("/api/v1/user/algorithms");
+        const algos = (data.algorithms || []).filter(a => {
+          const ps = a.publishStatus || "draft";
+          return ps !== "draft"; // 只显示已提交或更高状态的
+        });
+        if (algos.length === 0) {
+          qs("#my-submissions-list").innerHTML = '<div class="empty">暂无提交记录</div>';
+          return;
+        }
+        qs("#my-submissions-list").innerHTML = `
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:1px solid var(--line);text-align:left">
+                <th style="padding:8px 12px;color:var(--text-dim)">算法名称</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">标识符</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">状态</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">驳回原因</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${algos.map(a => {
+                const ps = a.publishStatus || "draft";
+                const statusTxt = { reviewing: "审核中", rejected: "已拒绝", approved: "已批准", published: "已发布" }[ps] || ps;
+                const reason = a.rejectReason || "";
+                return `<tr style="border-bottom:1px solid var(--line)">
+                  <td style="padding:8px 12px;font-weight:500">${esc(a.zhName || a.callPrefix || a.id)}</td>
+                  <td style="padding:8px 12px;font-size:12px;color:var(--text-dim)">${esc(a.callPrefix || a.id)}</td>
+                  <td style="padding:8px 12px"><span class="tag ${statusClass(ps)}">${esc(statusTxt)}</span></td>
+                  <td style="padding:8px 12px;font-size:12px;color:var(--danger,#f55)">${esc(reason)}</td>
+                  <td style="padding:8px 12px">
+                    <button style="font-size:12px;padding:4px 8px;margin-right:4px" onclick="window.openMyAlgoEditor('${esc(a.id)}')">查看/编辑</button>
+                    ${ps === "reviewing" ? `<button style="font-size:12px;padding:4px 8px" onclick="window.withdrawMyAlgoReview('${esc(a.id)}')">撤回</button>` : ""}
+                    ${ps === "rejected" ? `<button class="primary" style="font-size:12px;padding:4px 8px" onclick="window.openSubmitReviewModal('${esc(a.id)}')">重新提交</button>` : ""}
+                  </td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        qs("#my-submissions-list").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+      }
+    }
+
+    async function renderUsersPage() {
+      qs("#main").innerHTML = `
+        <h1>用户管理</h1>
+        <div class="toolbar">
+          <span class="spacer"></span>
+          <button class="primary" onclick="window.openCreateUserModal()">新建用户</button>
+        </div>
+        <section id="list"><div class="skeleton"></div></section>
+      `;
+      try {
+        const data = await api("/api/v1/admin/users");
+        const users = data.users || [];
+        qs("#list").innerHTML = users.length === 0 ? '<div class="empty">暂无用户</div>' : `
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:1px solid var(--line);text-align:left">
+                <th style="padding:8px 12px;color:var(--text-dim)">用户名</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">显示名</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">角色</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">状态</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">创建时间</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${users.map(u => `<tr style="border-bottom:1px solid var(--line)">
+                <td style="padding:8px 12px">${esc(u.username)}</td>
+                <td style="padding:8px 12px">${esc(u.display_name || "")}</td>
+                <td style="padding:8px 12px"><span class="tag ${u.role === "admin" ? "warning" : ""} status-badge">${esc(u.role)}</span></td>
+                <td style="padding:8px 12px"><span class="tag ${u.status === "active" ? "success" : "danger"} status-badge">${esc(u.status)}</span></td>
+                <td style="padding:8px 12px;font-size:12px;color:var(--text-dim)">${esc((u.created_at || "").slice(0, 10))}</td>
+                <td style="padding:8px 12px">
+                  <button onclick="window.openResetPasswordModal('${esc(u.id)}')" style="font-size:12px;padding:4px 8px;margin-right:4px">重置密码</button>
+                  <button onclick="window.toggleUserStatus('${esc(u.id)}','${u.status === "active" ? "disabled" : "active"}')" style="font-size:12px;padding:4px 8px;margin-right:4px" class="${u.status === "active" ? "danger" : "success"}">${u.status === "active" ? "禁用" : "启用"}</button>
+                  ${u.id !== (state.currentUser && state.currentUser.id) ? `<button onclick="window.deleteUser('${esc(u.id)}')" class="danger" style="font-size:12px;padding:4px 8px">删除</button>` : ""}
+                </td>
+              </tr>`).join("")}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        qs("#list").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+      }
+    }
+
+    function openCreateUserModal() {
+      openModal(`
+        <h2 style="margin:0 0 18px">新建用户</h2>
+        <div class="form-group"><label>用户名</label><input id="cu_username" placeholder="英文字母、数字、下划线" /></div>
+        <div class="form-group"><label>显示名</label><input id="cu_display_name" placeholder="中文姓名（可选）" /></div>
+        <div class="form-group"><label>密码</label><input id="cu_password" type="password" placeholder="至少8位" /></div>
+        <div class="form-group"><label>角色</label>
+          <select id="cu_role"><option value="user">普通用户</option><option value="admin">管理员</option></select>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+          <button onclick="window.closeModal()">取消</button>
+          <button class="primary" onclick="window.doCreateUser()">创建</button>
+        </div>
+      `);
+    }
+
+    async function doCreateUser() {
+      const username = qs("#cu_username").value.trim();
+      const display_name = qs("#cu_display_name").value.trim();
+      const password = qs("#cu_password").value;
+      const role = qs("#cu_role").value;
+      if (!username || !password) { showToast("用户名和密码不能为空"); return; }
+      try {
+        await api("/api/v1/admin/users", {
+          method: "POST",
+          body: JSON.stringify({ username, display_name, password, role }),
+        });
+        closeModal();
+        showToast("用户已创建");
+        renderUsersPage();
+      } catch (err) { showToast(err.message); }
+    }
+
+    function openResetPasswordModal(userId) {
+      openModal(`
+        <h2 style="margin:0 0 18px">重置密码</h2>
+        <div class="form-group"><label>新密码</label><input id="rp_password" type="password" placeholder="至少8位" /></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+          <button onclick="window.closeModal()">取消</button>
+          <button class="primary" onclick="window.doResetPassword('${userId}')">重置</button>
+        </div>
+      `);
+    }
+
+    async function doResetPassword(userId) {
+      const password = qs("#rp_password").value;
+      if (!password) { showToast("请输入新密码"); return; }
+      try {
+        await api(`/api/v1/admin/users/${userId}/reset-password`, {
+          method: "POST",
+          body: JSON.stringify({ new_password: password }),
+        });
+        closeModal();
+        showToast("密码已重置");
+      } catch (err) { showToast(err.message); }
+    }
+
+    async function toggleUserStatus(userId, newStatus) {
+      try {
+        await api(`/api/v1/admin/users/${userId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: newStatus }),
+        });
+        showToast(newStatus === "active" ? "已启用" : "已禁用");
+        renderUsersPage();
+      } catch (err) { showToast(err.message); }
+    }
+
+    async function deleteUser(userId) {
+      if (!confirm("确定删除该用户？此操作不可恢复。")) return;
+      try {
+        await api(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
+        showToast("用户已删除");
+        renderUsersPage();
+      } catch (err) { showToast(err.message); }
     }
 
     function init() {
@@ -3586,6 +4261,11 @@
     window.applyWorkspaceTemplate = applyWorkspaceTemplate;
     window.switchWorkspaceFile = switchWorkspaceFile;
     window.updateWorkspaceFileContent = updateWorkspaceFileContent;
+    window.renameWorkspaceFile = renameWorkspaceFile;
+    window.renameSourceFile = renameSourceFile;
+    window.renameEntryFile = renameEntryFile;
+    window.formatCurrentFile = formatCurrentFile;
+    window.checkSyntax = checkSyntax;
     window.onAlgCatChange = onAlgCatChange;
     window.withdrawReview = withdrawReview;
     window.approveReview = approveReview;
@@ -3622,8 +4302,52 @@
     window.closeModal = closeModal;
     window.loadCurrentPage = loadCurrentPage;
     window.updateCardNamespace = updateCardNamespace;
+    window.doLogin = doLogin;
+    window.doLogout = doLogout;
+    window.renderUsersPage = renderUsersPage;
+    window.renderMyAlgorithmsPage = renderMyAlgorithmsPage;
+    window.renderMySubmissionsPage = renderMySubmissionsPage;
+    window.openNewAlgoModal = openNewAlgoModal;
+    window.doCreateMyAlgo = doCreateMyAlgo;
+    window.openMyAlgoEditor = openMyAlgoEditor;
+    window.saveMyAlgoSource = saveMyAlgoSource;
+    window.runMyAlgoTest = runMyAlgoTest;
+    window.openSubmitReviewModal = openSubmitReviewModal;
+    window.doSubmitReview = doSubmitReview;
+    window.withdrawMyAlgoReview = withdrawMyAlgoReview;
+    window.deleteMyAlgo = deleteMyAlgo;
+    window.openCreateUserModal = openCreateUserModal;
+    window.doCreateUser = doCreateUser;
+    window.openResetPasswordModal = openResetPasswordModal;
+    window.doResetPassword = doResetPassword;
+    window.toggleUserStatus = toggleUserStatus;
+    window.deleteUser = deleteUser;
 
-    init();
+    (async function initWithAuth() {
+      tickClock();
+      window.setInterval(tickClock, 1000);
+      bindGlobalKeys();
+
+      const token = localStorage.getItem("algolib_token");
+      if (token) {
+        try {
+          const resp = await fetch(BASE + "/api/v1/auth/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            state.currentUser = data.user || data;
+            localStorage.setItem("algolib_user", JSON.stringify(state.currentUser));
+            hideLoginPage();
+            renderNav();
+            switchPage("components");
+            connectSse();
+            return;
+          }
+        } catch (_) { /* network error */ }
+      }
+      showLoginPage();
+    })();
   </script>
 </body>
 </html>

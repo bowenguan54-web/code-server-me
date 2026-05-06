@@ -542,7 +542,24 @@
   </style>
 </head>
 <body>
-  <div class="app">
+  <!-- Login Page -->
+  <div id="loginPage" style="position:fixed;inset:0;z-index:9999;background:var(--bg-deep);align-items:center;justify-content:center;display:none">
+    <div style="width:340px;background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:36px 32px;box-shadow:var(--shadow)">
+      <div style="font-size:20px;font-weight:700;margin-bottom:6px;color:#fff">AlgoLib 管理平台</div>
+      <div style="color:var(--text-dim);font-size:13px;margin-bottom:24px">请登录以继续</div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:13px;margin-bottom:5px;color:var(--text-dim)">用户名</label>
+        <input id="loginUsername" type="text" placeholder="admin" autocomplete="username" />
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:13px;margin-bottom:5px;color:var(--text-dim)">密码</label>
+        <input id="loginPassword" type="password" placeholder="密码" autocomplete="current-password" />
+      </div>
+      <div id="loginError" style="display:none;color:var(--danger);font-size:13px;margin-bottom:12px"></div>
+      <button class="primary" style="width:100%" onclick="window.doLogin()">登 录</button>
+    </div>
+  </div>
+  <div class="app" id="appShell" style="display:none">
     <aside class="sidebar" id="sidebar"></aside>
     <main class="main" id="main"></main>
     <div class="statusbar" id="statusbar">
@@ -560,6 +577,7 @@
 
     const state = {
       page: "components",
+      currentUser: null,
       data: { components: [], templates: [], snippets: [] },
       categories: { components: [], templates: [] },
       filters: {},
@@ -614,9 +632,18 @@
     async function api(path, options = {}) {
       const headers = { ...(options.headers || {}) };
       if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      const token = localStorage.getItem("algolib_token");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
       const response = await fetch(BASE + path, { ...options, headers });
       let data = null;
       try { data = await response.json(); } catch (error) { data = { detail: response.statusText }; }
+      if (response.status === 401) {
+        localStorage.removeItem("algolib_token");
+        localStorage.removeItem("algolib_user");
+        state.currentUser = null;
+        showLoginPage();
+        throw new Error("登录已过期，请重新登录");
+      }
       if (!response.ok) throw new Error(data.detail || data.error || response.statusText);
       return data;
     }
@@ -774,7 +801,8 @@
         ["api", "API 管理"],
         ["monitor", "调用监控"],
         ["logs", "运行日志"],
-        ["settings", "系统设置"]
+        ["settings", "系统设置"],
+        ...(state.currentUser && state.currentUser.role === "admin" ? [["users", "用户管理"]] : [])
       ];
       const hasSub = ["components", "templates"];
       qs("#sidebar").innerHTML = [
@@ -788,7 +816,12 @@
             ${withSub ? `<button class="nav-toggle" onclick="event.stopPropagation();window.toggleNavSub('${page}')">${expanded ? "▾" : "▸"}</button>` : ""}
           </div>
           ${withSub ? renderSubNav(page) : ""}`;
-        })
+        }),
+        state.currentUser ? `<div style="margin-top:auto;padding:10px 8px 0;border-top:1px solid var(--line);font-size:12px;color:var(--text-dim)">
+          <div style="color:var(--text);font-weight:600">${esc(state.currentUser.display_name || state.currentUser.username)}</div>
+          <div style="margin:2px 0 6px">${esc(state.currentUser.role === "admin" ? "管理员" : "普通用户")}</div>
+          <button class="ghost" style="font-size:12px;padding:4px 8px" onclick="window.doLogout()">退出登录</button>
+        </div>` : ""
       ].join("");
       qsa(".nav-item").forEach(item => {
         item.addEventListener("click", () => switchPage(item.dataset.page));
@@ -833,6 +866,10 @@
       }
       if (page === "logs") {
         renderLogsPage();
+        return;
+      }
+      if (page === "users") {
+        renderUsersPage();
         return;
       }
       renderSettingsPage();
@@ -3020,6 +3057,8 @@
       try {
         await loadModuleData("components");
         const items = (state.data.components || []).filter(item => ["draft", "reviewing", "rejected", "approved"].includes(getStatus(item)));
+        const userSubmitted = items.filter(i => i.ownerId && i.ownerId !== "system");
+        const reviewing = items.filter(i => getStatus(i) === "reviewing");
         qs("#main").innerHTML = `
           <h1>算法审核</h1>
           <section class="stat-bar">
@@ -3028,12 +3067,35 @@
             <article class="stat-card"><div class="stat-label">未通过</div><div class="stat-value">${items.filter(i => getStatus(i) === "rejected").length}</div></article>
             <article class="stat-card"><div class="stat-label">待发布</div><div class="stat-value">${items.filter(i => getStatus(i) === "approved").length}</div></article>
           </section>
+          ${reviewing.length > 0 ? `
+          <h2 style="margin:20px 0 10px;font-size:16px">待审核算法（共 ${reviewing.length} 条）</h2>
+          <table class="api-table" style="margin-bottom:24px">
+            <thead><tr><th>算法名称</th><th>提交者</th><th>命名空间</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody>${reviewing.map(item => {
+              const status = getStatus(item);
+              const ownerLabel = item.ownerId && item.ownerId !== "system" ? `<span class="tag warning" style="font-size:11px">${esc(item.ownerId)}</span>` : '<span class="tag" style="font-size:11px">系统</span>';
+              return `<tr>
+                <td><strong>${esc(getName(item))}</strong></td>
+                <td>${ownerLabel}</td>
+                <td><code>${esc(getNs(item, "components"))}</code></td>
+                <td><span class="tag ${statusClass(status)}">${esc(statusLabel(status))}</span></td>
+                <td>
+                  <button onclick="window.openReviewDraftForTest('${esc(item.id)}')">查看/测试</button>
+                  <button class="success" onclick="window.approveReview('${esc(item.id)}')">✓ 通过</button>
+                  <button class="danger" onclick="window.rejectReview('${esc(item.id)}')">✗ 驳回</button>
+                </td>
+              </tr>`;
+            }).join("")}</tbody>
+          </table>` : ""}
+          <h2 style="margin:20px 0 10px;font-size:16px">全部审核记录</h2>
           <table class="api-table">
-            <thead><tr><th>算法</th><th>命名空间</th><th>状态</th><th>描述</th><th>操作</th></tr></thead>
+            <thead><tr><th>算法</th><th>提交者</th><th>命名空间</th><th>状态</th><th>描述</th><th>操作</th></tr></thead>
             <tbody>${items.map(item => {
               const status = getStatus(item);
+              const ownerLabel = item.ownerId && item.ownerId !== "system" ? `<span class="tag warning" style="font-size:11px">${esc(item.ownerId)}</span>` : "";
               return `<tr>
                 <td>${esc(getName(item))}</td>
+                <td>${ownerLabel}</td>
                 <td><code>${esc(getNs(item, "components"))}</code></td>
                 <td><span class="tag ${statusClass(status)}">${esc(statusLabel(status))}</span></td>
                 <td>${esc(getDesc(item))}</td>
@@ -3075,6 +3137,19 @@
           const data = JSON.parse(event.data);
           if (data.event === "updated") loadCurrentPage();
           if (data.event === "namespace.changed") updateCardNamespace(data.old || data.old_namespace, data.new || data.new_namespace);
+          if (data.event === "algorithm_published") {
+            showToast(`算法已发布到公共库：${data.namespace || ""}`);
+            loadCurrentPage();
+          }
+          if (data.event === "submission_rejected") {
+            showToast(`提交审核被驳回：${data.algorithm_id || ""}`);
+            loadCurrentPage();
+          }
+          if (data.event === "submission_created") {
+            if (state.currentUser && state.currentUser.role === "admin") {
+              showToast(`收到新的审核提交`);
+            }
+          }
         } catch (error) {
           loadCurrentPage();
         }
@@ -3118,6 +3193,190 @@
       qs("#modalRoot").addEventListener("click", event => {
         if (event.target.id === "modalRoot") closeModal();
       });
+    }
+
+    // ── Auth ───────────────────────────────────────────────────────────────────
+    function showLoginPage() {
+      const lp = qs("#loginPage");
+      const app = qs("#appShell");
+      lp.style.display = "flex";
+      if (app) app.style.display = "none";
+    }
+
+    function hideLoginPage() {
+      const lp = qs("#loginPage");
+      const app = qs("#appShell");
+      lp.style.display = "none";
+      if (app) app.style.display = "";
+    }
+
+    async function doLogin() {
+      const username = qs("#loginUsername").value.trim();
+      const password = qs("#loginPassword").value;
+      const errEl = qs("#loginError");
+      errEl.style.display = "none";
+      if (!username || !password) { errEl.textContent = "请输入用户名和密码"; errEl.style.display = "block"; return; }
+      try {
+        const data = await (async () => {
+          const resp = await fetch(BASE + "/api/v1/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+          const json = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(json.detail || "登录失败");
+          return json;
+        })();
+        localStorage.setItem("algolib_token", data.token);
+        localStorage.setItem("algolib_user", JSON.stringify(data.user));
+        state.currentUser = data.user;
+        hideLoginPage();
+        renderNav();
+        switchPage("components");
+        connectSse();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = "block";
+      }
+    }
+
+    async function doLogout() {
+      try { await api("/api/v1/auth/logout", { method: "POST" }); } catch (_) { /* ignore */ }
+      localStorage.removeItem("algolib_token");
+      localStorage.removeItem("algolib_user");
+      state.currentUser = null;
+      if (state.sse) { state.sse.close(); state.sse = null; }
+      showLoginPage();
+    }
+
+    // Login on Enter
+    document.addEventListener("keydown", ev => {
+      if (ev.key === "Enter" && qs("#loginPage") && qs("#loginPage").style.display !== "none") {
+        doLogin();
+      }
+    });
+
+    // ── User Management Page ───────────────────────────────────────────────────
+    async function renderUsersPage() {
+      qs("#main").innerHTML = `
+        <h1>用户管理</h1>
+        <div class="toolbar">
+          <span class="spacer"></span>
+          <button class="primary" onclick="window.openCreateUserModal()">新建用户</button>
+        </div>
+        <section id="list"><div class="skeleton"></div></section>
+      `;
+      try {
+        const data = await api("/api/v1/admin/users");
+        const users = data.users || [];
+        qs("#list").innerHTML = `
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:1px solid var(--line);text-align:left">
+                <th style="padding:8px 12px;color:var(--text-dim)">用户名</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">显示名</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">角色</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">状态</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">创建时间</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${users.map(u => `<tr style="border-bottom:1px solid var(--line)">
+                <td style="padding:8px 12px">${esc(u.username)}</td>
+                <td style="padding:8px 12px">${esc(u.display_name || "")}</td>
+                <td style="padding:8px 12px"><span class="badge ${u.role === "admin" ? "warning" : ""}">${esc(u.role)}</span></td>
+                <td style="padding:8px 12px"><span class="badge ${u.status === "active" ? "success" : "danger"}">${esc(u.status)}</span></td>
+                <td style="padding:8px 12px;font-size:12px;color:var(--text-dim)">${esc((u.created_at || "").slice(0, 10))}</td>
+                <td style="padding:8px 12px">
+                  <button onclick="window.openResetPasswordModal('${esc(u.id)}')" style="font-size:12px;padding:4px 8px;margin-right:4px">重置密码</button>
+                  <button onclick="window.toggleUserStatus('${esc(u.id)}','${u.status === "active" ? "disabled" : "active"}')" style="font-size:12px;padding:4px 8px;margin-right:4px" class="${u.status === "active" ? "danger" : "success"}">${u.status === "active" ? "禁用" : "启用"}</button>
+                  ${u.id !== (state.currentUser && state.currentUser.id) ? `<button onclick="window.deleteUser('${esc(u.id)}')" class="danger" style="font-size:12px;padding:4px 8px">删除</button>` : ""}
+                </td>
+              </tr>`).join("")}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        qs("#list").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+      }
+    }
+
+    function openCreateUserModal() {
+      openModal(`
+        <h2 style="margin:0 0 18px">新建用户</h2>
+        <div class="form-group"><label>用户名</label><input id="cu_username" placeholder="英文字母、数字、下划线" /></div>
+        <div class="form-group"><label>显示名</label><input id="cu_display_name" placeholder="中文姓名（可选）" /></div>
+        <div class="form-group"><label>密码</label><input id="cu_password" type="password" placeholder="至少8位" /></div>
+        <div class="form-group"><label>角色</label>
+          <select id="cu_role"><option value="user">普通用户</option><option value="admin">管理员</option></select>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+          <button onclick="window.closeModal()">取消</button>
+          <button class="primary" onclick="window.doCreateUser()">创建</button>
+        </div>
+      `);
+    }
+
+    async function doCreateUser() {
+      const username = qs("#cu_username").value.trim();
+      const display_name = qs("#cu_display_name").value.trim();
+      const password = qs("#cu_password").value;
+      const role = qs("#cu_role").value;
+      if (!username || !password) { showToast("用户名和密码不能为空"); return; }
+      try {
+        await api("/api/v1/admin/users", {
+          method: "POST",
+          body: JSON.stringify({ username, display_name, password, role }),
+        });
+        closeModal();
+        showToast("用户已创建");
+        renderUsersPage();
+      } catch (err) { showToast(err.message); }
+    }
+
+    function openResetPasswordModal(userId) {
+      openModal(`
+        <h2 style="margin:0 0 18px">重置密码</h2>
+        <div class="form-group"><label>新密码</label><input id="rp_password" type="password" placeholder="至少8位" /></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+          <button onclick="window.closeModal()">取消</button>
+          <button class="primary" onclick="window.doResetPassword('${userId}')">重置</button>
+        </div>
+      `);
+    }
+
+    async function doResetPassword(userId) {
+      const password = qs("#rp_password").value;
+      if (!password) { showToast("请输入新密码"); return; }
+      try {
+        await api(`/api/v1/admin/users/${userId}/reset-password`, {
+          method: "POST",
+          body: JSON.stringify({ new_password: password }),
+        });
+        closeModal();
+        showToast("密码已重置");
+      } catch (err) { showToast(err.message); }
+    }
+
+    async function toggleUserStatus(userId, newStatus) {
+      try {
+        await api(`/api/v1/admin/users/${userId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: newStatus }),
+        });
+        showToast(newStatus === "active" ? "已启用" : "已禁用");
+        renderUsersPage();
+      } catch (err) { showToast(err.message); }
+    }
+
+    async function deleteUser(userId) {
+      if (!confirm("确定删除该用户？此操作不可恢复。")) return;
+      try {
+        await api(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
+        showToast("用户已删除");
+        renderUsersPage();
+      } catch (err) { showToast(err.message); }
     }
 
     function init() {
@@ -3221,8 +3480,42 @@
     window.updateCardNamespace = updateCardNamespace;
     window.toggleNavSub = toggleNavSub;
     window.switchPageAndFilter = switchPageAndFilter;
+    window.doLogin = doLogin;
+    window.doLogout = doLogout;
+    window.renderUsersPage = renderUsersPage;
+    window.openCreateUserModal = openCreateUserModal;
+    window.doCreateUser = doCreateUser;
+    window.openResetPasswordModal = openResetPasswordModal;
+    window.doResetPassword = doResetPassword;
+    window.toggleUserStatus = toggleUserStatus;
+    window.deleteUser = deleteUser;
 
-    init();
+    // ── Bootstrap ──────────────────────────────────────────────────────────────
+    (async function initWithAuth() {
+      tickClock();
+      window.setInterval(tickClock, 1000);
+      bindGlobalKeys();
+
+      const token = localStorage.getItem("algolib_token");
+      if (token) {
+        try {
+          const resp = await fetch(BASE + "/api/v1/auth/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            state.currentUser = data.user || data;
+            localStorage.setItem("algolib_user", JSON.stringify(state.currentUser));
+            hideLoginPage();
+            renderNav();
+            switchPage("components");
+            connectSse();
+            return;
+          }
+        } catch (_) { /* network error – fall through */ }
+      }
+      showLoginPage();
+    })();
   </script>
 </body>
 </html>

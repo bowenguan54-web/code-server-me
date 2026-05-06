@@ -105,6 +105,7 @@ class AlgorithmEntry:
     version: str
     folder_path: str
     input_example: str = ""
+    owner_id: str = "system"
     package_id: str | None = None
     package_root: str | None = None
 
@@ -180,6 +181,7 @@ class AlgorithmRegistry:
 
         namespace = str(config.get("namespace", "")).strip()
         folder_type = normalize_module_kind(config.get("module_kind", config.get("type", "component")))
+        owner_id = str(config.get("owner_id", "system")).strip() or "system"
         if not namespace:
             return
 
@@ -196,6 +198,7 @@ class AlgorithmRegistry:
                     file_path=file_path,
                     dirpath=dirpath,
                     root_dir=root_dir,
+                    owner_id=owner_id,
                 )
                 self.register(entry)
 
@@ -260,13 +263,14 @@ class AlgorithmRegistry:
             published=bool(manifest.get("published", True)),
             module_kind=normalize_module_kind(manifest.get("module_kind", manifest.get("type", "component"))),
         )
+        pkg_owner_id = str(manifest.get("owner_id", "system")).strip() or "system"
 
         self._replace_package_entries(package.package_id)
         self._packages[package.package_id] = package
-        self._register_package_entries(package, ast_parser)
+        self._register_package_entries(package, ast_parser, owner_id=pkg_owner_id)
         return package
 
-    def _register_package_entries(self, package: AlgorithmPackage, ast_parser: Any) -> None:
+    def _register_package_entries(self, package: AlgorithmPackage, ast_parser: Any, owner_id: str = "system") -> None:
         entry_path = os.path.join(package.root_path, package.entry_file)
         functions = ast_parser.extract_functions(entry_path)
         info_by_name = {item["func_name"]: item for item in functions}
@@ -289,6 +293,7 @@ class AlgorithmRegistry:
                 file_path=entry_path,
                 dirpath=package.root_path,
                 root_dir=self._find_watch_root(package.root_path) or package.root_path,
+                owner_id=owner_id,
                 package_id=package.package_id,
                 package_root=package.root_path,
                 version_override=package.version,
@@ -346,6 +351,7 @@ class AlgorithmRegistry:
         file_path: str,
         dirpath: str,
         root_dir: str,
+        owner_id: str = "system",
         package_id: str | None = None,
         package_root: str | None = None,
         version_override: str | None = None,
@@ -374,6 +380,7 @@ class AlgorithmRegistry:
             version=version_override or func_info.get("version") or "1.0.0",
             input_example=func_info.get("input_example") or "",
             folder_path=folder_path,
+            owner_id=owner_id,
             package_id=package_id,
             package_root=package_root,
         )

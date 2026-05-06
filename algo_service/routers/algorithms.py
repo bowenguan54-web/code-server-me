@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from ..models.schemas import (
     AlgorithmCreateRequest,
@@ -83,6 +84,8 @@ def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
         "packageId": entry.package_id,
         "packageRoot": entry.package_root,
         "sourceFile": entry.source_file,
+        "ownerId": getattr(entry, "owner_id", "system"),
+        "rejectReason": review_draft.get("reject_reason", "") if review_draft else "",
     }
 
 
@@ -747,15 +750,125 @@ def _find_entries_for_docs(registry: AlgorithmRegistry, call_namespace: str) -> 
     return []
 
 
+from ..sdk.auth_utils import get_current_user
+
+_ALGORITHMS_ROOT = Path(__file__).resolve().parents[2] / "algorithms_root"
+
+
 @router.get("/algorithms")
 async def list_algorithms(
     module_kind: str | None = Query(None, description="Filter by component/template/snippet"),
     registry: AlgorithmRegistry = Depends(get_registry),
+    request: Request = None,
 ) -> dict[str, Any]:
     entries = registry.get_all()
     if module_kind:
         entries = [entry for entry in entries if entry.type == module_kind]
+    # Optional owner-based filtering via Bearer token (no token = return all for backward compat)
+    auth = (request.headers.get("Authorization", "") if request else "")
+    if auth.startswith("Bearer "):
+        try:
+            current_user = get_current_user(request)
+            if current_user.get("role") != "admin":
+                user_id = current_user["id"]
+                entries = [e for e in entries if getattr(e, "owner_id", "system") in ("system", user_id)]
+        except Exception:
+            pass
     return {"success": True, "count": len(entries), "algorithms": [_entry_dict(entry) for entry in entries]}
+
+
+class UserAlgorithmCreateRequest(BaseModel):
+    name: str
+    zh_name: str = ""
+    folder: str = "我的算法"
+    description: str = ""
+    tags: list[str] = []
+
+
+class UserFolderCreateRequest(BaseModel):
+    folder_name: str
+
+
+@router.post("/user/algorithms")
+async def create_user_algorithm(
+    body: UserAlgorithmCreateRequest,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Create a private algorithm in the current user's directory."""
+    current_user = get_current_user(request)
+    user_id = current_user["id"]
+    name = body.name.strip()
+    folder = body.folder.strip() or "我的算法"
+    if not name or not name.replace("_", "").isalnum():
+        raise HTTPException(status_code=400, detail="算法名称只能包含字母、数字和下划线")
+
+    user_dir = _ALGORITHMS_ROOT / "users" / user_id / folder / name
+    if user_dir.exists():
+        raise HTTPException(status_code=409, detail="该名称的算法已存在")
+    user_dir.mkdir(parents=True, exist_ok=False)
+
+    config = {
+        "namespace": name,
+        "owner_id": user_id,
+        "zh_name": body.zh_name or name,
+        "module_kind": "component",
+        "publish_status": "draft",
+        "zh_tags": body.tags,
+        "zh_description": body.description,
+    }
+    (user_dir / "folder_config.json").write_text(
+        json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    main_code = f'''# -*- coding: utf-8 -*-
+"""
+算法名称：{body.zh_name or name}
+命名空间：alg.{name}.main
+"""
+
+
+def main():
+    """
+    功能描述：
+    输入参数：
+    返回值：
+    """
+    pass
+'''
+    (user_dir / "main.py").write_text(main_code, encoding="utf-8")
+
+    # Scan to register
+    scan_root = str(_ALGORITHMS_ROOT / "users" / user_id)
+    registry.scan_directory(scan_root)
+    entry = registry.get(f"{name}.main")
+    return {
+        "success": True,
+        "algorithm": _entry_dict(entry) if entry else {"id": f"{name}.main", "namespace": name},
+    }
+
+
+@router.post("/user/folders")
+async def create_user_folder(
+    body: UserFolderCreateRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Create an empty folder in the current user's directory."""
+    current_user = get_current_user(request)
+    user_id = current_user["id"]
+    folder_name = body.folder_name.strip()
+    if not folder_name:
+        raise HTTPException(status_code=400, detail="文件夹名称不能为空")
+    folder_dir = _ALGORITHMS_ROOT / "users" / user_id / folder_name
+    folder_dir.mkdir(parents=True, exist_ok=True)
+    # placeholder config
+    cfg_path = folder_dir / "folder_config.json"
+    if not cfg_path.exists():
+        cfg_path.write_text(
+            json.dumps({"namespace": folder_name, "owner_id": user_id, "module_kind": "component"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    return {"success": True, "folder": folder_name}
 
 
 @router.get("/algorithms/search")
@@ -1244,6 +1357,7 @@ async def update_algorithm_metadata(
 @router.delete("/algorithms/{algorithm_id:path}")
 async def delete_algorithm(
     algorithm_id: str,
+    request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Delete a single-file algorithm source."""
@@ -1270,9 +1384,12 @@ async def delete_algorithm(
         sse_manager.broadcast({"event": "updated", "file": str(config_path), "algorithms": registry.to_completion_json()})
         return {"success": True, "algorithm": _entry_dict(refreshed)}
 
+    current_user = get_current_user(request)
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="无权删除他人的算法")
     if entry.package_id:
         package_root = Path(entry.package_root or "").resolve()
         if not package_root.exists():
@@ -1462,9 +1579,12 @@ async def submit_algorithm_review(
 ) -> dict[str, Any]:
     """Submit an algorithm for review (draft → reviewing). Snapshots current code."""
 
+    current_user = get_current_user(request)
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="无权提交他人的算法审核")
     current = _read_entry_publish_status(entry)
     if current not in ("draft", "rejected", "published"):
         raise HTTPException(status_code=400, detail=f"Cannot submit from status: {current}")
@@ -1495,13 +1615,17 @@ async def submit_algorithm_review(
 @router.post("/algorithms/{algorithm_id:path}/withdraw")
 async def withdraw_algorithm_review(
     algorithm_id: str,
+    request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Withdraw a submitted review (reviewing → original base status)."""
 
+    current_user = get_current_user(request)
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="无权撤回他人的审核提交")
     draft = _load_review_draft(entry) or {}
     base_status = str(draft.get("base_status") or "draft")
     # Mark draft as pending (not yet reviewing)
@@ -1515,10 +1639,14 @@ async def withdraw_algorithm_review(
 @router.post("/algorithms/{algorithm_id:path}/approve")
 async def approve_algorithm_review(
     algorithm_id: str,
+    request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Approve a review (reviewing → approved)."""
 
+    current_user = get_current_user(request)
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可审批算法")
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
@@ -1537,6 +1665,9 @@ async def reject_algorithm_review(
 ) -> dict[str, Any]:
     """Reject a review (reviewing → rejected). Updates review draft with reason."""
 
+    current_user = get_current_user(request)
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可驳回算法审核")
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
@@ -1585,10 +1716,14 @@ async def re_review_algorithm(
 @router.post("/algorithms/{algorithm_id:path}/publish")
 async def publish_algorithm(
     algorithm_id: str,
+    request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Publish an approved algorithm (approved → published). Applies any pending review draft."""
 
+    current_user = get_current_user(request)
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可发布算法")
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
@@ -1630,17 +1765,96 @@ async def add_algorithm_source_file(
     return {"success": True, "folder_files": _folder_files_for_entry(entry)}
 
 
-@router.post("/algorithm-source/{algorithm_id:path}/save")
+@router.patch("/algorithm-source/{algorithm_id:path}/rename-file")
+async def rename_algorithm_source_file(
+    algorithm_id: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Rename a Python file in an algorithm folder."""
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    payload = await request.json()
+    old_name = str(payload.get("old_name", "")).strip().replace("\\", "/")
+    new_name = str(payload.get("new_name", "")).strip().replace("\\", "/")
+    if not old_name or not new_name:
+        raise HTTPException(status_code=400, detail="old_name and new_name are required")
+    if "/" in new_name or not new_name.endswith(".py"):
+        raise HTTPException(status_code=400, detail="new_name must be a plain .py filename")
+    if new_name in {"__init__.py"}:
+        raise HTTPException(status_code=400, detail="Cannot rename to __init__.py")
+    folder = Path(entry.source_file).parent
+    old_path = folder / old_name
+    new_path = folder / new_name
+    if not old_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {old_name}")
+    if new_path.exists():
+        raise HTTPException(status_code=409, detail=f"File already exists: {new_name}")
+    # Disallow renaming the entry file if it is a single-file algorithm
+    is_entry = str(old_path.resolve()) == str(Path(entry.source_file).resolve())
+    if is_entry and not entry.package_id:
+        raise HTTPException(status_code=400, detail="不能重命名单文件算法的入口文件")
+    try:
+        old_path.rename(new_path)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Rename failed: {exc}") from exc
+    registry.rescan_file(str(new_path))
+    return {"success": True, "old_name": old_name, "new_name": new_name, "folder_files": _folder_files_for_entry(entry)}
+
+
+@router.post("/algorithm-source/{algorithm_id:path}/check-syntax")
+async def check_algorithm_syntax(
+    algorithm_id: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Check Python syntax for a given source snippet."""
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    payload = await request.json()
+    content = str(payload.get("content", ""))
+    filename = str(payload.get("filename", "source.py"))
+    errors: list[dict[str, Any]] = []
+    try:
+        ast.parse(content, filename=filename)
+    except SyntaxError as exc:
+        errors.append({"line": exc.lineno, "col": exc.offset, "message": str(exc.msg)})
+    return {"success": True, "valid": len(errors) == 0, "errors": errors}
+
+
+@router.get("/user/algorithms")
+async def list_user_algorithms(
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """List current user's own private algorithms."""
+    current_user = get_current_user(request)
+    user_id = current_user["id"]
+    # Ensure the user's directory is scanned so new algos are visible
+    user_scan_root = _ALGORITHMS_ROOT / "users" / user_id
+    if user_scan_root.exists():
+        registry.scan_directory(str(user_scan_root))
+    entries = [e for e in registry.get_all() if getattr(e, "owner_id", "system") == user_id]
+    return {"success": True, "count": len(entries), "algorithms": [_entry_dict(e) for e in entries]}
+
+
+@router.patch("/algorithm-source/{algorithm_id:path}")
 async def save_algorithm_source(
     algorithm_id: str,
     payload: AlgorithmSourceSaveRequest,
+    request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Save the source file for a single-file algorithm entry."""
 
+    current_user = get_current_user(request)
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+    if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="无权修改他人的算法")
     if entry.package_id:
         raise HTTPException(status_code=400, detail="Use package file APIs for package algorithms")
     source_path = Path(entry.source_file)
@@ -1651,8 +1865,8 @@ async def save_algorithm_source(
     except SyntaxError as exc:
         raise HTTPException(status_code=400, detail=f"Python 语法错误：{exc}") from exc
     current_status = _read_entry_publish_status(entry)
-    # For published/reviewing algorithms, save to review draft (preserve live file)
-    if current_status in ("published", "reviewing"):
+    # For published/reviewing/approved algorithms, save to review draft (preserve live file)
+    if current_status in ("published", "reviewing", "approved"):
         filename = Path(entry.source_file).name
         existing = _load_review_draft(entry) or {}
         draft: dict[str, Any] = {

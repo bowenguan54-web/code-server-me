@@ -27,12 +27,15 @@ from starlette.responses import Response
 from .routers.algorithms import external_router, router as algorithms_router, set_registry
 from .routers.apikeys import find_key_by_value, is_expired, namespace_allowed, touch_key_last_used
 from .routers.apikeys import router as apikeys_router
+from .routers.auth import router as auth_router
 from .routers.monitor import record_call_log
 from .routers.monitor import router as monitor_router
 from .routers.packages import router as packages_router
 from .routers.publish import router as publish_router
 from .routers.snippets import router as snippets_router
 from .routers.stubs import router as stubs_router
+from .routers.submissions import router as submissions_router
+from .routers.users import router as users_router
 from .setup_env import ensure_algolib_installed
 from .sdk.file_watcher import FileWatcher
 from .sdk.registry import AlgorithmRegistry
@@ -268,6 +271,9 @@ app.add_middleware(ApiKeyMiddleware)
 # Wire registry into the router.
 set_registry(registry)
 
+app.include_router(auth_router)
+app.include_router(users_router)
+app.include_router(submissions_router)
 app.include_router(packages_router)
 app.include_router(stubs_router)
 app.include_router(snippets_router)
