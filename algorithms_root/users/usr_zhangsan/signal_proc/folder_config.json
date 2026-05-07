@@ -1,0 +1,7 @@
+{
+  "namespace": "signal_proc",
+  "zh_name": "信号处理",
+  "module_kind": "component",
+  "publish_status": "draft",
+  "owner_id": "usr_zhangsan"
+}

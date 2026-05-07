@@ -8,14 +8,16 @@ import json
 import logging
 import shutil
 import sys
+import tempfile
 import time
 import types
+import uuid as uuid_lib
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -47,7 +49,7 @@ def set_registry(reg: AlgorithmRegistry) -> None:
 
 def get_registry() -> AlgorithmRegistry:
     if _registry is None:
-        raise HTTPException(status_code=503, detail="Registry not initialized")
+        raise HTTPException(status_code=503, detail="注册表未初始化")
     return _registry
 
 
@@ -116,7 +118,7 @@ def _save_review_draft(entry: AlgorithmEntry, payload: dict[str, Any]) -> None:
     try:
         p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to save review draft: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"保存审核草稿失败：{exc}") from exc
 
 
 def _delete_review_draft(entry: AlgorithmEntry) -> None:
@@ -125,7 +127,7 @@ def _delete_review_draft(entry: AlgorithmEntry) -> None:
     try:
         _review_draft_path(entry).unlink(missing_ok=True)
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to delete review draft: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"删除审核草稿失败：{exc}") from exc
 
 
 def _read_entry_category(entry: AlgorithmEntry) -> dict[str, str]:
@@ -188,7 +190,7 @@ def _ensure_callable_status(entry: AlgorithmEntry) -> None:
 
     status = _read_entry_publish_status(entry)
     if status != "published":
-        raise HTTPException(status_code=403, detail=f"Algorithm is not callable while status is {status}")
+        raise HTTPException(status_code=403, detail=f"算法在 {status} 状态下不可调用")
 
 
 def _folder_files_for_entry(entry: AlgorithmEntry) -> list[dict[str, Any]]:
@@ -246,7 +248,7 @@ def _validate_identifier(value: str, field_name: str) -> str:
 
     normalized = value.strip()
     if not normalized.replace("_", "").isalnum() or not normalized[0:1].isalpha():
-        raise HTTPException(status_code=400, detail=f"{field_name} must contain letters, numbers, and underscores")
+        raise HTTPException(status_code=400, detail=f"{field_name} 只能包含字母、数字和下划线，且必须以字母开头")
     return normalized
 
 
@@ -258,7 +260,7 @@ def _normalize_category(value: str) -> str:
         text = text[4:]
     parts = [part for part in text.replace("/", ".").split(".") if part]
     if not parts:
-        raise HTTPException(status_code=400, detail="category must not be empty")
+        raise HTTPException(status_code=400, detail="分类不能为空")
     return ".".join(_validate_identifier(part, "category") for part in parts)
 
 
@@ -345,7 +347,7 @@ def _upsert_algo_meta(source: str, func_name: str, metadata: dict[str, Any]) -> 
             target = node
             break
     if target is None:
-        raise HTTPException(status_code=400, detail=f"Function not found in source: {func_name}")
+        raise HTTPException(status_code=400, detail=f"源码中未找到函数定义：{func_name}")
 
     lines = source.splitlines()
     remove_ranges: list[tuple[int, int]] = []
@@ -368,7 +370,7 @@ def _upsert_algo_meta(source: str, func_name: str, metadata: dict[str, Any]) -> 
             adjusted_target = node
             break
     if adjusted_target is None:
-        raise HTTPException(status_code=400, detail=f"Function not found after metadata update: {func_name}")
+        raise HTTPException(status_code=400, detail=f"元数据更新后源码中未找到函数：{func_name}")
 
     insert_at = adjusted_target.lineno - 1
     decorator_text = _algo_meta_decorator(
@@ -419,7 +421,7 @@ def _ensure_folder_kind_compatible(folder: Path, module_kind: str) -> None:
     if existing_kind != module_kind and any(path.suffix == ".py" for path in folder.glob("*.py")):
         raise HTTPException(
             status_code=409,
-            detail=f"Folder already contains {existing_kind} entries; cannot add {module_kind}",
+            detail=f"该目录已包含 {existing_kind} 类型的算法，无法添加 {module_kind} 类型",
         )
 
 
@@ -460,6 +462,7 @@ def _category_from_config(path: Path, registry: AlgorithmRegistry) -> dict[str, 
         entry for entry in registry.get_all()
         if entry.type == module_kind and (entry.namespace == namespace or entry.namespace.startswith(f"{namespace}."))
     ]
+    owner_id = str(config.get("owner_id") or "").strip() or None
     return {
         "namespace": namespace,
         "zh_name": str(config.get("zh_name") or config.get("display_name") or namespace),
@@ -467,6 +470,7 @@ def _category_from_config(path: Path, registry: AlgorithmRegistry) -> dict[str, 
         "path": str(path.parent),
         "count": len(entries),
         "is_algo_folder": is_algo_folder,
+        "owner_id": owner_id,
     }
 
 
@@ -497,7 +501,7 @@ def _rename_function_in_source(source: str, old_name: str, new_name: str) -> str
             target = node
             break
     if target is None:
-        raise HTTPException(status_code=400, detail=f"Function not found in source: {old_name}")
+        raise HTTPException(status_code=400, detail=f"源码中未找到函数：{old_name}")
     lines = source.splitlines()
     line_index = target.lineno - 1
     line = lines[line_index]
@@ -570,7 +574,7 @@ def _append_entry_version(entry: AlgorithmEntry, action: str, operator: str = "s
     try:
         path.write_text(json.dumps(history[-100:], ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to write version history: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"写入版本历史失败：{exc}") from exc
 
 
 def _normalize_call_namespace(value: str) -> str:
@@ -596,7 +600,7 @@ def _apply_review_draft(entry: AlgorithmEntry, registry: AlgorithmRegistry) -> A
         return entry
     files = draft.get("files", [])
     if not isinstance(files, list):
-        raise HTTPException(status_code=500, detail="Review draft files must be a list")
+        raise HTTPException(status_code=500, detail="审核草稿的 files 字段必须是列表")
     metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
     try:
         if entry.package_id and entry.package_root:
@@ -607,11 +611,11 @@ def _apply_review_draft(entry: AlgorithmEntry, registry: AlgorithmRegistry) -> A
                 filename = str(item.get("filename") or item.get("relative_path") or "").strip()
                 content = str(item.get("content") or "")
                 if not filename.endswith(".py") or ".." in Path(filename).parts:
-                    raise HTTPException(status_code=400, detail=f"Invalid draft filename: {filename}")
+                    raise HTTPException(status_code=400, detail=f"无效的草稿文件名：{filename}")
                 ast.parse(content)
                 target = (package_root / filename).resolve()
                 if not target.is_relative_to(package_root):
-                    raise HTTPException(status_code=400, detail=f"Invalid draft filename: {filename}")
+                    raise HTTPException(status_code=400, detail=f"草稿文件路径越界：{filename}")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(content, encoding="utf-8")
             manifest_path = package_root / "algopack.json"
@@ -627,7 +631,7 @@ def _apply_review_draft(entry: AlgorithmEntry, registry: AlgorithmRegistry) -> A
                 return entry
             first = files[0]
             if not isinstance(first, dict):
-                raise HTTPException(status_code=400, detail="Invalid review draft file")
+                raise HTTPException(status_code=400, detail="无效的审核草稿文件格式")
             content = str(first.get("content") or "")
             ast.parse(content)
             if metadata.get("version"):
@@ -647,9 +651,9 @@ def _apply_review_draft(entry: AlgorithmEntry, registry: AlgorithmRegistry) -> A
     except SyntaxError as exc:
         raise HTTPException(status_code=400, detail=f"审核草稿中存在 Python 语法错误：{exc}") from exc
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to update package manifest: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"更新包清单失败：{exc}") from exc
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to apply review draft: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"应用审核草稿失败：{exc}") from exc
     refreshed = registry.get_by_id(entry.id) or registry.get_by_id(f"{entry.namespace}.{entry.func_name}") or entry
     _delete_review_draft(refreshed)
     return refreshed
@@ -674,7 +678,7 @@ def _load_entry_module(entry: AlgorithmEntry) -> types.ModuleType:
         spec = importlib.util.spec_from_file_location(module_key, entry.source_file)
 
     if spec is None or spec.loader is None:
-        raise HTTPException(status_code=500, detail="Cannot load algorithm module")
+        raise HTTPException(status_code=500, detail="无法加载算法模块")
 
     _clear_cached_modules(module_key)
     module = importlib.util.module_from_spec(spec)
@@ -683,7 +687,7 @@ def _load_entry_module(entry: AlgorithmEntry) -> types.ModuleType:
         spec.loader.exec_module(module)  # type: ignore[union-attr]
     except Exception as exc:  # noqa: BLE001
         _clear_cached_modules(module_key)
-        raise HTTPException(status_code=500, detail=f"Module load error: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"算法模块加载失败：{exc}") from exc
     return module
 
 
@@ -691,7 +695,7 @@ def _execute_entry(entry: AlgorithmEntry, args: list[Any], kwargs: dict[str, Any
     module = _load_entry_module(entry)
     func = getattr(module, entry.func_name, None)
     if func is None or not callable(func):
-        raise HTTPException(status_code=404, detail=f"Function '{entry.func_name}' not found in module")
+        raise HTTPException(status_code=404, detail=f"模块中未找到函数 '{entry.func_name}'")
 
     started = time.perf_counter()
     try:
@@ -764,14 +768,30 @@ async def list_algorithms(
     entries = registry.get_all()
     if module_kind:
         entries = [entry for entry in entries if entry.type == module_kind]
-    # Optional owner-based filtering via Bearer token (no token = return all for backward compat)
+    # Owner-based visibility: draft/rejected items are private to their owner
     auth = (request.headers.get("Authorization", "") if request else "")
     if auth.startswith("Bearer "):
         try:
             current_user = get_current_user(request)
-            if current_user.get("role") != "admin":
-                user_id = current_user["id"]
-                entries = [e for e in entries if getattr(e, "owner_id", "system") in ("system", user_id)]
+            user_id = current_user["id"]
+            is_admin = current_user.get("role") == "admin"
+
+            def _is_visible(e: AlgorithmEntry) -> bool:
+                owner = getattr(e, "owner_id", "system")
+                # Always show the user's own items
+                if owner == user_id:
+                    return True
+                # System-owned items are always visible
+                if owner == "system":
+                    return True
+                # Another user's item: hide if draft or rejected (private)
+                status = _read_entry_publish_status(e)
+                if status in ("draft", "rejected"):
+                    return False
+                # Admin sees reviewing/approved/published; regular users see published only
+                return is_admin or status == "published"
+
+            entries = [e for e in entries if _is_visible(e)]
         except Exception:
             pass
     return {"success": True, "count": len(entries), "algorithms": [_entry_dict(entry) for entry in entries]}
@@ -787,6 +807,73 @@ class UserAlgorithmCreateRequest(BaseModel):
 
 class UserFolderCreateRequest(BaseModel):
     folder_name: str
+    zh_name: str = ""
+
+
+class UserFolderUpdateRequest(BaseModel):
+    """Request body for renaming a user's private category folder."""
+
+    new_folder_name: str
+    zh_name: str = ""
+
+
+def _safe_user_folder_name(value: str) -> str:
+    """Validate and normalize a user folder/category path."""
+
+    text = value.strip().strip("/").replace("\\", "/")
+    if not text:
+        raise HTTPException(status_code=400, detail="文件夹名称不能为空")
+    parts = [part.strip() for part in text.split("/") if part.strip()]
+    if any(part in {".", ".."} for part in parts):
+        raise HTTPException(status_code=400, detail="文件夹路径不合法")
+    return "/".join(parts)
+
+
+def _user_folder_response(folder_dir: Path, user_root: Path) -> dict[str, Any]:
+    """Return one user folder response item."""
+
+    config_path = folder_dir / "folder_config.json"
+    config: dict[str, Any] = {}
+    if config_path.exists():
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            config = {}
+    rel = folder_dir.relative_to(user_root).as_posix()
+    namespace = str(config.get("namespace") or rel.replace("/", ".")).strip()
+    return {
+        "folder_name": rel,
+        "namespace": namespace,
+        "zh_name": str(config.get("zh_name") or config.get("display_name") or rel),
+        "owner_id": str(config.get("owner_id") or ""),
+        "module_kind": normalize_module_kind(config.get("module_kind", config.get("type", "component"))),
+        "path": str(folder_dir),
+    }
+
+
+def _write_user_folder_config(folder_dir: Path, namespace: str, user_id: str, zh_name: str = "") -> None:
+    """Create or update the folder_config.json for a private user folder."""
+
+    cfg_path = folder_dir / "folder_config.json"
+    config: dict[str, Any] = {}
+    if cfg_path.exists():
+        try:
+            config = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            config = {}
+    config.update(
+        {
+            "namespace": namespace,
+            "owner_id": user_id,
+            "module_kind": "component",
+            "type": "component",
+            "publish_status": config.get("publish_status", "draft"),
+            "published": bool(config.get("published", False)),
+        }
+    )
+    if zh_name:
+        config["zh_name"] = zh_name
+    cfg_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 @router.post("/user/algorithms")
@@ -852,23 +939,124 @@ def main():
 async def create_user_folder(
     body: UserFolderCreateRequest,
     request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Create an empty folder in the current user's directory."""
     current_user = get_current_user(request)
     user_id = current_user["id"]
-    folder_name = body.folder_name.strip()
-    if not folder_name:
-        raise HTTPException(status_code=400, detail="文件夹名称不能为空")
-    folder_dir = _ALGORITHMS_ROOT / "users" / user_id / folder_name
+    folder_name = _safe_user_folder_name(body.folder_name)
+    user_root = _ALGORITHMS_ROOT / "users" / user_id
+    folder_dir = user_root / folder_name
     folder_dir.mkdir(parents=True, exist_ok=True)
-    # placeholder config
-    cfg_path = folder_dir / "folder_config.json"
-    if not cfg_path.exists():
-        cfg_path.write_text(
-            json.dumps({"namespace": folder_name, "owner_id": user_id, "module_kind": "component"}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-    return {"success": True, "folder": folder_name}
+    namespace = folder_name.replace("/", ".")
+    _write_user_folder_config(folder_dir, namespace, user_id, body.zh_name.strip())
+    registry.scan_directory(str(user_root))
+    return {"success": True, "folder": _user_folder_response(folder_dir, user_root)}
+
+
+@router.get("/user/folders")
+async def list_user_folders(
+    request: Request,
+) -> dict[str, Any]:
+    """List the current user's private category folders."""
+
+    current_user = get_current_user(request)
+    user_id = current_user["id"]
+    user_root = _ALGORITHMS_ROOT / "users" / user_id
+    folders: list[dict[str, Any]] = []
+    if user_root.exists():
+        for cfg_path in sorted(user_root.rglob("folder_config.json")):
+            folder_dir = cfg_path.parent
+            try:
+                config = json.loads(cfg_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                config = {}
+            if str(config.get("owner_id") or "") != user_id:
+                continue
+            if config.get("name"):
+                continue
+            folders.append(_user_folder_response(folder_dir, user_root))
+    return {"success": True, "count": len(folders), "folders": folders}
+
+
+@router.patch("/user/folders/{folder_name:path}")
+async def rename_user_folder(
+    folder_name: str,
+    body: UserFolderUpdateRequest,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Rename the current user's private category folder."""
+
+    current_user = get_current_user(request)
+    user_id = current_user["id"]
+    user_root = _ALGORITHMS_ROOT / "users" / user_id
+    old_name = _safe_user_folder_name(folder_name)
+    new_name = _safe_user_folder_name(body.new_folder_name)
+    old_dir = (user_root / old_name).resolve()
+    new_dir = (user_root / new_name).resolve()
+    if not old_dir.is_relative_to(user_root.resolve()) or not new_dir.is_relative_to(user_root.resolve()):
+        raise HTTPException(status_code=400, detail="文件夹路径不合法")
+    if not old_dir.exists():
+        raise HTTPException(status_code=404, detail=f"文件夹不存在：{old_name}")
+    if new_dir.exists() and new_dir != old_dir:
+        raise HTTPException(status_code=409, detail=f"目标文件夹已存在：{new_name}")
+    try:
+        for py_file in old_dir.rglob("*.py"):
+            registry.unregister_by_file(str(py_file))
+        if new_dir != old_dir:
+            new_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(old_dir), str(new_dir))
+        old_namespace = old_name.replace("/", ".")
+        new_namespace = new_name.replace("/", ".")
+        for cfg_path in new_dir.rglob("folder_config.json"):
+            try:
+                config = json.loads(cfg_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                config = {}
+            if str(config.get("owner_id") or "") != user_id:
+                continue
+            current_ns = str(config.get("namespace") or "")
+            if current_ns == old_namespace or current_ns.startswith(f"{old_namespace}."):
+                config["namespace"] = new_namespace + current_ns[len(old_namespace) :]
+            elif cfg_path.parent == new_dir:
+                config["namespace"] = new_namespace
+            if cfg_path.parent == new_dir and body.zh_name:
+                config["zh_name"] = body.zh_name
+            cfg_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+        if not (new_dir / "folder_config.json").exists():
+            _write_user_folder_config(new_dir, new_namespace, user_id, body.zh_name)
+        registry.scan_directory(str(user_root))
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"重命名文件夹失败：{exc}") from exc
+    return {"success": True, "folder": _user_folder_response(new_dir, user_root)}
+
+
+@router.delete("/user/folders/{folder_name:path}")
+async def delete_user_folder(
+    folder_name: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Delete the current user's private category folder and its contents."""
+
+    current_user = get_current_user(request)
+    user_id = current_user["id"]
+    user_root = _ALGORITHMS_ROOT / "users" / user_id
+    safe_name = _safe_user_folder_name(folder_name)
+    folder_dir = (user_root / safe_name).resolve()
+    if not folder_dir.is_relative_to(user_root.resolve()):
+        raise HTTPException(status_code=400, detail="文件夹路径不合法")
+    if not folder_dir.exists():
+        raise HTTPException(status_code=404, detail=f"文件夹不存在：{safe_name}")
+    try:
+        for py_file in folder_dir.rglob("*.py"):
+            registry.unregister_by_file(str(py_file))
+        shutil.rmtree(folder_dir)
+        registry.scan_directory(str(user_root))
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"删除文件夹失败：{exc}") from exc
+    return {"success": True, "deleted": safe_name}
 
 
 @router.get("/algorithms/search")
@@ -901,58 +1089,104 @@ async def search_algorithms(
 async def publish_template_as_component(
     algorithm_id: str,
     payload: PublishAsComponentRequest,
+    request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Copy a template directory and register the copy as a component draft."""
 
+    # Determine current user for ownership checks (upsert support)
+    current_user_id: str | None = None
+    try:
+        u = get_current_user(request)
+        current_user_id = u.get("id")
+    except Exception:
+        pass
+
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     if entry.type != "template":
-        raise HTTPException(status_code=400, detail="Only template entries can be published as component")
+        raise HTTPException(status_code=400, detail="只有算法模板可以发布为组件")
 
     name = payload.name.strip()
     if not name:
-        raise HTTPException(status_code=400, detail="name must not be empty")
+        raise HTTPException(status_code=400, detail="函数名不能为空")
     new_namespace_raw = payload.new_namespace.strip()
     if not new_namespace_raw.startswith("alg."):
-        raise HTTPException(status_code=400, detail="new_namespace must start with alg.")
+        raise HTTPException(status_code=400, detail="new_namespace 必须以 alg. 开头")
     normalized_namespace = _normalize_call_namespace(new_namespace_raw)
     namespace_parts = [part for part in normalized_namespace.split(".") if part]
     if not namespace_parts:
-        raise HTTPException(status_code=400, detail="new_namespace must look like alg.<category>")
+        raise HTTPException(status_code=400, detail="new_namespace 格式应为 alg.<分类>")
 
     source_dir = Path(entry.package_root) if entry.package_root else Path(entry.source_file).parent
     source_resolved = source_dir.resolve()
-    target_base = source_resolved.parent
-    for root in registry.watch_roots:
-        root_path = Path(root).resolve()
-        try:
-            if source_resolved.is_relative_to(root_path):
-                target_base = root_path
-                break
-        except ValueError:
-            continue
-    target_dir = target_base.joinpath(*namespace_parts, name)
+    if current_user_id:
+        # User-owned: place in user's private directory to preserve ownership
+        target_dir = _ALGORITHMS_ROOT / "users" / current_user_id / Path(*namespace_parts) / name
+    else:
+        target_base = source_resolved.parent
+        for root in registry.watch_roots:
+            root_path = Path(root).resolve()
+            try:
+                if source_resolved.is_relative_to(root_path):
+                    target_base = root_path
+                    break
+            except ValueError:
+                continue
+        target_dir = target_base.joinpath(*namespace_parts, name)
+    # Upsert: if directory already exists and the current user owns it, allow update in-place
+    is_upsert = False
     if target_dir.exists():
-        raise HTTPException(status_code=409, detail=f"Component directory already exists: {target_dir}")
+        cfg_path = target_dir / "folder_config.json"
+        existing_owner: str | None = None
+        try:
+            cfg_data = json.loads(cfg_path.read_text(encoding="utf-8"))
+            existing_owner = cfg_data.get("owner_id")
+        except Exception:
+            pass
+        if current_user_id and existing_owner == current_user_id:
+            is_upsert = True
+        else:
+            raise HTTPException(status_code=409, detail="同名组件已存在，请使用不同的函数名")
 
     manifest_name = "algopack.json" if entry.package_root else "folder_config.json"
     manifest_path = target_dir / manifest_name
 
+    dir_created = False
     try:
         if entry.package_root:
-            shutil.copytree(source_dir, target_dir)
+            if not is_upsert:
+                shutil.copytree(source_dir, target_dir)
+                dir_created = True
         else:
-            target_dir.mkdir(parents=True, exist_ok=False)
-            source_manifest = source_dir / "folder_config.json"
-            manifest = json.loads(source_manifest.read_text(encoding="utf-8")) if source_manifest.exists() else {}
+            if not is_upsert:
+                target_dir.mkdir(parents=True, exist_ok=False)
+                dir_created = True
+            if is_upsert:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+            else:
+                source_manifest = source_dir / "folder_config.json"
+                manifest = json.loads(source_manifest.read_text(encoding="utf-8")) if source_manifest.exists() else {}
             target_func_name = _validate_identifier(name, "component name")
             source = Path(entry.source_file).read_text(encoding="utf-8")
             if payload.code:
                 source = payload.code
             if target_func_name != entry.func_name:
-                source = _rename_function_in_source(source, entry.func_name, target_func_name)
+                # If payload.code is provided, find what function name is actually in it
+                src_tree = ast.parse(source)
+                src_public = [
+                    node.name
+                    for node in src_tree.body
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and not node.name.startswith("_")
+                ]
+                if target_func_name not in src_public:
+                    # Rename from either entry.func_name or the first public function found
+                    old_name = entry.func_name if entry.func_name in src_public else (src_public[0] if src_public else None)
+                    if old_name is None:
+                        raise HTTPException(status_code=400, detail="代码中未找到可重命名的公共函数")
+                    source = _rename_function_in_source(source, old_name, target_func_name)
             source = _upsert_algo_meta(
                 source,
                 target_func_name,
@@ -967,7 +1201,7 @@ async def publish_template_as_component(
             (target_dir / f"{target_func_name}.py").write_text(source, encoding="utf-8")
             manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         if not manifest_path.exists():
-            raise HTTPException(status_code=500, detail=f"{manifest_name} not found in copied component")
+            raise HTTPException(status_code=500, detail=f"组件目录中未找到 {manifest_name} 文件")
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest["name"] = name
         manifest["zh_name"] = payload.zh_name
@@ -979,10 +1213,19 @@ async def publish_template_as_component(
         manifest["module_kind"] = "component"
         manifest["published"] = False
         manifest["publish_status"] = "draft"
+        if current_user_id:
+            manifest["owner_id"] = current_user_id
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-        registry.scan_directory(str(target_dir.parent))
+        scan_root = str(_ALGORITHMS_ROOT / "users" / current_user_id) if current_user_id else str(target_dir.parent)
+        registry.scan_directory(scan_root)
+    except HTTPException:
+        if dir_created and target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+        raise
     except (OSError, json.JSONDecodeError, ValueError) as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to update copied component manifest: {exc}") from exc
+        if dir_created and target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"更新组件清单失败：{exc}") from exc
 
     target_resolved = target_dir.resolve()
     candidates = []
@@ -994,7 +1237,7 @@ async def publish_template_as_component(
         if is_in_target and item.type == "component":
             candidates.append(item)
     if not candidates:
-        raise HTTPException(status_code=500, detail="Component copied but could not be registered")
+        raise HTTPException(status_code=500, detail="组件目录已创建但无法注册，请刷新页面重试")
 
     payload = _entry_dict(candidates[0])
     payload["source_template_id"] = entry.id
@@ -1020,21 +1263,49 @@ async def reload_algorithms(registry: AlgorithmRegistry = Depends(get_registry))
 @router.post("/algorithms/create")
 async def create_algorithm(
     payload: AlgorithmCreateRequest,
+    request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     """Create a single-file component or template from plain user code."""
 
     module_kind = payload.module_kind.strip().lower() or "component"
     if module_kind not in {"component", "template"}:
-        raise HTTPException(status_code=400, detail="module_kind must be component or template")
+        raise HTTPException(status_code=400, detail="module_kind 必须为 component 或 template")
 
     func_name = _validate_identifier(payload.name, "name")
     namespace = _normalize_category(payload.category)
-    root = _default_algorithm_root(registry)
-    target_folder = root.joinpath(*namespace.split("."))
-    target_file = target_folder / f"{func_name}.py"
+
+    # Determine owner: if a user is authenticated, create in their private directory
+    # so they retain ownership and can submit the algorithm for review later.
+    current_user_id: str | None = None
+    try:
+        u = get_current_user(request)
+        current_user_id = u.get("id")
+    except Exception:
+        pass
+
+    if current_user_id:
+        # Create algorithm in user's private directory to preserve ownership
+        user_algo_dir = _ALGORITHMS_ROOT / "users" / current_user_id / namespace / func_name
+        target_folder = user_algo_dir
+        target_file = target_folder / f"{func_name}.py"
+    else:
+        root = _default_algorithm_root(registry)
+        target_folder = root.joinpath(*namespace.split("."))
+        target_file = target_folder / f"{func_name}.py"
+
     if target_file.exists():
-        raise HTTPException(status_code=409, detail=f"Algorithm file already exists: {target_file.name}")
+        # Allow upsert if the current user already owns this algorithm
+        owner_cfg = target_folder / "folder_config.json"
+        existing_owner_id: str | None = None
+        try:
+            existing_cfg = json.loads(owner_cfg.read_text(encoding="utf-8"))
+            existing_owner_id = existing_cfg.get("owner_id")
+        except Exception:
+            pass
+        if not (current_user_id and existing_owner_id == current_user_id):
+            raise HTTPException(status_code=409, detail=f"算法文件已存在：{target_file.name}，请换一个函数名")
+        # If user owns it, proceed to overwrite (upsert)
 
     try:
         function_names = _public_function_names(payload.code)
@@ -1047,6 +1318,15 @@ async def create_algorithm(
         target_folder.mkdir(parents=True, exist_ok=True)
         _ensure_folder_kind_compatible(target_folder, module_kind)
         _write_folder_config(target_folder, namespace, module_kind, payload.publish_status or "draft", payload.category_zh_name or "")
+        # Write owner_id into folder_config.json when user is authenticated
+        if current_user_id:
+            cfg_path = target_folder / "folder_config.json"
+            try:
+                cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            except Exception:
+                cfg = {}
+            cfg["owner_id"] = current_user_id
+            cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
         source = _upsert_algo_meta(
             payload.code,
             func_name,
@@ -1059,13 +1339,14 @@ async def create_algorithm(
             },
         )
         target_file.write_text(source, encoding="utf-8")
-        registry.scan_directory(str(target_folder))
+        scan_root = str(_ALGORITHMS_ROOT / "users" / current_user_id) if current_user_id else str(target_folder)
+        registry.scan_directory(scan_root)
     except (OSError, SyntaxError) as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to create algorithm: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"创建算法失败：{exc}") from exc
 
     entry = registry.get_by_id(f"{namespace}.{func_name}")
     if entry is None:
-        raise HTTPException(status_code=500, detail="Algorithm created but could not be registered")
+        raise HTTPException(status_code=500, detail="算法文件已创建但无法注册，请刷新页面重试")
     # Write per-algorithm status file immediately so this entry's status is
     # isolated from other algorithms in the same folder_config.json.
     try:
@@ -1084,9 +1365,15 @@ async def create_algorithm(
 @router.get("/categories")
 async def list_categories(
     module_kind: str | None = Query(None),
+    with_mine: bool = Query(False, description="Include caller's own private categories"),
+    request: Request = None,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
-    """List algorithm categories backed by folder_config.json."""
+    """List algorithm categories backed by folder_config.json.
+
+    By default only public categories (no owner_id) are returned.
+    Pass with_mine=true to also include the authenticated user's own private categories.
+    """
 
     categories = [_category_from_config(path, registry) for path in _category_config_paths(registry)]
     if module_kind:
@@ -1094,6 +1381,29 @@ async def list_categories(
     # Only include top-level categories: must have a namespace and must NOT be
     # an algorithm-level folder_config (those have a "name" field = func name).
     categories = [item for item in categories if item.get("namespace") and not item.get("is_algo_folder")]
+
+    # Determine caller identity for private-category filtering
+    caller_id: str | None = None
+    if request:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            try:
+                caller_id = get_current_user(request).get("id")
+            except Exception:
+                pass
+
+    # Filter: keep only public categories (no owner_id), plus optionally the
+    # caller's own private categories when with_mine=True.
+    def _is_visible(item: dict) -> bool:
+        oid = item.get("owner_id")
+        if not oid:
+            return True  # public category
+        if with_mine and caller_id and oid == caller_id:
+            return True  # caller's own private category
+        return False
+
+    categories = [item for item in categories if _is_visible(item)]
+
     seen_ns: set[str] = set()
     deduped: list[dict] = []
     for item in categories:
@@ -1117,7 +1427,7 @@ async def create_category(
     root = _default_algorithm_root(registry)
     target = root / name
     if target.exists():
-        raise HTTPException(status_code=409, detail=f"Category already exists: {name}")
+        raise HTTPException(status_code=409, detail=f"分类已存在：{name}")
     try:
         target.mkdir(parents=True)
         _write_folder_config(target, name, module_kind, "draft")
@@ -1127,7 +1437,7 @@ async def create_category(
         config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
         registry.scan_directory(str(target))
     except (OSError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to create category: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"创建分类失败：{exc}") from exc
 
     category = _category_from_config(target / "folder_config.json", registry)
     sse_manager.broadcast({"event": "updated", "category": category, "algorithms": registry.to_completion_json()})
@@ -1145,11 +1455,11 @@ async def update_category(
 
     config_path = _find_category_config(registry, namespace, module_kind)
     if config_path is None:
-        raise HTTPException(status_code=404, detail=f"Category not found: {namespace}")
+        raise HTTPException(status_code=404, detail=f"分类不存在：{namespace}")
     try:
         config = json.loads(config_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=500, detail=f"Cannot read category config: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"读取分类配置失败：{exc}") from exc
 
     old_namespace = str(config.get("namespace") or _normalize_category(namespace))
     new_namespace = _normalize_category(payload.new_namespace) if payload.new_namespace else old_namespace
@@ -1161,7 +1471,7 @@ async def update_category(
     root = Path(registry._find_watch_root(str(old_folder)) or _default_algorithm_root(registry)).resolve()  # noqa: SLF001
     target_folder = root.joinpath(*new_namespace.split("."))
     if target_folder != old_folder.resolve() and target_folder.exists():
-        raise HTTPException(status_code=409, detail=f"Target category already exists: {new_namespace}")
+        raise HTTPException(status_code=409, detail=f"目标分类已存在：{new_namespace}")
 
     try:
         config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1172,11 +1482,71 @@ async def update_category(
         else:
             _rescan_all(registry)
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to update category: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"更新分类失败：{exc}") from exc
 
     category = _category_from_config(target_folder / "folder_config.json", registry)
     sse_manager.broadcast({"event": "updated", "category": category, "algorithms": registry.to_completion_json()})
     return {"success": True, "category": category}
+
+
+@router.delete("/categories/{namespace:path}")
+async def delete_category(
+    namespace: str,
+    request: Request,
+    action: str = Query("delete", description="'delete' to remove all algorithms; 'move' to move them to target"),
+    target_namespace: str = Query("", alias="target", description="Target category namespace when action=move"),
+    module_kind: str | None = Query(None),
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Delete a category. Admin only.
+
+    action=delete  → permanently delete the category folder and all algorithms inside.
+    action=move    → move all algorithms to target_namespace, then delete the (now empty) category.
+    """
+    current_user = get_current_user(request)
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="只有管理员可以删除分类")
+
+    config_path = _find_category_config(registry, namespace, module_kind)
+    if config_path is None:
+        raise HTTPException(status_code=404, detail=f"分类不存在：{namespace}")
+
+    category_folder = config_path.parent
+
+    if action == "move":
+        # Find the target folder
+        if not target_namespace:
+            raise HTTPException(status_code=400, detail="移动操作需要指定目标命名空间（target 参数）")
+        target_config = _find_category_config(registry, target_namespace, module_kind)
+        if target_config is None:
+            raise HTTPException(status_code=404, detail=f"目标分类不存在：{target_namespace}")
+        target_folder = target_config.parent
+        try:
+            # Move all algorithm files (and subdirectories) into the target folder
+            for item in category_folder.iterdir():
+                if item.name == "folder_config.json":
+                    continue  # keep source config in place until we delete the whole folder
+                dest = target_folder / item.name
+                if dest.exists():
+                    # Avoid collision: suffix with source namespace
+                    dest = target_folder / f"{namespace.replace('.', '_')}_{item.name}"
+                shutil.move(str(item), str(dest))
+            # Now delete the (empty) source folder
+            shutil.rmtree(str(category_folder))
+            _rescan_all(registry)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"移动分类失败：{exc}") from exc
+    elif action == "delete":
+        try:
+            shutil.rmtree(str(category_folder))
+            _rescan_all(registry)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"删除分类失败：{exc}") from exc
+    else:
+        raise HTTPException(status_code=400, detail="action 参数必须为 delete 或 move")
+
+    sse_manager.broadcast({"event": "updated", "algorithms": registry.to_completion_json()})
+    return {"success": True, "deleted": namespace, "action": action}
 
 
 @router.post("/categories/{namespace:path}/subcategories")
@@ -1189,14 +1559,14 @@ async def create_subcategory(
 
     parent_config = _find_category_config(registry, namespace, payload.module_kind)
     if parent_config is None:
-        raise HTTPException(status_code=404, detail=f"Parent category not found: {namespace}")
+        raise HTTPException(status_code=404, detail=f"父分类不存在：{namespace}")
     child_name = _validate_identifier(payload.name, "name")
     parent_namespace = _normalize_category(namespace)
     child_namespace = f"{parent_namespace}.{child_name}"
     parent_folder = parent_config.parent
     child_folder = parent_folder / child_name
     if child_folder.exists():
-        raise HTTPException(status_code=409, detail=f"Subcategory already exists: {child_namespace}")
+        raise HTTPException(status_code=409, detail=f"子分类已存在：{child_namespace}")
     try:
         child_folder.mkdir(parents=True)
         _write_folder_config(
@@ -1211,7 +1581,7 @@ async def create_subcategory(
         config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
         registry.scan_directory(str(child_folder))
     except (OSError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to create subcategory: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"创建子分类失败：{exc}") from exc
 
     category = _category_from_config(child_folder / "folder_config.json", registry)
     sse_manager.broadcast({"event": "updated", "category": category, "algorithms": registry.to_completion_json()})
@@ -1227,7 +1597,7 @@ async def list_algorithm_versions(
 
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     history = _load_version_history(_version_history_path_for_entry(entry))
     return {"success": True, "count": len(history), "versions": history}
 
@@ -1242,7 +1612,7 @@ async def snapshot_algorithm_version(
 
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     payload = await request.json()
     _append_entry_version(
         entry,
@@ -1260,14 +1630,14 @@ async def get_algorithm(algorithm_id: str, registry: AlgorithmRegistry = Depends
         base_id = algorithm_id[: -len("/review-draft")]
         entry_for_draft = registry.get_by_id(_normalize_call_namespace(base_id)) or registry.get_by_id(base_id)
         if entry_for_draft is None:
-            raise HTTPException(status_code=404, detail=f"Algorithm not found: {base_id}")
+            raise HTTPException(status_code=404, detail=f"算法不存在：{base_id}")
         draft = _load_review_draft(entry_for_draft)
         if draft is None:
             return {"success": True, "exists": False, "draft": None}
         return {"success": True, "exists": True, "draft": draft}
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     return {"success": True, "algorithm": _entry_dict(entry)}
 
 
@@ -1281,7 +1651,7 @@ async def update_algorithm_metadata(
 
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
 
     metadata = {
         "zh_name": payload.zh_name if payload.zh_name is not None else entry.zh_name,
@@ -1302,13 +1672,13 @@ async def update_algorithm_metadata(
             normalized = _normalize_call_namespace(payload.namespace)
             parts = [part for part in normalized.split(".") if part]
             if len(parts) < 2 or ".".join(parts[:-1]) != entry.namespace:
-                raise HTTPException(status_code=400, detail="Package category is determined by its package manifest")
+                raise HTTPException(status_code=400, detail="算法包的分类由其 algopack.json 决定，不可在此修改")
             if parts[-1] != entry.func_name:
-                raise HTTPException(status_code=400, detail="Package export renaming is not supported here")
+                raise HTTPException(status_code=400, detail="算法包导出函数重命名不支持此操作")
         package = registry.update_package_manifest(entry.package_id, updates)
         updated = next((item for item in registry.get_by_namespace(package.namespace) if item.func_name == entry.func_name), None)
         if updated is None:
-            raise HTTPException(status_code=500, detail="Metadata updated but algorithm could not be reloaded")
+            raise HTTPException(status_code=500, detail="元数据已更新但无法重新加载算法，请刷新页面")
         return {"success": True, "algorithm": _entry_dict(updated)}
 
     source_path = Path(entry.source_file).resolve()
@@ -1318,10 +1688,10 @@ async def update_algorithm_metadata(
         normalized = _normalize_call_namespace(payload.namespace)
         parts = [part for part in normalized.split(".") if part]
         if len(parts) < 2:
-            raise HTTPException(status_code=400, detail="namespace must look like alg.<category>.<function>")
+            raise HTTPException(status_code=400, detail="namespace 格式应为 alg.<分类>.<函数名>")
         target_namespace = ".".join(parts[:-1])
         if target_namespace != entry.namespace:
-            raise HTTPException(status_code=400, detail="Category namespace is determined by the algorithm folder")
+            raise HTTPException(status_code=400, detail="分类命名空间由算法所在目录决定，请直接移动目录")
         target_func_name = _validate_identifier(parts[-1], "function name")
 
     root = Path(registry._find_watch_root(str(source_path)) or _default_algorithm_root(registry)).resolve()  # noqa: SLF001
@@ -1336,7 +1706,7 @@ async def update_algorithm_metadata(
         target_folder.mkdir(parents=True, exist_ok=True)
         _write_folder_config(target_folder, target_namespace, entry.type, _read_entry_publish_status(entry))
         if target_file != source_path and target_file.exists():
-            raise HTTPException(status_code=409, detail=f"Target algorithm file already exists: {target_file}")
+            raise HTTPException(status_code=409, detail=f"目标算法文件已存在：{target_file}")
         _ensure_folder_kind_compatible(target_folder, entry.type)
         target_file.write_text(updated_source, encoding="utf-8")
         if target_file != source_path:
@@ -1344,11 +1714,11 @@ async def update_algorithm_metadata(
             registry.unregister_by_file(str(source_path))
         registry.rescan_file(str(target_file))
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to update metadata: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"更新元数据失败：{exc}") from exc
 
     updated = registry.get_by_id(f"{target_namespace}.{target_func_name}")
     if updated is None:
-        raise HTTPException(status_code=500, detail="Metadata updated but algorithm could not be reloaded")
+        raise HTTPException(status_code=500, detail="元数据已更新但无法重新加载算法，请刷新页面")
     _append_entry_version(updated, "metadata.updated", note="Metadata updated")
     sse_manager.broadcast({"event": "updated", "file": str(target_file), "algorithms": registry.to_completion_json()})
     return {"success": True, "algorithm": _entry_dict(updated)}
@@ -1366,7 +1736,7 @@ async def delete_algorithm(
         base_id = algorithm_id[: -len("/review-draft")]
         entry_for_draft = registry.get_by_id(_normalize_call_namespace(base_id)) or registry.get_by_id(base_id)
         if entry_for_draft is None:
-            raise HTTPException(status_code=404, detail=f"Algorithm not found: {base_id}")
+            raise HTTPException(status_code=404, detail=f"算法不存在：{base_id}")
         draft = _load_review_draft(entry_for_draft)
         base_status = str((draft or {}).get("base_status") or "draft")
         config_path = _entry_config_path(entry_for_draft)
@@ -1377,7 +1747,7 @@ async def delete_algorithm(
                 config["published"] = base_status == "published"
                 config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
             except (OSError, json.JSONDecodeError) as exc:
-                raise HTTPException(status_code=500, detail=f"Failed to restore status: {exc}") from exc
+                raise HTTPException(status_code=500, detail=f"恢复状态失败：{exc}") from exc
         _delete_review_draft(entry_for_draft)
         registry.scan_directory(str(config_path.parent.parent))
         refreshed = registry.get_by_id(entry_for_draft.id) or entry_for_draft
@@ -1387,21 +1757,21 @@ async def delete_algorithm(
     current_user = get_current_user(request)
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
         raise HTTPException(status_code=403, detail="无权删除他人的算法")
     if entry.package_id:
         package_root = Path(entry.package_root or "").resolve()
         if not package_root.exists():
-            raise HTTPException(status_code=404, detail=f"Package root not found: {package_root}")
+            raise HTTPException(status_code=404, detail=f"算法包目录不存在：{package_root}")
         root = Path(registry._find_watch_root(str(package_root)) or _default_algorithm_root(registry)).resolve()  # noqa: SLF001
         if not package_root.is_relative_to(root) or package_root == root:
-            raise HTTPException(status_code=400, detail="Refusing to delete package outside algorithm root")
+            raise HTTPException(status_code=400, detail="不允许删除算法根目录外的算法包")
         try:
             shutil.rmtree(package_root)
             registry.scan_directory(str(root))
         except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"Failed to delete package algorithm: {exc}") from exc
+            raise HTTPException(status_code=500, detail=f"删除算法包失败：{exc}") from exc
         sse_manager.broadcast({"event": "updated", "file": str(package_root), "algorithms": registry.to_completion_json()})
         return {"success": True, "deleted": entry.id}
     source_path = Path(entry.source_file).resolve()
@@ -1410,7 +1780,7 @@ async def delete_algorithm(
         source_path.unlink(missing_ok=True)
         registry.unregister_by_file(str(source_path))
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to delete algorithm: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"删除算法失败：{exc}") from exc
     sse_manager.broadcast({"event": "updated", "file": str(source_path), "algorithms": registry.to_completion_json()})
     return {"success": True, "deleted": entry.id}
 
@@ -1422,10 +1792,10 @@ async def get_algorithm_source(
 ) -> dict[str, Any]:
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     source_path = Path(entry.source_file)
     if not source_path.exists():
-        raise HTTPException(status_code=404, detail=f"Source file not found: {source_path}")
+        raise HTTPException(status_code=404, detail=f"源文件不存在：{source_path}")
     # For published/reviewing/rejected algorithms, return draft content if available
     review_draft = _load_review_draft(entry)
     if review_draft and review_draft.get("files"):
@@ -1461,7 +1831,7 @@ async def get_algorithm_review_draft(
 
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     draft = _load_review_draft(entry)
     if draft is None:
         return {"success": True, "exists": False, "draft": None}
@@ -1478,19 +1848,19 @@ async def save_algorithm_review_draft(
 
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     payload = await request.json()
     files = payload.get("files", [])
     if not isinstance(files, list) or not files:
-        raise HTTPException(status_code=400, detail="Field 'files' must be a non-empty list")
+        raise HTTPException(status_code=400, detail="files 字段必须是非空列表")
     normalized_files: list[dict[str, str]] = []
     for item in files:
         if not isinstance(item, dict):
-            raise HTTPException(status_code=400, detail="Each file must be an object")
+            raise HTTPException(status_code=400, detail="每个文件条目必须是对象")
         filename = str(item.get("filename") or item.get("relative_path") or "").strip()
         content = str(item.get("content") or "")
         if not filename.endswith(".py") or filename == "__init__.py" or ".." in Path(filename).parts:
-            raise HTTPException(status_code=400, detail=f"Invalid Python filename: {filename}")
+            raise HTTPException(status_code=400, detail=f"无效的 Python 文件名：{filename}")
         try:
             ast.parse(content)
         except SyntaxError as exc:
@@ -1520,7 +1890,7 @@ async def discard_algorithm_review_draft(
 
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     draft = _load_review_draft(entry)
     base_status = str((draft or {}).get("base_status") or "draft")
     current_status = _read_entry_publish_status(entry)
@@ -1549,7 +1919,7 @@ def _update_publish_status(entry: AlgorithmEntry, status: str, registry: Algorit
                 encoding="utf-8",
             )
         except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"Failed to update algorithm status: {exc}") from exc
+            raise HTTPException(status_code=500, detail=f"更新算法状态失败：{exc}") from exc
         scan_root = str(config_path.parent.parent)
     else:
         # Package entries own their algopack.json exclusively.
@@ -1582,12 +1952,12 @@ async def submit_algorithm_review(
     current_user = get_current_user(request)
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
         raise HTTPException(status_code=403, detail="无权提交他人的算法审核")
     current = _read_entry_publish_status(entry)
     if current not in ("draft", "rejected", "published"):
-        raise HTTPException(status_code=400, detail=f"Cannot submit from status: {current}")
+        raise HTTPException(status_code=400, detail=f"当前状态为 {current}，不允许提交审核")
     try:
         body: dict[str, Any] = await request.json()
     except Exception:
@@ -1623,7 +1993,7 @@ async def withdraw_algorithm_review(
     current_user = get_current_user(request)
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
         raise HTTPException(status_code=403, detail="无权撤回他人的审核提交")
     draft = _load_review_draft(entry) or {}
@@ -1649,10 +2019,10 @@ async def approve_algorithm_review(
         raise HTTPException(status_code=403, detail="仅管理员可审批算法")
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     current = _read_entry_publish_status(entry)
     if current not in ("reviewing", "draft"):
-        raise HTTPException(status_code=400, detail=f"Cannot approve from status: {current}")
+        raise HTTPException(status_code=400, detail=f"当前状态为 {current}，不允许审批")
     refreshed = _update_publish_status(entry, "approved", registry)
     return {"success": True, "algorithm": _entry_dict(refreshed)}
 
@@ -1670,7 +2040,7 @@ async def reject_algorithm_review(
         raise HTTPException(status_code=403, detail="仅管理员可驳回算法审核")
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     try:
         body: dict[str, Any] = await request.json()
     except Exception:
@@ -1701,10 +2071,10 @@ async def re_review_algorithm(
 
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     current = _read_entry_publish_status(entry)
     if current != "rejected":
-        raise HTTPException(status_code=400, detail=f"Cannot re-review from status: {current}")
+        raise HTTPException(status_code=400, detail=f"当前状态为 {current}，不允许重新审评")
     draft = _load_review_draft(entry)
     if draft:
         draft["status"] = "reviewing"
@@ -1726,11 +2096,28 @@ async def publish_algorithm(
         raise HTTPException(status_code=403, detail="仅管理员可发布算法")
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     # Apply review draft so code changes actually take effect (e.g. published → revised → approved → published)
     draft = _load_review_draft(entry)
     if draft and draft.get("files"):
         entry = _apply_review_draft(entry, registry)
+    # If private algorithm (has owner_id), promote to public by removing owner_id from config
+    owner_id = getattr(entry, "owner_id", None) or "system"
+    if owner_id != "system":
+        config_path = _entry_config_path(entry)
+        if config_path.exists():
+            try:
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+                config.pop("owner_id", None)
+                config_path.write_text(
+                    json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                registry.scan_directory(str(config_path.parent.parent))
+                entry = registry.get_by_id(entry.id) or entry
+            except (OSError, json.JSONDecodeError) as exc:
+                raise HTTPException(
+                    status_code=500, detail=f"发布算法失败（无法移除私有标记）: {exc}"
+                ) from exc
     refreshed = _update_publish_status(entry, "published", registry)
     return {"success": True, "algorithm": _entry_dict(refreshed)}
 
@@ -1745,22 +2132,22 @@ async def add_algorithm_source_file(
 
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     payload = await request.json()
     filename = str(payload.get("filename", "")).strip().replace("\\", "/")
     content = str(payload.get("content", ""))
     if not filename.endswith(".py"):
-        raise HTTPException(status_code=400, detail="filename must end with .py")
+        raise HTTPException(status_code=400, detail="文件名必须以 .py 结尾")
     if "/" in filename or filename in {"", "__init__.py"}:
-        raise HTTPException(status_code=400, detail="filename must be a plain Python filename")
+        raise HTTPException(status_code=400, detail="文件名必须是合法的 Python 文件名")
     folder = Path(entry.source_file).parent
     new_file = folder / filename
     if new_file.exists():
-        raise HTTPException(status_code=409, detail=f"File already exists: {filename}")
+        raise HTTPException(status_code=409, detail=f"文件已存在：{filename}")
     try:
         new_file.write_text(content, encoding="utf-8")
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to create file: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"创建文件失败：{exc}") from exc
     registry.rescan_file(str(new_file))
     return {"success": True, "folder_files": _folder_files_for_entry(entry)}
 
@@ -1774,33 +2161,37 @@ async def rename_algorithm_source_file(
     """Rename a Python file in an algorithm folder."""
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     payload = await request.json()
     old_name = str(payload.get("old_name", "")).strip().replace("\\", "/")
     new_name = str(payload.get("new_name", "")).strip().replace("\\", "/")
     if not old_name or not new_name:
-        raise HTTPException(status_code=400, detail="old_name and new_name are required")
+        raise HTTPException(status_code=400, detail="old_name 和 new_name 字段不能为空")
     if "/" in new_name or not new_name.endswith(".py"):
-        raise HTTPException(status_code=400, detail="new_name must be a plain .py filename")
+        raise HTTPException(status_code=400, detail="new_name 必须是合法的 .py 文件名")
     if new_name in {"__init__.py"}:
-        raise HTTPException(status_code=400, detail="Cannot rename to __init__.py")
+        raise HTTPException(status_code=400, detail="不允许重命名为 __init__.py")
     folder = Path(entry.source_file).parent
     old_path = folder / old_name
     new_path = folder / new_name
     if not old_path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {old_name}")
+        raise HTTPException(status_code=404, detail=f"文件不存在：{old_name}")
     if new_path.exists():
-        raise HTTPException(status_code=409, detail=f"File already exists: {new_name}")
-    # Disallow renaming the entry file if it is a single-file algorithm
-    is_entry = str(old_path.resolve()) == str(Path(entry.source_file).resolve())
-    if is_entry and not entry.package_id:
-        raise HTTPException(status_code=400, detail="不能重命名单文件算法的入口文件")
+        raise HTTPException(status_code=409, detail=f"目标文件已存在：{new_name}")
     try:
         old_path.rename(new_path)
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Rename failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"重命名失败：{exc}") from exc
+    registry.unregister_by_file(str(old_path))
     registry.rescan_file(str(new_path))
-    return {"success": True, "old_name": old_name, "new_name": new_name, "folder_files": _folder_files_for_entry(entry)}
+    refreshed = registry.get_by_id(entry.id) or entry
+    return {
+        "success": True,
+        "old_name": old_name,
+        "new_name": new_name,
+        "algorithm": _entry_dict(refreshed),
+        "folder_files": _folder_files_for_entry(refreshed),
+    }
 
 
 @router.post("/algorithm-source/{algorithm_id:path}/check-syntax")
@@ -1812,7 +2203,7 @@ async def check_algorithm_syntax(
     """Check Python syntax for a given source snippet."""
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     payload = await request.json()
     content = str(payload.get("content", ""))
     filename = str(payload.get("filename", "source.py"))
@@ -1822,6 +2213,41 @@ async def check_algorithm_syntax(
     except SyntaxError as exc:
         errors.append({"line": exc.lineno, "col": exc.offset, "message": str(exc.msg)})
     return {"success": True, "valid": len(errors) == 0, "errors": errors}
+
+
+@router.post("/algorithm-source/{algorithm_id:path}/files/{filename:path}")
+async def save_algorithm_folder_file(
+    algorithm_id: str,
+    filename: str,
+    payload: AlgorithmSourceSaveRequest,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Save one Python file in an algorithm folder."""
+
+    current_user = get_current_user(request)
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
+    if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="无权修改他人的算法")
+    clean = filename.strip().replace("\\", "/")
+    if not clean.endswith(".py") or clean == "__init__.py" or ".." in Path(clean).parts:
+        raise HTTPException(status_code=400, detail="文件名必须是合法的 .py 文件")
+    folder = Path(entry.source_file).parent.resolve()
+    target = (folder / clean).resolve()
+    if not target.is_relative_to(folder):
+        raise HTTPException(status_code=400, detail="文件路径不合法")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail=f"文件不存在：{clean}")
+    try:
+        target.write_text(payload.content, encoding="utf-8")
+        registry.rescan_file(str(target))
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"保存文件失败：{exc}") from exc
+    refreshed = registry.get_by_id(entry.id) or entry
+    sse_manager.broadcast({"event": "updated", "file": str(target), "algorithms": registry.to_completion_json()})
+    return {"success": True, "algorithm": _entry_dict(refreshed), "folder_files": _folder_files_for_entry(refreshed)}
 
 
 @router.get("/user/algorithms")
@@ -1852,14 +2278,14 @@ async def save_algorithm_source(
     current_user = get_current_user(request)
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
         raise HTTPException(status_code=403, detail="无权修改他人的算法")
     if entry.package_id:
-        raise HTTPException(status_code=400, detail="Use package file APIs for package algorithms")
+        raise HTTPException(status_code=400, detail="算法包请使用文件级 API 操作")
     source_path = Path(entry.source_file)
     if not source_path.exists():
-        raise HTTPException(status_code=404, detail=f"Source file not found: {source_path}")
+        raise HTTPException(status_code=404, detail=f"源文件不存在：{source_path}")
     try:
         ast.parse(payload.content)
     except SyntaxError as exc:
@@ -1889,7 +2315,7 @@ async def save_algorithm_source(
         source_path.write_text(payload.content, encoding="utf-8")
         registry.rescan_file(str(source_path))
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to save source: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"保存源码失败：{exc}") from exc
     updated = registry.get_by_id(entry.id) or registry.get_by_id(f"{entry.namespace}.{entry.func_name}")
     _append_entry_version(updated or entry, "source.saved", note="Source saved")
     sse_manager.broadcast({"event": "updated", "file": str(source_path), "algorithms": registry.to_completion_json()})
@@ -1909,19 +2335,19 @@ async def patch_algorithm_namespace(
 ) -> dict[str, Any]:
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {algorithm_id}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
 
     payload = await request.json()
     new_namespace_raw = str(payload.get("new_namespace", "")).strip()
     if not new_namespace_raw:
-        raise HTTPException(status_code=400, detail="Field 'new_namespace' is required")
+        raise HTTPException(status_code=400, detail="new_namespace 字段不能为空")
     if not new_namespace_raw.startswith("alg."):
-        raise HTTPException(status_code=400, detail="new_namespace must start with alg.")
+        raise HTTPException(status_code=400, detail="new_namespace 必须以 alg. 开头")
 
     normalized = _normalize_call_namespace(new_namespace_raw)
     parts = [part for part in normalized.split(".") if part]
     if len(parts) < 2:
-        raise HTTPException(status_code=400, detail="Namespace must look like alg.<category>.<function_name>")
+        raise HTTPException(status_code=400, detail="命名空间格式应为 alg.<分类>.<函数名>")
 
     new_func_name = parts[-1]
     new_namespace = ".".join(parts[:-1])
@@ -1935,7 +2361,7 @@ async def patch_algorithm_namespace(
     else:
         config_path = Path(entry.source_file).parent / "folder_config.json"
         if not config_path.exists():
-            raise HTTPException(status_code=404, detail=f"folder_config.json not found for {entry.id}")
+            raise HTTPException(status_code=404, detail=f"算法 {entry.id} 的 folder_config.json 不存在")
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["namespace"] = new_namespace
         config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1944,7 +2370,7 @@ async def patch_algorithm_namespace(
 
     updated_entry = next((item for item in updated_entries if item.func_name == entry.func_name), None)
     if updated_entry is None:
-        raise HTTPException(status_code=500, detail="Namespace updated but algorithm could not be reloaded")
+        raise HTTPException(status_code=500, detail="命名空间已更新但无法重新加载算法，请刷新页面")
 
     sse_manager.broadcast(
         {
@@ -1969,7 +2395,7 @@ async def get_invoke_docs(
 ) -> dict[str, Any]:
     entries = _find_entries_for_docs(registry, call_namespace)
     if not entries:
-        raise HTTPException(status_code=404, detail=f"No published component found for: {call_namespace}")
+        raise HTTPException(status_code=404, detail=f"未找到已发布的组件：{call_namespace}")
     docs = [_entry_doc(entry) for entry in entries]
     return {
         "success": True,
@@ -2009,6 +2435,20 @@ async def algo_changes_sse(registry: AlgorithmRegistry = Depends(get_registry)) 
     )
 
 
+@router.post("/test/upload-temp")
+async def upload_temp_file(file: UploadFile = File(...)) -> dict[str, str]:
+    """Upload a file to a temp path and return its path (for use in test kwargs)."""
+    original = file.filename or "upload"
+    suffix = Path(original).suffix
+    tmp_path = Path(tempfile.gettempdir()) / f"algolib_test_{uuid_lib.uuid4().hex}{suffix}"
+    try:
+        data = await file.read()
+        tmp_path.write_bytes(data)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"文件上传失败：{exc}") from exc
+    return {"path": str(tmp_path), "filename": original}
+
+
 @router.post("/run-source")
 async def run_source(request: Request) -> dict[str, Any]:
     payload = await request.json()
@@ -2017,11 +2457,11 @@ async def run_source(request: Request) -> dict[str, Any]:
     args = payload.get("args", [])
     kwargs = payload.get("kwargs", {})
     if not content.strip():
-        raise HTTPException(status_code=400, detail="Field 'content' must not be empty")
+        raise HTTPException(status_code=400, detail="content 字段不能为空")
     if not isinstance(args, list):
-        raise HTTPException(status_code=400, detail="Field 'args' must be a list")
+        raise HTTPException(status_code=400, detail="args 字段必须是列表")
     if not isinstance(kwargs, dict):
-        raise HTTPException(status_code=400, detail="Field 'kwargs' must be an object")
+        raise HTTPException(status_code=400, detail="kwargs 字段必须是字典")
 
     module_key = f"_algo_inline_{int(time.time() * 1000)}"
     module = types.ModuleType(module_key)
@@ -2048,7 +2488,7 @@ async def run_source(request: Request) -> dict[str, Any]:
         }
     except Exception as exc:  # noqa: BLE001
         elapsed_ms = round((time.perf_counter() - started) * 1000, 3)
-        raise HTTPException(status_code=400, detail=f"Run source failed: {exc}", headers={"X-Elapsed-MS": str(elapsed_ms)}) from exc
+        raise HTTPException(status_code=400, detail=f"代码执行失败：{exc}", headers={"X-Elapsed-MS": str(elapsed_ms)}) from exc
 
 
 @router.post("/run")
@@ -2062,10 +2502,10 @@ async def run_registered_algorithm(request: Request, registry: AlgorithmRegistry
     if params and isinstance(params, dict):
         kwargs = params
     if not namespace or not func_name:
-        raise HTTPException(status_code=400, detail="Fields 'namespace' and 'function' are required")
+        raise HTTPException(status_code=400, detail="namespace 和 function 字段不能为空")
     entry = registry.get_by_id(f"{namespace}.{func_name}")
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {namespace}.{func_name}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{namespace}.{func_name}")
     if not bool(payload.get("allow_unpublished", False)):
         _ensure_callable_status(entry)
     return _execute_entry(entry, args if isinstance(args, list) else [], kwargs if isinstance(kwargs, dict) else {})
@@ -2080,7 +2520,7 @@ async def execute_algorithm(
 ) -> dict[str, Any]:
     entry = registry.get_by_id(f"{namespace}.{func_name}")
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {namespace}.{func_name}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{namespace}.{func_name}")
     _ensure_callable_status(entry)
     return _execute_entry(entry, request.args, request.kwargs)
 
@@ -2094,7 +2534,7 @@ async def invoke_algorithm_by_namespace(
     normalized = _normalize_call_namespace(call_namespace)
     entry = registry.get_by_id(normalized)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {call_namespace}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{call_namespace}")
     _ensure_callable_status(entry)
     return _execute_entry(entry, request.args, request.kwargs)
 
@@ -2110,9 +2550,9 @@ async def invoke_external_algorithm(
 
     entry = registry.get_by_id(f"{namespace}.{func_name}")
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"Algorithm not found: {namespace}.{func_name}")
+        raise HTTPException(status_code=404, detail=f"算法不存在：{namespace}.{func_name}")
     if entry.type != "component":
         raise HTTPException(status_code=404, detail=f"Published component not found: {namespace}.{func_name}")
     if _read_entry_publish_status(entry) != "published":
-        raise HTTPException(status_code=403, detail="Algorithm is not published")
+        raise HTTPException(status_code=403, detail="该算法未发布，无法通过外部接口调用")
     return _execute_entry(entry, request.args, request.kwargs)

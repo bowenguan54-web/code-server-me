@@ -35,6 +35,11 @@
         "command": "algolib.showAlgorithms",
         "key": "alt+a",
         "when": "editorFocus"
+      },
+      {
+        "command": "algolib.insertSnippet",
+        "key": "ctrl+alt+s",
+        "when": "editorTextFocus"
       }
     ]
   }

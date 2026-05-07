@@ -473,50 +473,6 @@
     .file-functions { margin-top: 3px; color: var(--text-dim); font-size: 12px; }
     .tree-resize { background: #0b1d38; cursor: col-resize; }
     .monaco-host { min-width: 0; min-height: 0; }
-    .snippet-editor {
-      grid-template-rows: auto auto 1fr;
-      background: #07111f;
-    }
-    .snippet-editor .editor-top {
-      flex-wrap: nowrap;
-      min-height: 54px;
-    }
-    .snippet-meta {
-      display: grid;
-      grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) 120px 120px minmax(240px, 2fr);
-      gap: 10px;
-      padding: 10px 12px;
-      background: #0b1a31;
-      border-bottom: 1px solid var(--line);
-    }
-    .snippet-meta .form-row,
-    .snippet-top-field {
-      margin: 0;
-      min-width: 0;
-    }
-    .snippet-meta label,
-    .snippet-top-field label {
-      display: block;
-      margin-bottom: 4px;
-      color: var(--text-dim);
-      font-size: 12px;
-    }
-    .snippet-code-shell {
-      display: grid;
-      grid-template-rows: 32px 1fr;
-      min-height: 0;
-      background: #040e1f;
-    }
-    .snippet-code-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0 12px;
-      color: var(--text-dim);
-      background: #07162b;
-      border-bottom: 1px solid var(--line);
-      font-size: 12px;
-    }
     .v-resize-bar {
       height: 8px;
       background: #0b1d38;
@@ -691,7 +647,7 @@
     <div class="statusbar" id="statusbar">
       <span id="conn">● AlgoLib 已连接</span>
       <span id="clock"></span>
-      <button onclick="window.openSnippetOverlay()" title="插入代码片段 (Ctrl+Alt+S)" style="background:none;border:1px solid rgba(30,144,255,.3);color:var(--text-dim);cursor:pointer;padding:1px 8px;border-radius:4px;font-size:11px;">⎘ 片段</button>
+      <button onclick="window.openSnippetOverlay()" title="插入代码片段 (Alt+S)" style="background:none;border:1px solid rgba(30,144,255,.3);color:var(--text-dim);cursor:pointer;padding:1px 8px;border-radius:4px;font-size:11px;">⎘ 片段</button>
     </div>
   </div>
   <div id="toast" class="toast hidden"></div>
@@ -862,8 +818,9 @@
         components: "算法组件",
         templates: "算法模板",
         snippets: "代码片段",
-        "my-algos": "我的算法",
-        review: "算法审核",
+        api: "API 管理",
+        monitor: "调用监控",
+        logs: "运行日志",
         settings: "系统设置"
       }[page] || page;
     }
@@ -905,16 +862,6 @@
         deprecated: "已下架"
       }[status] || status;
     }
-    function ownsAlgorithm(item) {
-      const ownerId = item?.ownerId || item?.owner_id || "system";
-      return !!(state.currentUser?.id && ownerId === state.currentUser.id);
-    }
-    function canManageAlgorithm(item) {
-      return state.currentUser?.role === "admin" || ownsAlgorithm(item);
-    }
-    function canSubmitAlgorithm(item) {
-      return ownsAlgorithm(item) && ["draft", "rejected"].includes(getStatus(item));
-    }
     function parseVersion(value) {
       const parts = String(value || "1.0.0").split(".").map(part => Number.parseInt(part, 10) || 0);
       return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
@@ -930,7 +877,6 @@
     }
     function safeId(id) { return encodeURIComponent(id); }
     function currentModuleKind(page) {
-      if (page === "my-algos") return "component";
       if (page === "components") return "component";
       if (page === "templates") return "template";
       return "snippet";
@@ -941,12 +887,15 @@
         ["components", "算法组件"],
         ["templates", "算法模板"],
         ["snippets", "代码片段"],
-        ...(state.currentUser ? [["my-algos", "我的算法"]] : []),
-        ...(state.currentUser?.role === "admin" ? [["review", "算法审核"]] : []),
+        ...(state.currentUser ? [["my-algos", "我的算法"], ["my-submissions", "我的提交记录"]] : []),
+        ["review", "算法审核"],
+        ["api", "API 管理"],
+        ["monitor", "调用监控"],
+        ["logs", "运行日志"],
         ["settings", "系统设置"],
         ...(state.currentUser && state.currentUser.role === "admin" ? [["users", "用户管理"]] : [])
       ];
-      const subPages = ["components", "templates", "my-algos"];
+      const subPages = ["components", "templates"];
       qs("#sidebar").innerHTML = [
         '<div class="brand">Algo<span>Lib</span></div>',
         ...pages.flatMap(([page, label]) => {
@@ -1020,7 +969,7 @@
     }
 
     function renderPage(page) {
-      if (page === "components" || page === "templates" || page === "snippets" || page === "my-algos") {
+      if (page === "components" || page === "templates" || page === "snippets") {
         renderModulePage(page);
         return;
       }
@@ -1028,8 +977,28 @@
         renderUsersPage();
         return;
       }
-      if (page === "review" && state.currentUser?.role === "admin") {
+      if (page === "my-algos") {
+        renderMyAlgorithmsPage();
+        return;
+      }
+      if (page === "my-submissions") {
+        renderMySubmissionsPage();
+        return;
+      }
+      if (page === "api") {
+        renderApiPage();
+        return;
+      }
+      if (page === "review") {
         renderReviewPage();
+        return;
+      }
+      if (page === "monitor") {
+        renderMonitorPage(false);
+        return;
+      }
+      if (page === "logs") {
+        renderLogsPage();
         return;
       }
       renderSettingsPage();
@@ -1045,24 +1014,6 @@
         state.data.snippets = normalizeListPayload(data, "snippets");
         return state.data.snippets;
       }
-      if (page === "my-algos") {
-        const [data, folderData] = await Promise.all([
-          api("/api/v1/user/algorithms"),
-          api("/api/v1/user/folders").catch(() => ({ folders: [] }))
-        ]);
-        state.data["my-algos"] = normalizeListPayload(data, "algorithms");
-        const categories = {};
-        normalizeListPayload(folderData, "folders").forEach(folder => {
-          const key = folder.namespace || String(folder.folder_name || "").replaceAll("/", ".");
-          if (key) categories[key] = { namespace: key, zh_name: folder.zh_name || folder.folder_name || key, folderName: folder.folder_name || key };
-        });
-        state.data["my-algos"].forEach(item => {
-          const key = groupKey(item, page);
-          if (!categories[key]) categories[key] = { namespace: key, zh_name: key };
-        });
-        state.categories["my-algos"] = Object.values(categories);
-        return state.data["my-algos"];
-      }
       const [data, categoryData] = await Promise.all([
         api(`/api/v1/algorithms?module_kind=${currentModuleKind(page)}`),
         api(`/api/v1/categories?module_kind=${currentModuleKind(page)}`)
@@ -1073,27 +1024,28 @@
     }
 
     function renderModulePage(page) {
+      state._monitorOverview = undefined; // reset monitor cache for fresh load
       qs("#main").innerHTML = `
         <h1>${pageTitle(page)}</h1>
         <div class="toolbar">
           <input id="filterSearch" placeholder="搜索名称、命名空间、描述、标签" oninput="window.applyFilters()" />
           <select id="filterCategory" onchange="window.applyFilters()"><option value="">全部分类</option></select>
           <select id="filterLanguage" onchange="window.applyFilters()"><option value="">全部语言</option></select>
-          ${(page === "components" || page === "my-algos") ? '<select id="filterStatus" onchange="window.applyFilters()"><option value="">全部状态</option></select>' : ""}
+          ${page === "components" ? '<select id="filterStatus" onchange="window.applyFilters()"><option value="">全部状态</option></select>' : ""}
           ${page === "snippets" ? '<select id="filterScope" onchange="window.applyFilters()"><option value="">全部权限</option><option value="private">私有</option><option value="team">共享</option></select>' : ""}
           <button onclick="window.applyFilters()">筛选</button>
           <span class="spacer"></span>
           <div class="toolbar-actions">
-            ${(page === "components" || page === "templates" || page === "my-algos") ? `<button onclick="window.createRootCategory('${page}')">新建分类</button>` : ""}
-            <button class="primary" onclick="window.createNew('${page === "my-algos" ? "components" : page}')">新建</button>
+            ${(page === "components" || page === "templates") ? `<button onclick="window.createRootCategory('${page}')">新建分类</button>` : ""}
+            <button class="primary" onclick="window.createNew('${page}')">新建</button>
           </div>
         </div>
-        ${(page === "components" || page === "my-algos") ? `<div class="quick-filters" id="quickFilters">
-          <button class="active" data-qf="" onclick="window.setQuickFilter('','${page}')">全部</button>
-          <button class="qf-success" data-qf="published" onclick="window.setQuickFilter('published','${page}')">已发布</button>
-          <button data-qf="draft" onclick="window.setQuickFilter('draft','${page}')">草稿</button>
-          <button class="qf-warning" data-qf="reviewing" onclick="window.setQuickFilter('reviewing','${page}')">审核中</button>
-          <button data-qf="rejected" onclick="window.setQuickFilter('rejected','${page}')">已驳回</button>
+        ${page === "components" ? `<div class="quick-filters" id="quickFilters">
+          <button class="active" data-qf="" onclick="window.setQuickFilter('','components')">全部</button>
+          <button class="qf-success" data-qf="published" onclick="window.setQuickFilter('published','components')">已发布</button>
+          <button data-qf="draft" onclick="window.setQuickFilter('draft','components')">草稿</button>
+          <button class="qf-warning" data-qf="reviewing" onclick="window.setQuickFilter('reviewing','components')">审核中</button>
+          <button data-qf="rejected" onclick="window.setQuickFilter('rejected','components')">已驳回</button>
         </div>` : ""}
         <section id="stats" class="stat-bar"></section>
         <section id="list">${skeletonHtml()}</section>
@@ -1147,12 +1099,16 @@
         const reviewingCount = items.filter(item => getStatus(item) === "reviewing").length;
         const draftCount = items.filter(item => getStatus(item) === "draft").length;
         const statLabel = page === "my-algos" ? "我的算法总数" : "算法组件总数";
+        const monitorCache = state._monitorOverview || {};
+        const todayCalls = monitorCache.total_calls !== undefined ? monitorCache.total_calls : "—";
+        const avgMs = monitorCache.avg_elapsed_ms !== undefined ? `${monitorCache.avg_elapsed_ms} ms` : "—";
         qs("#stats").innerHTML = [
           `<article class="stat-card accent-info"><div class="stat-label">${statLabel}</div><div class="stat-value">${items.length}</div><div class="stat-desc">${categoryCount} 个分类 · 今日更新 ${todayCount}</div></article>`,
           `<article class="stat-card accent-success"><div class="stat-label">已发布</div><div class="stat-value">${publishedCount}</div><div class="stat-desc">草稿 ${draftCount} 个</div></article>`,
           `<article class="stat-card${reviewingCount > 0 ? " accent-warning" : ""}"><div class="stat-label">待审核</div><div class="stat-value${reviewingCount > 0 ? " accent-warning" : ""}">${reviewingCount}</div><div class="stat-desc">等待审核中</div></article>`,
           ...(page === "components" ? [
-            `<article class="stat-card"><div class="stat-label">公共组件</div><div class="stat-value">${items.filter(item => (item.ownerId || "system") === "system").length}</div><div class="stat-desc">所有账号可见</div></article>`,
+            `<article class="stat-card"><div class="stat-label">今日调用次数</div><div class="stat-value">${todayCalls}</div><div class="stat-desc">最近 24 小时</div></article>`,
+            `<article class="stat-card"><div class="stat-label">平均响应时间</div><div class="stat-value">${avgMs}</div><div class="stat-desc">最近 24 小时</div></article>`,
           ] : []),
         ].join("");
         // 渲染审核 banner（仅 components 页）
@@ -1166,6 +1122,14 @@
         banner.innerHTML = reviewingCount > 0
           ? `<div class="review-banner">⚠ 有 ${reviewingCount} 个算法正在等待审核，请及时处理。<span class="spacer"></span><a onclick="window.setQuickFilter('reviewing','components')">查看审核中</a></div>`
           : "";
+        // 异步加载 monitor 数据
+        if (state._monitorOverview === undefined) {
+          state._monitorOverview = null; // 标记加载中
+          api("/api/v1/monitor/overview?period=24h").then(data => {
+            state._monitorOverview = data.overview || {};
+            renderCards("components");
+          }).catch(() => { state._monitorOverview = {}; });
+        }
         } // end if (page === "components")
       } else {
         const languageCount = new Set(items.map(item => item.language || "python")).size;
@@ -1204,9 +1168,9 @@
             <h3>${esc(categoryLabel(key, page))}</h3>
             <span class="count">${groups[key].length}</span>
             <span class="spacer"></span>
-            ${(state.currentUser?.role === "admin" || page === "my-algos") ? `<button class="ghost" onclick="window.editCategory('${esc(key)}','${esc(page)}')">编辑分类</button>` : ""}
-            ${(state.currentUser?.role === "admin" || page === "my-algos") ? `<button class="ghost" onclick="window.createSubcategory('${esc(key)}','${esc(page)}')">新建子分类</button>` : ""}
-            ${(state.currentUser?.role === "admin" || page === "my-algos") ? `<button class="ghost danger" onclick="window.deleteCategory('${esc(key)}','${esc(page)}')">删除分类</button>` : ""}
+            ${state.currentUser?.role === "admin" ? `<button class="ghost" onclick="window.editCategory('${esc(key)}','${esc(page)}')">编辑分类</button>` : ""}
+            ${state.currentUser?.role === "admin" ? `<button class="ghost" onclick="window.createSubcategory('${esc(key)}','${esc(page)}')">新建子分类</button>` : ""}
+            ${state.currentUser?.role === "admin" ? `<button class="ghost danger" onclick="window.deleteCategory('${esc(key)}','${esc(page)}')">删除分类</button>` : ""}
           </div>
           <div class="folder-body">${groups[key].map(item => renderCard(item, page)).join("")}</div>
         </section>
@@ -1218,18 +1182,18 @@
       const status = getStatus(item);
       const id = item.id;
       const isAdmin = state.currentUser?.role === "admin";
-      const isOwner = ownsAlgorithm(item);
-      const canManage = canManageAlgorithm(item);
+      const isOwner = !!(state.currentUser?.id && item.ownerId === state.currentUser.id);
+      const canManage = isAdmin || isOwner;
       const isMyAlgosPage = page === "my-algos";
       const effectivePage = isMyAlgosPage ? "components" : page;
       let btns = [];
       if (effectivePage === "components") {
-        if (canManage) btns.push(`<button onclick="window.openEditorById('${esc(id)}','${esc(page)}')">编辑</button>`);
+        if (canManage) btns.push(`<button onclick="window.openEditorById('${esc(id)}','${esc(isMyAlgosPage ? "components" : page)}')">编辑</button>`);
         else if (state.currentUser) btns.push(`<button onclick="window.openEditorById('${esc(id)}','components')">编辑</button>`);
         if (state.currentUser) btns.push(`<button onclick="window.openComponentTestModalById('${esc(id)}')">测试</button>`);
-        if (canManage) btns.push(`<button onclick="window.editAlgorithmInfo('${esc(id)}','${esc(page)}')">基本信息</button>`);
+        if (canManage) btns.push(`<button onclick="window.editAlgorithmInfo('${esc(id)}','${esc(isMyAlgosPage ? "components" : page)}')">基本信息</button>`);
         btns.push(`<button onclick="window.showApiDoc('${esc(id)}')">查看 API 文档</button>`);
-        if (canSubmitAlgorithm(item) || (isOwner && status === "published" && item.hasReviewDraft)) {
+        if (canManage && (["draft","rejected"].includes(status) || (status === "published" && item.hasReviewDraft))) {
           btns.push(`<button class="warning" onclick="window.openSubmitModal('${esc(id)}')">${status === "rejected" ? "重新提交" : "提交审核"}</button>`);
         }
         if (canManage && status === "rejected") {
@@ -1248,20 +1212,20 @@
         if (canManage) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
       } else {
         if (canManage) btns.push(`<button onclick="window.editSnippet('${esc(id)}')">编辑</button>`);
-        btns.push(`<button onclick="window.copySnippet('${esc(id)}')">复制</button>`);
+        btns.push(`<button onclick="window.insertSnippetById('${esc(id)}')">插入/复制</button>`);
         if (canManage) btns.push(`<button class="danger" onclick="window.deleteSnippet('${esc(id)}')">删除</button>`);
       }
       const buttons = btns.join(" ");
       return `
         <article class="algo-card ${kind} ${state.highlightId === id ? "highlight" : ""}" data-id="${esc(id)}">
           ${(effectivePage === "components" || effectivePage === "templates") ? `<span class="tag ${statusClass(status)} status-badge"${status === "rejected" ? ` style="cursor:pointer" onclick="window.viewRejectedDraft('${esc(id)}')" title="点击查看驳回内容"` : ""}>${esc(statusLabel(status))}${item.hasReviewDraft && status === "published" ? " (有草稿)" : ""}</span>` : ""}
-          ${effectivePage === "snippets" ? `<span class="tag ${item.scope === "team" ? "success" : "warning"} status-badge">${item.scope === "team" ? "共享" : "私有"}</span>` : ""}
           <div class="card-title">${esc(getName(item))}</div>
           <div class="card-ns">${esc(getNs(item, page))}</div>
           <div class="desc">${esc(getDesc(item))}</div>
           <div class="tags">
             <span class="tag">${esc(item.language || "python")}</span>
             <span class="tag">v${esc(item.version || "1.0")}</span>
+            ${page === "snippets" ? `<span class="tag">${item.scope === "team" ? "共享" : "私有"}</span>` : ""}
             ${(getTags(item) || []).slice(0, 3).map(tag => `<span class="tag">${esc(tag)}</span>`).join("")}
           </div>
           <div class="card-actions">${buttons}</div>
@@ -1326,17 +1290,10 @@
         return;
       }
       try {
-        if (page === "my-algos") {
-          await api(`/api/v1/user/folders/${safeId(namespace.replaceAll(".", "/"))}`, {
-            method: "PATCH",
-            body: JSON.stringify({ zh_name: qs("#catZhName").value.trim(), new_folder_name: newNamespace.replaceAll(".", "/") })
-          });
-        } else {
-          await api(`/api/v1/categories/${safeId(namespace)}?module_kind=${currentModuleKind(page)}`, {
-            method: "PATCH",
-            body: JSON.stringify({ zh_name: qs("#catZhName").value.trim(), new_namespace: newNamespace })
-          });
-        }
+        await api(`/api/v1/categories/${safeId(namespace)}?module_kind=${currentModuleKind(page)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ zh_name: qs("#catZhName").value.trim(), new_namespace: newNamespace })
+        });
         closeModal();
         showToast("分类已更新");
         await loadModuleData(page);
@@ -1348,21 +1305,6 @@
 
     function deleteCategory(namespace, page) {
       const category = (state.categories[page] || []).find(item => item.namespace === namespace) || { namespace, zh_name: namespace };
-      if (page === "my-algos") {
-        qs("#modalRoot").classList.remove("hidden");
-        qs("#modalRoot").innerHTML = `
-          <div class="modal">
-            <h3>删除分类：${esc(category.zh_name || namespace)}</h3>
-            <p>该操作会删除此私有分类文件夹及其中的算法文件，请确认已经不再需要。</p>
-            <div class="field-error" id="delCatErr"></div>
-            <div class="modal-actions">
-              <button onclick="window.closeModal()">取消</button>
-              <button class="danger" onclick="window.confirmDeleteCategory('${esc(namespace)}','${esc(page)}')">确认删除</button>
-            </div>
-          </div>
-        `;
-        return;
-      }
       const cats = (state.categories[page] || []).filter(c => c.namespace !== namespace);
       const catOptions = cats.map(c => `<option value="${esc(c.namespace)}">${esc(c.zh_name || c.namespace)}</option>`).join("");
       qs("#modalRoot").classList.remove("hidden");
@@ -1401,10 +1343,8 @@
       const action = document.querySelector('input[name="delAction"]:checked')?.value || "delete";
       const target = action === "move" ? (qs("#moveTarget")?.value || "") : "";
       const moduleKind = currentModuleKind(page);
-      let url = page === "my-algos"
-        ? `/api/v1/user/folders/${safeId(namespace.replaceAll(".", "/"))}`
-        : `/api/v1/categories/${safeId(namespace)}?module_kind=${moduleKind}&action=${encodeURIComponent(action)}`;
-      if (page !== "my-algos" && action === "move" && target) url += `&target=${encodeURIComponent(target)}`;
+      let url = `/api/v1/categories/${safeId(namespace)}?module_kind=${moduleKind}&action=${encodeURIComponent(action)}`;
+      if (action === "move" && target) url += `&target=${encodeURIComponent(target)}`;
       try {
         await api(url, { method: "DELETE" });
         closeModal();
@@ -1443,21 +1383,14 @@
         return;
       }
       try {
-        if (page === "my-algos") {
-          await api("/api/v1/user/folders", {
-            method: "POST",
-            body: JSON.stringify({ folder_name: `${namespace.replaceAll(".", "/")}/${name}`, zh_name: qs("#subZhName").value.trim() })
-          });
-        } else {
-          await api(`/api/v1/categories/${safeId(namespace)}/subcategories`, {
-            method: "POST",
-            body: JSON.stringify({
-              name,
-              zh_name: qs("#subZhName").value.trim(),
-              module_kind: currentModuleKind(page)
-            })
-          });
-        }
+        await api(`/api/v1/categories/${safeId(namespace)}/subcategories`, {
+          method: "POST",
+          body: JSON.stringify({
+            name,
+            zh_name: qs("#subZhName").value.trim(),
+            module_kind: currentModuleKind(page)
+          })
+        });
         closeModal();
         showToast("子分类已创建");
         await loadModuleData(page);
@@ -1492,21 +1425,14 @@
         return;
       }
       try {
-        if (page === "my-algos") {
-          await api("/api/v1/user/folders", {
-            method: "POST",
-            body: JSON.stringify({ folder_name: name, zh_name: qs("#rootCatZhName").value.trim() })
-          });
-        } else {
-          await api("/api/v1/categories", {
-            method: "POST",
-            body: JSON.stringify({
-              name,
-              zh_name: qs("#rootCatZhName").value.trim(),
-              module_kind: currentModuleKind(page)
-            })
-          });
-        }
+        await api("/api/v1/categories", {
+          method: "POST",
+          body: JSON.stringify({
+            name,
+            zh_name: qs("#rootCatZhName").value.trim(),
+            module_kind: currentModuleKind(page)
+          })
+        });
         closeModal();
         showToast("主分类已创建");
         await loadModuleData(page);
@@ -2032,8 +1958,8 @@
       const e = state.editing;
       const nsPrefix = namespacePrefix(e.algo);
       const nsFunc = namespaceFunction(e.algo);
-      const isOwner = canManageAlgorithm(e.algo);
-      const isComponentEditor = e.page === "components" || e.page === "my-algos";
+      const isOwner = state.currentUser?.role === "admin" ||
+        (state.currentUser?.id && e.algo.ownerId === state.currentUser.id);
       qs("#main").innerHTML = `
         <div class="editor-view" id="editorView">
           <div class="editor-top">
@@ -2042,16 +1968,19 @@
             <button onclick="window.openComponentTestModal()">测试</button>
             <button onclick="window.editCurrentAlgorithmInfo()">基本信息</button>
             ${e.page === "templates" ? `<button onclick="window.editTemplateDescription('${esc(e.id)}')">编辑说明</button>` : ""}
-            ${isComponentEditor && canSubmitAlgorithm(e.algo) ? `<button data-status-btn="1" onclick="window.openSubmitModal('${esc(e.id)}')">${getStatus(e.algo) === "rejected" ? "重新提交" : "提交审核"}</button>` : ""}
-            ${isComponentEditor && ownsAlgorithm(e.algo) && getStatus(e.algo) === "published" && e.algo.hasReviewDraft ? `<button data-status-btn="1" class="warning" onclick="window.openSubmitModal('${esc(e.id)}')">提交审核</button>` : ""}
-            ${isComponentEditor && ownsAlgorithm(e.algo) && getStatus(e.algo) === "reviewing" ? `<button data-status-btn="1" onclick="window.withdrawReview('${esc(e.id)}')">撤回审核</button>` : ""}
-            ${isComponentEditor && state.currentUser?.role === "admin" && getStatus(e.algo) === "approved" ? `<button data-status-btn="1" class="success" onclick="window.publishComponent('${esc(e.id)}')">正式发布</button>` : ""}
+            ${e.page === "components" && ["draft", "rejected"].includes(getStatus(e.algo)) ? `<button data-status-btn="1" onclick="window.openSubmitModal('${esc(e.id)}')">${getStatus(e.algo) === "rejected" ? "重新提交" : "提交审核"}</button>` : ""}
+            ${e.page === "components" && getStatus(e.algo) === "published" ? `<button data-status-btn="1" class="warning" onclick="window.openSubmitModal('${esc(e.id)}')">提交审核</button>` : ""}
+            ${e.page === "components" && getStatus(e.algo) === "reviewing" ? `<button data-status-btn="1" onclick="window.withdrawReview('${esc(e.id)}')">撤回审核</button>` : ""}
+            ${e.page === "components" && getStatus(e.algo) === "approved" ? `<button data-status-btn="1" class="success" onclick="window.publishComponent('${esc(e.id)}')">正式发布</button>` : ""}
             <div class="more-menu-wrap" style="position:relative">
               <button onclick="this.nextElementSibling.classList.toggle('hidden')">更多 ▾</button>
               <div class="more-menu hidden" style="position:absolute;top:100%;right:0;z-index:200;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;min-width:120px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,.4)">
+                <div class="more-menu-item" onclick="window.formatCurrentFile();this.closest('.more-menu').classList.add('hidden')">格式化代码</div>
+                <div class="more-menu-item" onclick="window.checkSyntax();this.closest('.more-menu').classList.add('hidden')">检查语法</div>
+                <div class="more-menu-item" onclick="window.renameEntryFile();this.closest('.more-menu').classList.add('hidden')">重命名当前文件</div>
                 <div class="more-menu-item" onclick="window.openSnippetOverlay();this.closest('.more-menu').classList.add('hidden')">插入片段</div>
                 <div class="more-menu-item" onclick="window.showVersions('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">版本历史</div>
-                ${isComponentEditor && getStatus(e.algo) === "rejected" ? `<div class="more-menu-item" onclick="window.viewRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">查看驳回内容</div><div class="more-menu-item danger" onclick="window.discardRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">放弃修改</div>` : ""}
+                ${e.page === "components" && getStatus(e.algo) === "rejected" ? `<div class="more-menu-item" onclick="window.viewRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">查看驳回内容</div><div class="more-menu-item danger" onclick="window.discardRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">放弃修改</div>` : ""}
               </div>
             </div>
             <span class="spacer"></span>
@@ -2169,7 +2098,6 @@
       });
       window._activeMonaco = state.editor;
       state.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => saveCurrentFile());
-      state.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
       await registerCompletionProvider();
       renderTestPanel();
     }
@@ -2186,73 +2114,26 @@
       }).filter(fn => fn.func_name || fn.name);
     }
 
-    async function refreshEditorFolderFiles(files, activeFile) {
-      const m = await loadMonaco();
-      const normalized = (files || []).map(file => ({
-        filename: file.relative_path || file.filename,
-        content: file.content || "",
-        isEntry: !!file.is_entry,
-        functions: normalizeFunctions(file.functions || [])
-      })).filter(file => file.filename);
-      if (!normalized.length) return;
-
-      if (!state.editing.source) state.editing.source = {};
-      state.editing.source.folder_files = normalized;
-      const nextNames = new Set(normalized.map(file => file.filename));
-
-      Array.from(state.models.entries()).forEach(([filename, model]) => {
-        if (!nextNames.has(filename)) {
-          if (model && !model.isDisposed()) model.dispose();
-          state.models.delete(filename);
-          state.fileMeta.delete(filename);
-          state.viewStates.delete(filename);
-        }
-      });
-
-      normalized.forEach(file => {
-        const uri = m.Uri.parse(`inmemory://algolib/${encodeURIComponent(state.editing.id)}/${encodeURIComponent(file.filename)}`);
-        let model = state.models.get(file.filename);
-        if (!model || model.isDisposed()) {
-          const existing = m.editor.getModel(uri);
-          if (existing && !existing.isDisposed()) existing.dispose();
-          model = m.editor.createModel(file.content, "python", uri);
-          state.models.set(file.filename, model);
-        } else if (model.getValue() !== file.content && file.filename !== state.currentFile) {
-          model.setValue(file.content);
-        }
-        state.fileMeta.set(file.filename, file);
-      });
-
-      const target = activeFile && state.models.has(activeFile)
-        ? activeFile
-        : (normalized.find(file => file.isEntry) || normalized[0]).filename;
-      renderFileTree();
-      switchFile(target);
-    }
-
     function renderFileTree() {
       const files = Array.from(state.fileMeta.values());
       qs("#fileTree").innerHTML = `
         <div class="file-tree-head">
           <span>目录文件</span>
-          <button class="ghost" type="button" data-add-file="1" onclick="window.addSourceFile(event)">＋ 新增文件</button>
+          <button class="ghost" onclick="window.addSourceFile()">＋ 新增文件</button>
         </div>
         ${files.map(file => {
           const names = (file.functions || []).map(fn => fn.func_name || fn.name).filter(Boolean);
           return `
-            <div class="file-item ${file.filename === state.currentFile ? "active" : ""}" data-file-name="${esc(file.filename)}">
+            <div class="file-item ${file.filename === state.currentFile ? "active" : ""}" onclick="window.switchFile('${esc(file.filename)}')">
               <div class="file-name" style="display:flex;align-items:center;gap:4px">
                 <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(file.filename)}${file.isEntry ? " · entry" : ""}</span>
-                <button class="ghost" type="button" style="font-size:11px;padding:1px 5px;flex-shrink:0" data-rename-file="${esc(file.filename)}" onclick="event.stopPropagation();window.renameSourceFile(this.dataset.renameFile)" title="重命名">改名</button>
+                <button class="ghost" style="font-size:11px;padding:1px 5px;flex-shrink:0" onclick="event.stopPropagation();window.renameSourceFile('${esc(file.filename)}')" title="重命名">改名</button>
               </div>
               <div class="file-functions">${names.length ? `def ${esc(names.join(", "))}` : "无函数"}</div>
             </div>
           `;
         }).join("")}
       `;
-      qsa("[data-file-name]", qs("#fileTree")).forEach(item => {
-        item.addEventListener("click", () => switchFile(item.dataset.fileName || ""));
-      });
     }
 
     function switchFile(filename) {
@@ -2267,78 +2148,128 @@
       renderTestPanel();
     }
 
-    function openSourceFileModal(mode, oldName = "") {
-      const isRename = mode === "rename";
-      qs("#modalRoot").classList.remove("hidden");
-      qs("#modalRoot").innerHTML = `
-        <div class="modal" style="max-width:440px">
-          <h3>${isRename ? "重命名文件" : "新增 Python 文件"}</h3>
-          <div class="form-grid">
-            ${isRename ? `<div class="form-row"><label>当前文件</label><input value="${esc(oldName)}" disabled /></div>` : ""}
-            <div class="form-row"><label>文件名</label><input id="sourceFileNameInput" value="${esc(isRename ? oldName : "helpers.py")}" placeholder="例如 helpers.py" /></div>
-          </div>
-          <div class="field-error" id="sourceFileErr"></div>
-          <div class="modal-actions">
-            <button onclick="window.closeModal()">取消</button>
-            <button class="primary" onclick="window.confirmSourceFileModal('${esc(mode)}','${esc(oldName)}')">${isRename ? "确认改名" : "创建文件"}</button>
-          </div>
-        </div>
-      `;
-      window.setTimeout(() => qs("#sourceFileNameInput")?.focus(), 0);
-    }
-
-    function addSourceFile(event) {
-      event?.preventDefault?.();
-      event?.stopPropagation?.();
-      openSourceFileModal("add");
-    }
-
-    function renameSourceFile(oldName) {
-      if (!oldName) return;
-      openSourceFileModal("rename", oldName);
-    }
-
-    async function confirmSourceFileModal(mode, oldName = "") {
-      const clean = qs("#sourceFileNameInput")?.value.trim() || "";
+    async function addSourceFile() {
+      const filename = window.prompt("请输入 Python 文件名，例如 helpers.py", "helpers.py");
+      if (!filename) return;
+      const clean = filename.trim();
       if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]*\.py$/.test(clean) || clean === "__init__.py") {
-        qs("#sourceFileErr").textContent = "文件名必须是普通 .py 文件，例如 helpers.py";
-        return;
-      }
-      if (mode === "rename" && clean === oldName) {
-        closeModal();
+        showToast("文件名必须是普通 .py 文件");
         return;
       }
       try {
-        if (mode === "rename") await doRenameSourceFile(oldName, clean);
-        else await doAddSourceFile(clean);
-        closeModal();
+        const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/add-file`, {
+          method: "POST",
+          body: JSON.stringify({ filename: clean, content: "# 新文件\n" })
+        });
+        const files = result.folder_files || [];
+        state.editing.source.folder_files = files;
+        const created = files.find(file => (file.relative_path || file.filename) === clean);
+        if (created) {
+          const m = await loadMonaco();
+          const uri = m.Uri.parse(`inmemory://algolib/${encodeURIComponent(state.editing.id)}/${encodeURIComponent(clean)}`);
+          const existing = m.editor.getModel(uri);
+          if (existing && !existing.isDisposed()) existing.dispose();
+          const model = m.editor.createModel(created.content || "", "python", uri);
+          state.models.set(clean, model);
+          state.fileMeta.set(clean, {
+            filename: clean,
+            content: created.content || "",
+            isEntry: !!created.is_entry,
+            functions: normalizeFunctions(created.functions || [])
+          });
+        }
+        renderFileTree();
+        switchFile(clean);
+        showToast("文件已创建");
       } catch (error) {
-        const err = qs("#sourceFileErr");
-        if (err) err.textContent = error.message;
-        else showToast(error.message);
+        showToast(error.message);
       }
     }
 
-    async function doAddSourceFile(clean) {
-      const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/add-file`, {
-        method: "POST",
-        body: JSON.stringify({ filename: clean, content: "# 新文件\n" })
-      });
-      await refreshEditorFolderFiles(result.folder_files || [], clean);
-      showToast("文件已创建");
+    async function renameSourceFile(oldName) {
+      const newName = window.prompt("请输入新文件名（如 helpers.py）", oldName);
+      if (!newName || newName.trim() === oldName) return;
+      const clean = newName.trim();
+      if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]*\.py$/.test(clean)) {
+        showToast("文件名格式不正确，必须以 .py 结尾");
+        return;
+      }
+      try {
+        const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/rename-file`, {
+          method: "PATCH",
+          body: JSON.stringify({ old_name: oldName, new_name: clean })
+        });
+        const files = result.folder_files || [];
+        state.editing.source.folder_files = files;
+        const m = state.monaco || window.monaco;
+        if (m) {
+          // 更新 Monaco model
+          const oldModel = state.models.get(oldName);
+          if (oldModel) {
+            const content = oldModel.getValue();
+            oldModel.dispose();
+            state.models.delete(oldName);
+            const uri = m.Uri.parse(`inmemory://algolib/${encodeURIComponent(state.editing.id)}/${encodeURIComponent(clean)}`);
+            const existing = m.editor.getModel(uri);
+            if (existing && !existing.isDisposed()) existing.dispose();
+            const newModel = m.editor.createModel(content, "python", uri);
+            state.models.set(clean, newModel);
+          }
+        }
+        state.fileMeta.delete(oldName);
+        const updated = files.find(f => (f.relative_path || f.filename) === clean);
+        if (updated) {
+          state.fileMeta.set(clean, {
+            filename: clean,
+            content: updated.content || "",
+            isEntry: !!updated.is_entry,
+            functions: normalizeFunctions(updated.functions || [])
+          });
+        }
+        if (state.currentFile === oldName) {
+          state.currentFile = clean;
+          if (state.editor) state.editor.setModel(state.models.get(clean));
+        }
+        renderFileTree();
+        showToast(`文件已重命名为 ${clean}`);
+      } catch (error) {
+        showToast(error.message);
+      }
     }
 
-    async function doRenameSourceFile(oldName, clean) {
-      const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/rename-file`, {
-        method: "PATCH",
-        body: JSON.stringify({ old_name: oldName, new_name: clean })
-      });
-      if (result.algorithm) {
-        state.editing.algo = result.algorithm;
-        state.editing.id = result.algorithm.id || state.editing.id;
+    function renameEntryFile() {
+      if (!state.currentFile) { showToast("未选中文件"); return; }
+      renameSourceFile(state.currentFile);
+    }
+
+    function formatCurrentFile() {
+      if (!state.editor) { showToast("编辑器未就绪"); return; }
+      const action = state.editor.getAction("editor.action.formatDocument");
+      if (action) {
+        action.run().then(() => showToast("格式化完成")).catch(() => showToast("格式化失败"));
+      } else {
+        // 无内置 formatter，执行简单缩进格式化
+        showToast("当前环境不支持自动格式化，请手动整理代码");
       }
-      await refreshEditorFolderFiles(result.folder_files || [], clean);
-      showToast(`文件已重命名为 ${clean}`);
+    }
+
+    async function checkSyntax() {
+      if (!state.editor || !state.editing || !state.currentFile) { showToast("编辑器未就绪"); return; }
+      const content = state.editor.getValue();
+      try {
+        const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/check-syntax`, {
+          method: "POST",
+          body: JSON.stringify({ content, filename: state.currentFile })
+        });
+        if (result.valid) {
+          showToast("✅ 语法检查通过，未发现错误");
+        } else {
+          const msgs = result.errors.map(e => `第 ${e.line} 行：${e.message}`).join("\n");
+          showToast(`❌ 发现 ${result.errors.length} 个语法错误\n${msgs}`);
+        }
+      } catch (error) {
+        showToast(error.message);
+      }
     }
 
     // workspace textarea 界面的文件重命名（新建算法时）
@@ -2402,15 +2333,16 @@
       if (!state.editing || !state.currentFile) return;
       const content = state.models.get(state.currentFile)?.getValue() || "";
       const packageId = state.editing.algo.packageId || state.editing.package?.package_id;
-      const isOwner = canManageAlgorithm(state.editing.algo);
+      const isOwner = state.currentUser?.role === "admin" ||
+        (state.currentUser?.id && state.editing.algo.ownerId === state.currentUser.id);
       if (!packageId) {
         if (!isOwner) {
           await _saveAsPrivateDraft();
           return;
         }
         try {
-          const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/files/${safeId(state.currentFile)}`, {
-            method: "POST",
+          const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}`, {
+            method: "PATCH",
             body: JSON.stringify({ content })
           });
           state.editing.algo = result.algorithm || state.editing.algo;
@@ -2487,7 +2419,8 @@
 
     async function saveNamespace() {
       if (!validateNamespace()) return;
-      const isOwner = canManageAlgorithm(state.editing.algo);
+      const isOwner = state.currentUser?.role === "admin" ||
+        (state.currentUser?.id && state.editing.algo.ownerId === state.currentUser.id);
       if (!isOwner) {
         await _saveAsPrivateDraft();
         return;
@@ -2645,7 +2578,6 @@
       const e = state.editing;
       const status = getStatus(e.algo);
       const id = e.id;
-      const isComponentEditor = e.page === "components" || e.page === "my-algos";
       // Remove both static (data-status-btn) and previously dynamic (data-dynamic) buttons
       topBar.querySelectorAll("[data-status-btn],[data-dynamic]").forEach(b => b.remove());
       const insertBefore = topBar.querySelector(".spacer") || topBar.querySelector(".more-menu-wrap");
@@ -2657,13 +2589,13 @@
         btn.onclick = fn;
         topBar.insertBefore(btn, insertBefore);
       };
-      if (isComponentEditor && canSubmitAlgorithm(e.algo)) {
+      if (e.page === "components" && ["draft", "rejected"].includes(status)) {
         addBtn(status === "rejected" ? "重新提交" : "提交审核", "", () => window.openSubmitModal(id));
-      } else if (isComponentEditor && ownsAlgorithm(e.algo) && status === "published" && e.algo.hasReviewDraft) {
+      } else if (e.page === "components" && status === "published") {
         addBtn("提交审核", "warning", () => window.openSubmitModal(id));
-      } else if (isComponentEditor && ownsAlgorithm(e.algo) && status === "reviewing") {
+      } else if (e.page === "components" && status === "reviewing") {
         addBtn("撤回审核", "", () => window.withdrawReview(id));
-      } else if (isComponentEditor && state.currentUser?.role === "admin" && status === "approved") {
+      } else if (e.page === "components" && status === "approved") {
         addBtn("正式发布", "success", () => window.publishComponent(id));
       }
     }
@@ -3473,17 +3405,9 @@
 
     async function submitReview(id) { return openSubmitModal(id); }
 
-    function findAlgorithmInState(id) {
-      return [...(state.data.components || []), ...(state.data["my-algos"] || [])].find(a => a.id === id) || {};
-    }
-
     function openSubmitModal(id) {
-      const item = findAlgorithmInState(id);
-      if (!item.id && state.editing?.id === id) Object.assign(item, state.editing.algo || {});
-      if (!canSubmitAlgorithm(item) && !(ownsAlgorithm(item) && getStatus(item) === "published" && item.hasReviewDraft)) {
-        showToast("只能提交您自己的私有算法");
-        return;
-      }
+      const allItems = [...(state.data.components || [])];
+      const item = allItems.find(a => a.id === id) || {};
       const currentVer = item.version || "1.0.0";
       const isFirstRelease = currentVer === "1.0.0";
       const vOpts = versionUpgradeOptions(currentVer);
@@ -3518,7 +3442,8 @@
       const tags = tagsRaw.split(",").map(s => s.trim()).filter(Boolean);
       closeModal();
       try {
-        const item = findAlgorithmInState(id);
+        const allItems = [...(state.data.components || [])];
+        const item = allItems.find(a => a.id === id) || {};
         const patch = {};
         if (version && version !== (item.version || "1.0.0")) patch.version = version;
         if (zhName && zhName !== (item.zhName || "")) patch.zh_name = zhName;
@@ -3532,16 +3457,16 @@
           body: JSON.stringify({ version_bump: version })
         });
         showToast("已提交审核");
-        await loadModuleData(state.page === "my-algos" || state.editing?.page === "my-algos" ? "my-algos" : "components");
+        await loadModuleData("components");
         if (state.editing && state.editing.id === id) {
           // In editor: update local algo state and refresh toolbar (no renderCards needed)
-          const updated = findAlgorithmInState(id);
+          const updated = (state.data.components || []).find(a => a.id === id);
           if (updated) state.editing.algo = { ...state.editing.algo, ...updated };
           refreshEditorStatusButtons();
         } else if (state.page === "review") {
           await renderReviewPage();
         } else {
-          renderCards(state.page === "my-algos" ? "my-algos" : "components");
+          renderCards("components");
         }
       } catch (error) {
         showToast(error.message);
@@ -3825,39 +3750,29 @@
       const snippet = id ? (await api(`/api/v1/snippets/${safeId(id)}`)).snippet : {
         name: "", zh_name: "", body: "", language: "python", tags: [], scope: "private", version: "1.0"
       };
-      state.snippetEditing = { id, snippet };
-      qs("#main").innerHTML = `
-        <div class="editor-view snippet-editor" id="snippetEditorView">
-          <div class="editor-top">
-            <button onclick="window.closeSnippetEditor()">返回</button>
-            <span class="breadcrumb">代码片段 / ${esc(snippet.zh_name || snippet.name || "新建片段")}</span>
-            <span class="spacer"></span>
-            <button onclick="window.copySnippetFromEditor()">复制</button>
+      qs("#modalRoot").classList.remove("hidden");
+      qs("#modalRoot").innerHTML = `
+        <div class="modal">
+          <h3>${id ? "编辑" : "新建"}代码片段</h3>
+          <div class="form-grid">
+            <div class="form-row"><label>触发名</label><input id="snName" value="${esc(snippet.name)}" /></div>
+            <div class="form-row"><label>中文名</label><input id="snZhName" value="${esc(snippet.zh_name || "")}" /></div>
+            <div class="form-row"><label>语言</label><input id="snLanguage" value="${esc(snippet.language || "python")}" /></div>
+            <div class="form-row"><label>权限</label><select id="snScope"><option value="private">私有</option><option value="team">共享</option></select></div>
+            <div class="form-row"><label>标签</label><input id="snTags" value="${esc((snippet.tags || []).join(","))}" placeholder="逗号分隔" /></div>
+            <div class="form-row"><label>版本</label><input id="snVersion" value="${esc(snippet.version || "1.0")}" /></div>
+            <div class="form-row"><label>代码</label><textarea id="snBody" rows="12">${esc(snippet.body || "")}</textarea></div>
+          </div>
+          <div class="modal-actions">
+            <button onclick="window.closeModal()">取消</button>
             <button class="primary" onclick="window.saveSnippet('${esc(id)}')">保存</button>
-          </div>
-          <div class="snippet-meta">
-            <div class="snippet-top-field"><label>触发名</label><input id="snName" value="${esc(snippet.name)}" placeholder="例如 csv_to_records" /></div>
-            <div class="snippet-top-field"><label>中文名</label><input id="snZhName" value="${esc(snippet.zh_name || "")}" placeholder="例如 CSV 转记录片段" /></div>
-            <div class="snippet-top-field"><label>权限</label><select id="snScope"><option value="private">私有</option><option value="team">共享</option></select></div>
-            <div class="snippet-top-field"><label>语言</label><input id="snLanguage" value="${esc(snippet.language || "python")}" /></div>
-            <div class="snippet-top-field"><label>标签</label><input id="snTags" value="${esc((snippet.tags || []).join(","))}" placeholder="逗号分隔，如 CSV,DataFrame" /></div>
-            <div class="snippet-top-field"><label>版本</label><input id="snVersion" value="${esc(snippet.version || "1.0")}" /></div>
-          </div>
-          <div class="snippet-code-shell">
-            <div class="snippet-code-title"><span>代码内容</span><span class="tag">Python</span><span class="spacer"></span><span>Ctrl+S 保存，Ctrl+Alt+S 插入片段</span></div>
-            <div class="monaco-host" id="snippetMonacoHost"></div>
           </div>
         </div>
       `;
       qs("#snScope").value = snippet.scope || "private";
-      await initSnippetEditor(snippet.body || "");
     }
 
     async function saveSnippet(id) {
-      if (state.snippetEditor) {
-        const model = state.snippetEditor.getModel();
-        if (model) state.snippetEditing.snippet.body = model.getValue();
-      }
       const payload = {
         name: qs("#snName").value.trim(),
         zh_name: qs("#snZhName").value.trim(),
@@ -3865,63 +3780,20 @@
         scope: qs("#snScope").value,
         tags: qs("#snTags").value.split(",").map(item => item.trim()).filter(Boolean),
         version: qs("#snVersion").value.trim() || "1.0",
-        body: state.snippetEditing?.snippet?.body || ""
+        body: qs("#snBody").value
       };
       try {
         await api(id ? `/api/v1/snippets/${safeId(id)}` : "/api/v1/snippets", {
           method: id ? "PATCH" : "POST",
           body: JSON.stringify(payload)
         });
+        closeModal();
         showToast("片段已保存");
         await loadModuleData("snippets");
-        closeSnippetEditor();
+        if (state.page === "snippets") renderCards("snippets");
       } catch (error) {
         showToast(error.message);
       }
-    }
-
-    async function initSnippetEditor(content) {
-      const m = await loadMonaco();
-      if (state.snippetEditor) {
-        state.snippetEditor.dispose();
-        state.snippetEditor = null;
-      }
-      const uri = m.Uri.parse(`inmemory://algolib/snippet/${encodeURIComponent(state.snippetEditing?.id || "new")}.py`);
-      const existing = m.editor.getModel(uri);
-      if (existing && !existing.isDisposed()) existing.dispose();
-      const model = m.editor.createModel(content, "python", uri);
-      state.snippetEditor = m.editor.create(qs("#snippetMonacoHost"), {
-        model,
-        theme: "algolib-dark",
-        language: "python",
-        automaticLayout: true,
-        fontSize: 14,
-        tabSize: 4,
-        autoIndent: "full",
-        folding: true,
-        bracketPairColorization: { enabled: true },
-        quickSuggestions: { other: true, comments: false, strings: false }
-      });
-      window._activeMonaco = state.snippetEditor;
-      state.snippetEditor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => saveSnippet(state.snippetEditing?.id || ""));
-      state.snippetEditor.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
-    }
-
-    function closeSnippetEditor() {
-      if (state.snippetEditor) {
-        const model = state.snippetEditor.getModel();
-        state.snippetEditor.dispose();
-        if (model && !model.isDisposed()) model.dispose();
-        state.snippetEditor = null;
-      }
-      state.snippetEditing = null;
-      window._activeMonaco = state.editor || null;
-      switchPage("snippets");
-    }
-
-    async function copySnippetFromEditor() {
-      const text = state.snippetEditor?.getValue() || "";
-      await copyTextToClipboard(text);
     }
 
     async function insertSnippetById(id) {
@@ -3933,31 +3805,27 @@
       }
     }
 
-    function copyTextToClipboard(text) {
-      const value = String(text || "");
-      function fallbackCopy() {
-        const el = document.createElement("textarea");
-        el.value = value;
-        el.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
-        document.body.appendChild(el);
-        el.focus();
-        el.select();
-        try { document.execCommand("copy"); showToast("已复制到剪贴板"); }
-        catch (_err) { showToast("复制失败，请手动选择代码后复制"); }
-        document.body.removeChild(el);
-      }
-      if (navigator.clipboard) {
-        return navigator.clipboard.writeText(value)
-          .then(() => showToast("已复制到剪贴板"))
-          .catch(() => fallbackCopy());
-      }
-      fallbackCopy();
-      return Promise.resolve();
-    }
-
     function insertSnippet(body) {
       if (!window._activeMonaco || !state.monaco) {
-        copyTextToClipboard(body);
+        const text = String(body);
+        function fallbackCopy() {
+          const el = document.createElement("textarea");
+          el.value = text;
+          el.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
+          document.body.appendChild(el);
+          el.focus();
+          el.select();
+          try { document.execCommand("copy"); showToast("已复制到剪贴板，请手动粘贴"); }
+          catch (_err) { showToast("复制失败，请手动选择代码后复制"); }
+          document.body.removeChild(el);
+        }
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text)
+            .then(() => showToast("已复制到剪贴板，请手动粘贴"))
+            .catch(() => fallbackCopy());
+        } else {
+          fallbackCopy();
+        }
         return;
       }
       const editor = window._activeMonaco;
@@ -3975,7 +3843,8 @@
     async function copySnippet(id) {
       try {
         const data = await api(`/api/v1/snippets/${safeId(id)}`);
-        await copyTextToClipboard(data.snippet.body || "");
+        await navigator.clipboard.writeText(data.snippet.body || "");
+        showToast("已复制到剪贴板");
       } catch (error) {
         showToast(error.message);
       }
@@ -4048,6 +3917,216 @@
       if (!snippet) return;
       insertSnippet(snippet.body || "");
       closeSnippetOverlay();
+    }
+
+    function renderApiPage() {
+      qs("#main").innerHTML = `
+        <h1>API 管理</h1>
+        <div class="api-tabs">
+          <button class="${state.apiTab === "keys" ? "active" : ""}" onclick="window.setApiTab('keys')">API Key 管理</button>
+          <button class="${state.apiTab === "monitor" ? "active" : ""}" onclick="window.setApiTab('monitor')">调用监控</button>
+        </div>
+        <section id="apiContent"></section>
+      `;
+      if (state.apiTab === "keys") renderApiKeys();
+      else renderMonitorContent();
+    }
+
+    function setApiTab(tab) {
+      state.apiTab = tab;
+      renderApiPage();
+    }
+
+    async function renderApiKeys() {
+      const root = qs("#apiContent");
+      root.innerHTML = `<div class="toolbar"><button class="primary" onclick="window.openApiKeyModal()">新建 API Key</button></div><div class="empty">加载中...</div>`;
+      try {
+        const data = await api("/api/v1/apikeys");
+        const keys = normalizeListPayload(data, "apikeys");
+        root.innerHTML = `
+          <div class="toolbar"><button class="primary" onclick="window.openApiKeyModal()">新建 API Key</button></div>
+          <table class="api-table">
+            <thead><tr><th>名称</th><th>归属方</th><th>允许命名空间</th><th>每分钟限额</th><th>过期时间</th><th>状态</th><th>最后使用</th><th>操作</th></tr></thead>
+            <tbody>${keys.map(key => `
+              <tr>
+                <td>${esc(key.name)}</td>
+                <td>${esc(key.owner || "-")}</td>
+                <td>${esc((key.allowed_namespaces || []).join(", ") || "*")}</td>
+                <td>${esc(key.rate_limit || 60)}</td>
+                <td>${esc(key.expires_at || "永不过期")}</td>
+                <td>${esc(key.status)}</td>
+                <td>${esc(key.last_used_at || "-")}</td>
+                <td>
+                  <button onclick="window.toggleApiKey('${esc(key.id)}','${esc(key.status)}')">${key.status === "active" ? "禁用" : "启用"}</button>
+                  <button class="danger" onclick="window.deleteApiKey('${esc(key.id)}')">删除</button>
+                </td>
+              </tr>
+            `).join("")}</tbody>
+          </table>
+        `;
+      } catch (error) {
+        root.innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+      }
+    }
+
+    function openApiKeyModal() {
+      qs("#modalRoot").classList.remove("hidden");
+      qs("#modalRoot").innerHTML = `
+        <div class="modal">
+          <h3>新建 API Key</h3>
+          <div class="form-grid">
+            <div class="form-row"><label>名称</label><input id="keyName" /></div>
+            <div class="form-row"><label>归属方</label><input id="keyOwner" /></div>
+            <div class="form-row"><label>允许命名空间</label><textarea id="keyNs" rows="4" placeholder="每行一个，例如 alg.statistics.*"></textarea></div>
+            <div class="form-row"><label>限额</label><input id="keyRate" type="number" value="60" /></div>
+            <div class="form-row"><label>过期时间</label><input id="keyExpires" placeholder="ISO 时间，留空永不过期" /></div>
+          </div>
+          <div id="keyCreated"></div>
+          <div class="modal-actions">
+            <button onclick="window.closeModal()">取消</button>
+            <button class="primary" onclick="window.createApiKey()">创建</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function createApiKey() {
+      const payload = {
+        name: qs("#keyName").value.trim(),
+        owner: qs("#keyOwner").value.trim(),
+        allowed_namespaces: qs("#keyNs").value.split("\n").map(item => item.trim()).filter(Boolean),
+        rate_limit: Number(qs("#keyRate").value || 60),
+        expires_at: qs("#keyExpires").value.trim() || null
+      };
+      try {
+        const data = await api("/api/v1/apikeys", { method: "POST", body: JSON.stringify(payload) });
+        qs("#keyCreated").innerHTML = `<div class="output"><strong>明文 Key 仅此时可见：</strong><pre>${esc(data.apikey.key_value)}</pre></div>`;
+        showToast("API Key 已创建");
+        renderApiKeys();
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    async function toggleApiKey(id, status) {
+      try {
+        await api(`/api/v1/apikeys/${safeId(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: status === "active" ? "disabled" : "active" })
+        });
+        showToast("状态已更新");
+        renderApiKeys();
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    async function deleteApiKey(id) {
+      if (!confirm("确认删除这个 API Key？")) return;
+      try {
+        await api(`/api/v1/apikeys/${safeId(id)}`, { method: "DELETE" });
+        showToast("API Key 已删除");
+        renderApiKeys();
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    function renderMonitorPage(embedded) {
+      qs("#main").innerHTML = `<h1>调用监控</h1><section id="monitorContent"></section>`;
+      renderMonitorContent(qs("#monitorContent"));
+    }
+
+    async function renderMonitorContent(root = qs("#apiContent")) {
+      root.innerHTML = `
+        <div class="toolbar">
+          ${["24h", "7d", "30d"].map(period => `<button class="${state.monitorPeriod === period ? "active" : ""}" onclick="window.setMonitorPeriod('${period}')">${period}</button>`).join("")}
+        </div>
+        <section id="monitorOverview" class="stat-bar"></section>
+        <section id="ranking"></section>
+        <section id="logs"></section>
+      `;
+      await Promise.all([loadOverview(), loadRanking(), loadLogs()]);
+    }
+
+    function setMonitorPeriod(period) {
+      state.monitorPeriod = period;
+      if (state.page === "api") renderApiPage();
+      else renderMonitorPage(false);
+    }
+
+    async function loadOverview() {
+      try {
+        const data = await api(`/api/v1/monitor/overview?period=${state.monitorPeriod}`);
+        const overview = data.overview || {};
+        qs("#monitorOverview").innerHTML = [
+          ["总调用次数", overview.total_calls || 0],
+          ["成功率", `${Math.round((overview.success_rate || 0) * 100)}%`],
+          ["平均响应", `${overview.avg_elapsed_ms || 0} ms`],
+          ["活跃 Key", overview.active_key_count || 0]
+        ].map(([label, value]) => `<article class="stat-card"><div class="stat-label">${label}</div><div class="stat-value">${value}</div></article>`).join("");
+      } catch (error) {
+        qs("#monitorOverview").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+      }
+    }
+
+    async function loadRanking() {
+      try {
+        const data = await api("/api/v1/monitor/ranking");
+        const ranking = normalizeListPayload(data, "ranking");
+        const max = Math.max(...ranking.map(item => item.calls || 0), 1);
+        qs("#ranking").innerHTML = `
+          <h1 style="font-size:16px;margin-top:12px">命名空间调用 Top 10</h1>
+          ${ranking.map(item => `<div class="bar-row"><span>${esc(item.namespace)}</span><div class="bar"><span style="width:${Math.round((item.calls / max) * 100)}%"></span></div><strong>${esc(item.calls)}</strong></div>`).join("") || '<div class="empty">暂无排行数据</div>'}
+        `;
+      } catch (error) {
+        qs("#ranking").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+      }
+    }
+
+    async function loadLogs() {
+      const ns = qs("#logNs")?.value || "";
+      const apiKey = qs("#logKey")?.value || "";
+      const success = qs("#logSuccess")?.value || "";
+      const query = new URLSearchParams({ page: String(state.logsPage), page_size: "20" });
+      if (ns) query.set("namespace", ns);
+      if (apiKey) query.set("api_key_id", apiKey);
+      if (success) query.set("success", success);
+      try {
+        const data = await api(`/api/v1/monitor/logs?${query}`);
+        const logs = normalizeListPayload(data, "logs");
+        qs("#logs").innerHTML = `
+          <h1 style="font-size:16px;margin-top:16px">调用日志</h1>
+          <div class="log-filters">
+            <input id="logNs" placeholder="命名空间" value="${esc(ns)}" />
+            <input id="logKey" placeholder="API Key ID" value="${esc(apiKey)}" />
+            <select id="logSuccess"><option value="">全部</option><option value="true">成功</option><option value="false">失败</option></select>
+            <button onclick="window.reloadLogs()">筛选</button>
+          </div>
+          <table class="api-table">
+            <thead><tr><th>时间</th><th>命名空间</th><th>函数名</th><th>耗时</th><th>状态</th><th>调用方 IP</th></tr></thead>
+            <tbody>${logs.map(log => `<tr><td>${esc(log.request_time)}</td><td>${esc(log.namespace)}</td><td>${esc(log.function_name)}</td><td>${esc(log.elapsed_ms)} ms</td><td>${log.success ? "成功" : "失败"}</td><td>${esc(log.caller_ip || "-")}</td></tr>`).join("")}</tbody>
+          </table>
+          <div class="control-row">
+            <button onclick="window.prevLogsPage()">上一页</button>
+            <span>第 ${data.page || state.logsPage} 页 / 共 ${data.total || 0} 条</span>
+            <button onclick="window.nextLogsPage()">下一页</button>
+          </div>
+        `;
+        qs("#logSuccess").value = success;
+      } catch (error) {
+        qs("#logs").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+      }
+    }
+
+    function reloadLogs() { state.logsPage = 1; loadLogs(); }
+    function prevLogsPage() { state.logsPage = Math.max(1, state.logsPage - 1); loadLogs(); }
+    function nextLogsPage() { state.logsPage += 1; loadLogs(); }
+
+    function renderLogsPage() {
+      qs("#main").innerHTML = `<h1>运行日志</h1><section id="logs"></section>`;
+      state.logsPage = 1;
+      loadLogs();
     }
 
     function renderSettingsPage() {
@@ -4142,7 +4221,7 @@
       try {
         // 如果我的算法编辑器打开中，跳过 SSE 刷新，避免销毁未保存内容
         if (qs("#myeditor-code")) return;
-        if (["components", "templates", "snippets", "my-algos"].includes(state.page)) {
+        if (["components", "templates", "snippets"].includes(state.page)) {
           await loadModuleData(state.page);
           renderNav();
           hydrateFilters(state.page);
@@ -4168,7 +4247,7 @@
 
     function bindGlobalKeys() {
       document.addEventListener("keydown", event => {
-        if (event.ctrlKey && event.altKey && !event.metaKey && event.key.toLowerCase() === "s") {
+        if (event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "s") {
           event.preventDefault();
           openSnippetOverlay();
         }
@@ -4532,6 +4611,58 @@
         showToast("算法已删除");
         refreshMyAlgoList();
       } catch (err) { showToast(err.message); }
+    }
+
+    // ─── 我的提交记录页面 ─────────────────────────────────────────────
+    async function renderMySubmissionsPage() {
+      qs("#main").innerHTML = `
+        <h1>我的提交记录</h1>
+        <section id="my-submissions-list"><div class="skeleton"></div></section>
+      `;
+      try {
+        const data = await api("/api/v1/user/algorithms");
+        const algos = (data.algorithms || []).filter(a => {
+          const ps = a.publishStatus || "draft";
+          return ps !== "draft"; // 只显示已提交或更高状态的
+        });
+        if (algos.length === 0) {
+          qs("#my-submissions-list").innerHTML = '<div class="empty">暂无提交记录</div>';
+          return;
+        }
+        qs("#my-submissions-list").innerHTML = `
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:1px solid var(--line);text-align:left">
+                <th style="padding:8px 12px;color:var(--text-dim)">算法名称</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">标识符</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">状态</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">驳回原因</th>
+                <th style="padding:8px 12px;color:var(--text-dim)">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${algos.map(a => {
+                const ps = a.publishStatus || "draft";
+                const statusTxt = { reviewing: "审核中", rejected: "已拒绝", approved: "已批准", published: "已发布" }[ps] || ps;
+                const reason = a.rejectReason || "";
+                return `<tr style="border-bottom:1px solid var(--line)">
+                  <td style="padding:8px 12px;font-weight:500">${esc(a.zhName || a.callPrefix || a.id)}</td>
+                  <td style="padding:8px 12px;font-size:12px;color:var(--text-dim)">${esc(a.callPrefix || a.id)}</td>
+                  <td style="padding:8px 12px"><span class="tag ${statusClass(ps)}">${esc(statusTxt)}</span></td>
+                  <td style="padding:8px 12px;font-size:12px;color:var(--danger,#f55)">${esc(reason)}</td>
+                  <td style="padding:8px 12px">
+                    <button style="font-size:12px;padding:4px 8px;margin-right:4px" onclick="window.openMyAlgoEditor('${esc(a.id)}')">查看/编辑</button>
+                    ${ps === "reviewing" ? `<button style="font-size:12px;padding:4px 8px" onclick="window.withdrawMyAlgoReview('${esc(a.id)}')">撤回</button>` : ""}
+                    ${ps === "rejected" ? `<button class="primary" style="font-size:12px;padding:4px 8px" onclick="window.openSubmitReviewModal('${esc(a.id)}')">重新提交</button>` : ""}
+                  </td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        qs("#my-submissions-list").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+      }
     }
 
     async function renderUsersPage() {
@@ -4987,8 +5118,6 @@
     window.initEditor = initEditor;
     window.switchFile = switchFile;
     window.addSourceFile = addSourceFile;
-    window.openSourceFileModal = openSourceFileModal;
-    window.confirmSourceFileModal = confirmSourceFileModal;
     window.saveCurrentFile = saveCurrentFile;
     window.validateNamespace = validateNamespace;
     window.saveNamespace = saveNamespace;
@@ -5057,6 +5186,9 @@
     window.updateWorkspaceFileContent = updateWorkspaceFileContent;
     window.renameWorkspaceFile = renameWorkspaceFile;
     window.renameSourceFile = renameSourceFile;
+    window.renameEntryFile = renameEntryFile;
+    window.formatCurrentFile = formatCurrentFile;
+    window.checkSyntax = checkSyntax;
     window.onAlgCatChange = onAlgCatChange;
     window.withdrawReview = withdrawReview;
     window.approveReview = approveReview;
@@ -5071,17 +5203,25 @@
     window.showApiDoc = showApiDoc;
     window.editSnippet = editSnippet;
     window.saveSnippet = saveSnippet;
-    window.closeSnippetEditor = closeSnippetEditor;
-    window.copySnippetFromEditor = copySnippetFromEditor;
     window.insertSnippet = insertSnippet;
     window.insertSnippetById = insertSnippetById;
-    window.copyTextToClipboard = copyTextToClipboard;
     window.copySnippet = copySnippet;
     window.deleteSnippet = deleteSnippet;
     window.openSnippetOverlay = openSnippetOverlay;
     window.closeSnippetOverlay = closeSnippetOverlay;
     window.searchSnippetOverlay = searchSnippetOverlay;
     window.pickSnippet = pickSnippet;
+    window.renderApiPage = renderApiPage;
+    window.setApiTab = setApiTab;
+    window.openApiKeyModal = openApiKeyModal;
+    window.createApiKey = createApiKey;
+    window.toggleApiKey = toggleApiKey;
+    window.deleteApiKey = deleteApiKey;
+    window.renderMonitorPage = renderMonitorPage;
+    window.setMonitorPeriod = setMonitorPeriod;
+    window.reloadLogs = reloadLogs;
+    window.prevLogsPage = prevLogsPage;
+    window.nextLogsPage = nextLogsPage;
     window.closeModal = closeModal;
     window.loadCurrentPage = loadCurrentPage;
     window.updateCardNamespace = updateCardNamespace;
@@ -5089,6 +5229,7 @@
     window.doLogout = doLogout;
     window.renderUsersPage = renderUsersPage;
     window.renderMyAlgorithmsPage = renderMyAlgorithmsPage;
+    window.renderMySubmissionsPage = renderMySubmissionsPage;
     window.openNewAlgoModal = openNewAlgoModal;
     window.doCreateMyAlgo = doCreateMyAlgo;
     window.openMyAlgoEditor = openMyAlgoEditor;

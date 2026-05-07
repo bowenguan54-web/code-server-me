@@ -9,7 +9,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from .algorithms import _append_entry_version, get_registry
+from ..sdk.auth_utils import get_current_user
 from ..sdk.registry import AlgorithmRegistry
+
+_ALGORITHMS_ROOT = Path(__file__).resolve().parents[2] / "algorithms_root"
 
 router = APIRouter(prefix="/api/v1", tags=["packages"])
 
@@ -89,6 +92,22 @@ async def create_package(
     root_dir = str(payload.pop("root_dir", "") or _default_root(registry))
     if not isinstance(files, list):
         raise HTTPException(status_code=400, detail="Field 'files' must be a list")
+
+    # Determine owner: if a user is authenticated, create in their private directory
+    current_user_id: str | None = None
+    try:
+        u = get_current_user(request)
+        current_user_id = u.get("id")
+    except Exception:
+        pass
+
+    if current_user_id:
+        namespace = str(payload.get("namespace", "")).strip()
+        name = str(payload.get("name", "")).strip()
+        if namespace and name:
+            root_dir = str(_ALGORITHMS_ROOT / "users" / current_user_id)
+        payload["owner_id"] = current_user_id
+
     try:
         package = registry.create_package(payload, files, root_dir)
     except ValueError as exc:

@@ -1,0 +1,7 @@
+{
+  "namespace": "signal_proc.butterworth_filter",
+  "zh_name": "巴特沃斯滤波器",
+  "module_kind": "component",
+  "publish_status": "draft",
+  "owner_id": "usr_zhangsan"
+}

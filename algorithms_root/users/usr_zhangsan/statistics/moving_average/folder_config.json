@@ -1,0 +1,7 @@
+{
+  "namespace": "statistics.moving_average",
+  "zh_name": "移动平均",
+  "module_kind": "component",
+  "publish_status": "draft",
+  "owner_id": "usr_zhangsan"
+}

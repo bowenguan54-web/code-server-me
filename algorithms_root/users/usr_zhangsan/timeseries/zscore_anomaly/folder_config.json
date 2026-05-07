@@ -1,0 +1,7 @@
+{
+  "namespace": "timeseries.zscore_anomaly",
+  "zh_name": "Z-Score 异常检测",
+  "module_kind": "component",
+  "publish_status": "draft",
+  "owner_id": "usr_zhangsan"
+}

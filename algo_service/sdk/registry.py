@@ -159,6 +159,7 @@ class AlgorithmRegistry:
             config: dict[str, Any] = json.load(fh)
         namespace = str(config.get("namespace", "")).strip()
         folder_type = normalize_module_kind(config.get("module_kind", config.get("type", "component")))
+        owner_id = str(config.get("owner_id", "system")).strip() or "system"
         if not namespace:
             return
         root = self._find_watch_root(dirpath) or dirpath
@@ -171,6 +172,7 @@ class AlgorithmRegistry:
                 file_path=abs_path,
                 dirpath=dirpath,
                 root_dir=root,
+                owner_id=owner_id,
             )
             self.register(entry)
 
@@ -422,6 +424,8 @@ class AlgorithmRegistry:
             "publish_status": str(manifest.get("publish_status", "draft")).strip() or "draft",
             "module_kind": normalize_module_kind(manifest.get("module_kind", manifest.get("type", "component"))),
         }
+        if manifest.get("owner_id") and manifest["owner_id"] != "system":
+            manifest_payload["owner_id"] = manifest["owner_id"]
         (package_root / "algopack.json").write_text(
             json.dumps(manifest_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
