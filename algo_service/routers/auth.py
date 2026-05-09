@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
+from pathlib import Path
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,6 +19,9 @@ from ..sdk.auth_utils import (
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_SESSION_PATH = _PROJECT_ROOT / ".run" / "algolib-current-session.json"
 
 
 class LoginRequest(BaseModel):
@@ -38,6 +43,27 @@ def _public_user(user: dict) -> dict:
     }
 
 
+def _write_current_session(token: str, user: dict) -> None:
+    """Persist the latest login so the local code-server extension can reuse it."""
+
+    try:
+        _SESSION_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _SESSION_PATH.write_text(
+            json.dumps(
+                {
+                    "token": token,
+                    "user": _public_user(user),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    except OSError:
+        return
+
+
 @router.post("/login")
 async def login(body: LoginRequest) -> dict:
     user = find_user_by_username(body.username)
@@ -47,6 +73,7 @@ async def login(body: LoginRequest) -> dict:
     if not bcrypt.checkpw(body.password.encode(), stored_hash.encode()):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     token = create_access_token(user)
+    _write_current_session(token, user)
     return {"success": True, "token": token, "user": _public_user(user)}
 
 

@@ -1,10 +1,12 @@
-"use strict";
+﻿"use strict";
 /**
  * AlgoLib VS Code Extension.
  * Provides alg. completions, algorithm call insertion, and snippet insertion.
  */
 
 const vscode = require("vscode");
+const fs = require("fs");
+const path = require("path");
 
 const DEFAULT_URL = "http://localhost:8000";
 const COMPLETIONS_PATH = "/api/v1/stubs/completions";
@@ -19,9 +21,34 @@ let reconnectTimer;
 let completionItems = [];
 let snippetItems = [];
 
+function authHeaders() {
+  const candidates = [
+    path.join(process.cwd(), ".run", "algolib-current-session.json"),
+    "/home/guan/code-server-me/.run/algolib-current-session.json"
+  ];
+  for (const file of candidates) {
+    try {
+      const session = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (session && session.token) {
+        return { Authorization: `Bearer ${session.token}` };
+      }
+    } catch (error) {
+      // Continue to the next likely runtime path.
+    }
+  }
+  return {};
+}
+
+function privacyLabel(item) {
+  const owner = item.ownerId || item.owner_id || "";
+  const scope = item.scope || "";
+  const status = item.publishStatus || item.publish_status || "";
+  return status === "published" || (!status && owner === "system" && scope === "team") ? "公有" : "私有";
+}
+
 async function fetchCompletions() {
   try {
-    const resp = await fetch(`${DEFAULT_URL}${COMPLETIONS_PATH}`);
+    const resp = await fetch(`${DEFAULT_URL}${COMPLETIONS_PATH}`, { headers: authHeaders() });
     if (!resp.ok) return;
     const data = await resp.json();
     completionItems = data.items || data.completions || data.algorithms || [];
@@ -35,7 +62,7 @@ async function fetchCompletions() {
 async function fetchSnippets(keyword = "") {
   try {
     const query = keyword ? `?q=${encodeURIComponent(keyword)}` : "";
-    const resp = await fetch(`${DEFAULT_URL}${SNIPPETS_PATH}${query}`);
+    const resp = await fetch(`${DEFAULT_URL}${SNIPPETS_PATH}${query}`, { headers: authHeaders() });
     if (!resp.ok) return [];
     const data = await resp.json();
     snippetItems = Array.isArray(data) ? data : (data.items || data.snippets || []);
@@ -59,7 +86,11 @@ function updateStatusBar(count) {
 function refreshCompletionProvider(context) {
   if (completionDisposable) {
     completionDisposable.dispose();
+    completionDisposable = undefined;
   }
+  // Algorithm completion is provided by the built-in simple-browser provider.
+  // Keep this extension for status, refresh, and Ctrl+Alt+S snippet insertion only.
+  return;
   completionDisposable = vscode.languages.registerCompletionItemProvider(
     ["python", "javascript", "typescript"],
     {
@@ -69,12 +100,15 @@ function refreshCompletionProvider(context) {
         if (!/\balg(o)?\.?\w*$/.test(prefix)) return [];
         return completionItems.map(item => {
           const call = item.callPrefix || item.call_prefix || item.label || "";
+          const privacy = privacyLabel(item);
           const params = item.params || [];
           const snippetText = item.callSnippet || item.insertText || `${call}(${params.map((p, i) => `\${${i + 1}:${p.name || "arg"}}`).join(", ")})`;
-          const ci = new vscode.CompletionItem(call, vscode.CompletionItemKind.Function);
+          const ci = new vscode.CompletionItem(`[${privacy}] ${call}`, vscode.CompletionItemKind.Function);
+          ci.filterText = call;
+          ci.sortText = `${privacy === "私有" ? "0" : "1"}_${call}`;
           ci.insertText = new vscode.SnippetString(snippetText);
           ci.documentation = new vscode.MarkdownString(item.zhDescription || item.zh_description || item.snippetBody || "");
-          ci.detail = item.detail || call;
+          ci.detail = `${privacyLabel(item)} · ${item.detail || call}`;
           return ci;
         });
       }
@@ -131,8 +165,9 @@ async function showAlgorithmQuickPick() {
   }
   const items = completionItems.map(item => {
     const call = item.callPrefix || item.call_prefix || "";
+    const privacy = privacyLabel(item);
     return {
-      label: `$(beaker) ${call}`,
+      label: `$(beaker) [${privacy}] ${call}`,
       description: item.zh_description || item.zhDescription || "",
       detail: item.detail || "",
       item
@@ -199,7 +234,7 @@ async function insertRawSnippet(body) {
 async function showSnippetQuickPick() {
   const snippets = await fetchSnippets();
   const items = snippets.map(item => ({
-    label: `$(symbol-snippet) ${item.zh_name || item.zhName || item.name || item.id}`,
+    label: `$(symbol-snippet) [${privacyLabel(item)}] ${item.zh_name || item.zhName || item.name || item.id}`,
     description: item.name || "",
     detail: snippetPreview(item.body),
     item
@@ -219,6 +254,7 @@ async function showSnippetQuickPick() {
 }
 
 function activate(context) {
+  console.log("AlgoLib extension activated. Ctrl+Alt+S is bound to algolib.insertSnippet.");
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = "algolib.showAlgorithms";
   statusBar.text = "$(sync~spin) AlgoLib";
@@ -260,3 +296,4 @@ function deactivate() {
 }
 
 module.exports = { activate, deactivate };
+

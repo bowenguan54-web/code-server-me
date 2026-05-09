@@ -120,6 +120,7 @@ class SnippetBase(BaseModel):
     tags: list[str] = Field(default_factory=list)
     scope: str = "private"
     version: str = "1.0"
+    publish_status: str = "draft"
 
 
 class SnippetCreate(SnippetBase):
@@ -136,6 +137,7 @@ class SnippetUpdate(BaseModel):
     tags: list[str] | None = None
     scope: str | None = None
     version: str | None = None
+    publish_status: str | None = None
 
 
 class SnippetResponse(SnippetBase):
@@ -144,3 +146,5 @@ class SnippetResponse(SnippetBase):
     id: str
     created_at: str
     updated_at: str
+    owner_id: str = "system"
+    publish_status: str = "draft"

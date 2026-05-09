@@ -6,12 +6,18 @@
   "publisher": "coder",
   "license": "MIT",
   "activationEvents": [
-    "onStartupFinished"
+    "*",
+    "onCommand:algolib.insertSnippet",
+    "onCommand:algolib.showAlgorithms",
+    "onLanguage:python"
   ],
   "engines": {
     "vscode": "^1.80.0"
   },
   "main": "./extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
   "contributes": {
     "commands": [
       {
@@ -39,7 +45,7 @@
       {
         "command": "algolib.insertSnippet",
         "key": "ctrl+alt+s",
-        "when": "editorTextFocus"
+        "when": "editorTextFocus || editorFocus"
       }
     ]
   }

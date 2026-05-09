@@ -6,10 +6,11 @@ import keyword
 import re
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from .algorithms import get_registry
+from ..sdk.auth_utils import get_current_user
 from ..sdk.registry import AlgorithmEntry, AlgorithmRegistry
 
 router = APIRouter(prefix="/api/v1", tags=["stubs"])
@@ -118,8 +119,27 @@ async def get_alg_stub(registry: AlgorithmRegistry = Depends(get_registry)) -> P
     return PlainTextResponse(_generate_stub(registry), media_type="text/plain; charset=utf-8")
 
 
+def _visible_completion_entries(entries: list[AlgorithmEntry], request: Request) -> list[AlgorithmEntry]:
+    """Return public algorithms plus the current user's private algorithms."""
+
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return [entry for entry in entries if entry.owner_id == "system"]
+    try:
+        user = get_current_user(request)
+    except HTTPException:
+        return [entry for entry in entries if entry.owner_id == "system"]
+    if user.get("role") == "admin":
+        return entries
+    user_id = str(user.get("id", ""))
+    return [entry for entry in entries if entry.owner_id == "system" or entry.owner_id == user_id]
+
+
 @router.get("/stubs/completions")
-async def get_completions(registry: AlgorithmRegistry = Depends(get_registry)) -> dict:
+async def get_completions(
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict:
     """Return all algorithm entries as a JSON completion list for Monaco editor.
 
     Each item matches the shape expected by the frontend ``injectAlgCompletions``
@@ -127,8 +147,35 @@ async def get_completions(registry: AlgorithmRegistry = Depends(get_registry)) -
     zhDescription, zhTags, enDescription, params, namespace, version,
     funcName, packageId, returnType }``.
     """
+    entries = _visible_completion_entries(registry.get_all(), request)
+    items = [
+        {
+            "id": entry.id if entry.owner_id == "system" else f"{entry.id}@@{entry.owner_id}",
+            "registryId": entry.id,
+            "callPrefix": entry.call_prefix,
+            "callSnippet": entry.call_snippet,
+            "snippetBody": entry.snippet_body,
+            "type": entry.type,
+            "moduleKind": entry.type,
+            "zhName": entry.zh_name,
+            "zhDescription": entry.zh_description,
+            "zhTags": entry.zh_tags,
+            "enDescription": entry.en_description,
+            "params": entry.params,
+            "namespace": entry.namespace,
+            "version": entry.version,
+            "ownerId": entry.owner_id,
+            "owner_id": entry.owner_id,
+            "visibility": "public" if entry.owner_id == "system" else "private",
+            "privacyLabel": "公有" if entry.owner_id == "system" else "私有",
+            "funcName": entry.func_name,
+            "packageId": entry.package_id,
+            "returnType": entry.return_type,
+        }
+        for entry in entries
+    ]
     return {
         "success": True,
-        "count": registry.count,
-        "items": registry.to_completion_json(),
+        "count": len(items),
+        "items": items,
     }

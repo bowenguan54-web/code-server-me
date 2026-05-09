@@ -1,4 +1,4 @@
-"""Algorithm API routes (/api/v1/...)."""
+﻿"""Algorithm API routes (/api/v1/...)."""
 
 from __future__ import annotations
 
@@ -53,13 +53,23 @@ def get_registry() -> AlgorithmRegistry:
     return _registry
 
 
+def _entry_client_id(entry: AlgorithmEntry) -> str:
+    """Return the id exposed to frontend callers."""
+
+    owner_id = str(getattr(entry, "owner_id", "system") or "system").strip()
+    if owner_id and owner_id != "system":
+        return f"{entry.id}@@{owner_id}"
+    return entry.id
+
+
 def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
     publish_status = _read_entry_publish_status(entry)
     display_namespace = entry.call_prefix or f"alg.{entry.namespace}.{entry.func_name}"
     category = _read_entry_category(entry)
     review_draft = _load_review_draft(entry)
     return {
-        "id": entry.id,
+        "id": _entry_client_id(entry),
+        "registryId": entry.id,
         "callPrefix": display_namespace,
         "callSnippet": entry.call_snippet,
         "snippetBody": entry.snippet_body,
@@ -88,6 +98,8 @@ def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
         "sourceFile": entry.source_file,
         "ownerId": getattr(entry, "owner_id", "system"),
         "rejectReason": review_draft.get("reject_reason", "") if review_draft else "",
+        "reviewKind": review_draft.get("review_kind", "") if review_draft else "",
+        "targetPublicCallPrefix": review_draft.get("target_public_call_prefix", "") if review_draft else "",
     }
 
 
@@ -193,6 +205,24 @@ def _ensure_callable_status(entry: AlgorithmEntry) -> None:
         raise HTTPException(status_code=403, detail=f"算法在 {status} 状态下不可调用")
 
 
+def _ensure_user_callable_status(entry: AlgorithmEntry, request: Request) -> None:
+    """Allow published algorithms and the current user's private algorithms."""
+
+    status = _read_entry_publish_status(entry)
+    if status == "published":
+        return
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        try:
+            current_user = get_current_user(request)
+        except HTTPException as exc:
+            raise HTTPException(status_code=401, detail="请先登录后调用私有算法") from exc
+        owner_id = getattr(entry, "owner_id", "system")
+        if current_user.get("role") == "admin" or owner_id == current_user.get("id"):
+            return
+    raise HTTPException(status_code=403, detail=f"私有算法仅创建者可调用，当前状态：{status}")
+
+
 def _folder_files_for_entry(entry: AlgorithmEntry) -> list[dict[str, Any]]:
     """Return files that belong to the selected algorithm entry."""
 
@@ -207,26 +237,112 @@ def _folder_files_for_entry(entry: AlgorithmEntry) -> list[dict[str, Any]]:
             if file_path.name != "__init__.py" and "__pycache__" not in file_path.parts
         ]
     else:
-        paths = [entry_path]
+        folder = entry_path.parent
+        dedicated_folder_names = {entry_path.stem, entry.func_name}
+        is_dedicated_algorithm_folder = folder.name in dedicated_folder_names
+        if is_dedicated_algorithm_folder:
+            paths = [
+                file_path.resolve()
+                for file_path in sorted(folder.glob("*.py"), key=lambda item: item.name)
+                if file_path.name != "__init__.py" and "__pycache__" not in file_path.parts
+            ]
+        else:
+            paths = [entry_path]
+            for extra_name in _load_entry_extra_files(entry):
+                extra_path = (folder / extra_name).resolve()
+                if extra_path.exists() and extra_path.suffix == ".py" and extra_path.name != "__init__.py":
+                    paths.append(extra_path)
 
+    paths = sorted(paths, key=lambda item: (item.resolve() != entry_path, item.name))
     files: list[dict[str, Any]] = []
+    seen: set[Path] = set()
     for file_path in paths:
-        try:
-            content = file_path.read_text(encoding="utf-8")
-        except OSError as exc:
-            logger.warning("Cannot read folder file %s: %s", file_path, exc)
+        resolved = file_path.resolve()
+        if resolved in seen:
             continue
-        relative_path = file_path.name if not entry.package_root else file_path.relative_to(Path(entry.package_root)).as_posix()
+        seen.add(resolved)
+        try:
+            content = resolved.read_text(encoding="utf-8")
+        except OSError as exc:
+            logger.warning("Cannot read folder file %s: %s", resolved, exc)
+            continue
+        relative_path = resolved.name if not entry.package_root else resolved.relative_to(Path(entry.package_root)).as_posix()
         files.append(
             {
-                "filename": file_path.name,
+                "filename": resolved.name,
                 "relative_path": relative_path,
                 "content": content,
-                "is_entry": file_path.resolve() == entry_path,
-                "functions": AstParser.extract_functions(str(file_path)),
+                "is_entry": resolved == entry_path,
+                "functions": AstParser.extract_functions(str(resolved)),
             }
         )
     return files
+
+
+def _entry_extra_files_manifest(entry: AlgorithmEntry) -> Path:
+    """Return the sidecar manifest used by legacy flat-file algorithms."""
+
+    return Path(entry.source_file).parent / ".algofiles" / f"{entry.func_name}.json"
+
+
+def _load_entry_extra_files(entry: AlgorithmEntry) -> list[str]:
+    """Load helper files associated with a legacy flat-file algorithm."""
+
+    manifest = _entry_extra_files_manifest(entry)
+    if not manifest.exists():
+        return []
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    raw_files = data.get("files") if isinstance(data, dict) else data
+    if not isinstance(raw_files, list):
+        return []
+    files: list[str] = []
+    for item in raw_files:
+        clean = str(item).strip().replace("\\", "/")
+        if clean and "/" not in clean and clean.endswith(".py") and clean != "__init__.py":
+            files.append(clean)
+    return sorted(set(files))
+
+
+def _save_entry_extra_files(entry: AlgorithmEntry, files: list[str]) -> None:
+    """Persist helper files associated with a legacy flat-file algorithm."""
+
+    clean_files = sorted({
+        str(item).strip().replace("\\", "/")
+        for item in files
+        if str(item).strip().endswith(".py") and "/" not in str(item).strip().replace("\\", "/")
+    })
+    manifest = _entry_extra_files_manifest(entry)
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps({"files": clean_files}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _merge_review_draft_files(entry: AlgorithmEntry, draft_files: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge review draft files with physical folder files, preserving helper files."""
+
+    merged: dict[str, dict[str, Any]] = {}
+    for item in _folder_files_for_entry(entry):
+        key = str(item.get("relative_path") or item.get("filename") or "")
+        if key:
+            merged[key] = item
+    entry_name = Path(entry.source_file).name
+    for raw in draft_files:
+        if not isinstance(raw, dict):
+            continue
+        filename = str(raw.get("filename") or raw.get("relative_path") or "").strip().replace("\\", "/")
+        if not filename or not filename.endswith(".py") or "/" in filename or filename == "__init__.py":
+            continue
+        previous = merged.get(filename, {})
+        merged[filename] = {
+            "filename": Path(filename).name,
+            "relative_path": filename,
+            "content": str(raw.get("content", previous.get("content", ""))),
+            "is_entry": filename == entry_name or bool(previous.get("is_entry")),
+            "functions": previous.get("functions", []),
+        }
+    return sorted(merged.values(), key=lambda item: (not bool(item.get("is_entry")), str(item.get("relative_path") or item.get("filename") or "")))
 
 
 def _project_root() -> Path:
@@ -584,6 +700,62 @@ def _normalize_call_namespace(value: str) -> str:
     return normalized
 
 
+def _entry_by_owner(registry: AlgorithmRegistry, algorithm_id: str, owner_id: str | None) -> AlgorithmEntry | None:
+    """Find an entry by base id and owner_id."""
+
+    base_id = _normalize_call_namespace(algorithm_id)
+    if "@@" in base_id:
+        base_id, owner_hint = base_id.split("@@", 1)
+        owner_id = owner_id or owner_hint
+    for entry in registry.get_all():
+        if entry.id == base_id and str(getattr(entry, "owner_id", "system") or "system") == str(owner_id or "system"):
+            return entry
+    return None
+
+
+def _entry_from_client_id(registry: AlgorithmRegistry, algorithm_id: str) -> AlgorithmEntry | None:
+    """Resolve a public id or private frontend id."""
+
+    normalized = _normalize_call_namespace(algorithm_id)
+    return registry.get_by_id(normalized) or registry.get_by_id(algorithm_id)
+
+
+def _public_conflict_for_entry(registry: AlgorithmRegistry, entry: AlgorithmEntry) -> AlgorithmEntry | None:
+    """Return a published public entry using the same callable id."""
+
+    if str(getattr(entry, "owner_id", "system") or "system") == "system":
+        return None
+    for item in registry.get_all():
+        if item.id == entry.id and item.type == entry.type and str(getattr(item, "owner_id", "system") or "system") == "system":
+            if _read_entry_publish_status(item) == "published":
+                return item
+    return None
+
+
+def _bump_semver(version: str, bump_type: str = "patch") -> str:
+    """Bump a semantic version using patch/minor/major semantics."""
+
+    parts = [int(part) if part.isdigit() else 0 for part in str(version or "1.0.0").split(".")[:3]]
+    while len(parts) < 3:
+        parts.append(0)
+    major, minor, patch = parts
+    if bump_type == "major":
+        return f"{major + 1}.0.0"
+    if bump_type == "minor":
+        return f"{major}.{minor + 1}.0"
+    return f"{major}.{minor}.{patch + 1}"
+
+
+def _version_bump_options(version: str) -> list[dict[str, str]]:
+    """Return version iteration options for submit/review UI."""
+
+    return [
+        {"type": "patch", "label": f"补丁版本：{version} → {_bump_semver(version, 'patch')}", "value": _bump_semver(version, "patch")},
+        {"type": "minor", "label": f"次版本：{version} → {_bump_semver(version, 'minor')}", "value": _bump_semver(version, "minor")},
+        {"type": "major", "label": f"主版本：{version} → {_bump_semver(version, 'major')}", "value": _bump_semver(version, "major")},
+    ]
+
+
 def _serialize_result(result: Any) -> Any:
     try:
         json.dumps(result, ensure_ascii=False)
@@ -654,9 +826,62 @@ def _apply_review_draft(entry: AlgorithmEntry, registry: AlgorithmRegistry) -> A
         raise HTTPException(status_code=500, detail=f"更新包清单失败：{exc}") from exc
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"应用审核草稿失败：{exc}") from exc
-    refreshed = registry.get_by_id(entry.id) or registry.get_by_id(f"{entry.namespace}.{entry.func_name}") or entry
+    refreshed = _entry_by_owner(registry, entry.id, getattr(entry, "owner_id", "system")) or registry.get_by_id(entry.id) or registry.get_by_id(f"{entry.namespace}.{entry.func_name}") or entry
     _delete_review_draft(refreshed)
     return refreshed
+
+
+def _apply_review_files_to_entry(
+    target_entry: AlgorithmEntry,
+    files: list[Any],
+    metadata: dict[str, Any],
+    registry: AlgorithmRegistry,
+) -> AlgorithmEntry:
+    """Apply reviewed file snapshots to another entry while preserving ownership."""
+
+    if not files:
+        return target_entry
+    target_root = Path(target_entry.package_root or Path(target_entry.source_file).parent).resolve()
+    source_filename = Path(target_entry.source_file).name
+    written_names: list[str] = []
+    try:
+        for index, item in enumerate(files):
+            if not isinstance(item, dict):
+                continue
+            filename = str(item.get("filename") or item.get("relative_path") or "").strip().replace("\\", "/")
+            content = str(item.get("content") or "")
+            if not filename.endswith(".py") or filename == "__init__.py" or ".." in Path(filename).parts:
+                raise HTTPException(status_code=400, detail=f"无效的审核文件名：{filename}")
+            ast.parse(content)
+            if filename == source_filename or index == 0:
+                content = _upsert_algo_meta(
+                    content,
+                    target_entry.func_name,
+                    {
+                        "zh_name": str(metadata.get("zh_name") or target_entry.zh_name),
+                        "zh_description": str(metadata.get("zh_description") or target_entry.zh_description),
+                        "zh_tags": metadata.get("zh_tags") if isinstance(metadata.get("zh_tags"), list) else target_entry.zh_tags,
+                        "version": str(metadata.get("version") or target_entry.version),
+                        "input_example": str(metadata.get("input_example") or target_entry.input_example),
+                    },
+                )
+            target = (target_root / filename).resolve()
+            if not target.is_relative_to(target_root):
+                raise HTTPException(status_code=400, detail=f"审核文件路径越界：{filename}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+            written_names.append(filename)
+        if not target_entry.package_root:
+            extras = [name for name in written_names if name != source_filename]
+            _save_entry_extra_files(target_entry, extras)
+            registry.scan_directory(str(target_root))
+        else:
+            registry.scan_directory(str(target_root.parent))
+    except SyntaxError as exc:
+        raise HTTPException(status_code=400, detail=f"审核代码存在 Python 语法错误：{exc}") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"应用版本迭代代码失败：{exc}") from exc
+    return _entry_by_owner(registry, target_entry.id, getattr(target_entry, "owner_id", "system")) or registry.get_by_id(target_entry.id) or target_entry
 
 
 def _clear_cached_modules(module_key: str) -> None:
@@ -759,6 +984,27 @@ from ..sdk.auth_utils import get_current_user
 _ALGORITHMS_ROOT = Path(__file__).resolve().parents[2] / "algorithms_root"
 
 
+def _visible_entries_for_request(entries: list[AlgorithmEntry], request: Request | None) -> list[AlgorithmEntry]:
+    """Filter algorithms to public entries plus the current user's private entries."""
+
+    auth = request.headers.get("Authorization", "") if request else ""
+    if not auth.startswith("Bearer "):
+        return [entry for entry in entries if getattr(entry, "owner_id", "system") == "system"]
+    try:
+        current_user = get_current_user(request)
+    except HTTPException:
+        return [entry for entry in entries if getattr(entry, "owner_id", "system") == "system"]
+    user_id = str(current_user.get("id", ""))
+    if current_user.get("role") == "admin":
+        return entries
+    return [
+        entry
+        for entry in entries
+        if getattr(entry, "owner_id", "system") == "system"
+        or getattr(entry, "owner_id", "system") == user_id
+    ]
+
+
 @router.get("/algorithms")
 async def list_algorithms(
     module_kind: str | None = Query(None, description="Filter by component/template/snippet"),
@@ -768,6 +1014,7 @@ async def list_algorithms(
     entries = registry.get_all()
     if module_kind:
         entries = [entry for entry in entries if entry.type == module_kind]
+    entries = _visible_entries_for_request(entries, request)
     # Owner-based visibility: draft/rejected items are private to their owner
     auth = (request.headers.get("Authorization", "") if request else "")
     if auth.startswith("Bearer "):
@@ -1067,6 +1314,7 @@ async def search_algorithms(
     type: str | None = Query(None, description="类型过滤 component/snippet"),
     module_kind: str | None = Query(None, description="Filter by component/template/snippet"),
     registry: AlgorithmRegistry = Depends(get_registry),
+    request: Request = None,
 ) -> dict[str, Any]:
     if prefix:
         entries = registry.search_by_prefix(prefix)
@@ -1081,6 +1329,7 @@ async def search_algorithms(
         entries = [entry for entry in entries if entry.type == type]
     if module_kind:
         entries = [entry for entry in entries if entry.type == module_kind]
+    entries = _visible_entries_for_request(entries, request)
 
     return {"success": True, "count": len(entries), "algorithms": [_entry_dict(entry) for entry in entries]}
 
@@ -1298,14 +1547,37 @@ async def create_algorithm(
         # Allow upsert if the current user already owns this algorithm
         owner_cfg = target_folder / "folder_config.json"
         existing_owner_id: str | None = None
+        existing_publish_status: str = "draft"
         try:
             existing_cfg = json.loads(owner_cfg.read_text(encoding="utf-8"))
             existing_owner_id = existing_cfg.get("owner_id")
+            existing_publish_status = existing_cfg.get("publish_status", "draft")
         except Exception:
             pass
-        if not (current_user_id and existing_owner_id == current_user_id):
+        if current_user_id and existing_owner_id == current_user_id:
+            # User owns this private algorithm → allow overwrite (upsert)
+            pass
+        elif not existing_owner_id or existing_owner_id == "system":
+            # The file belongs to a public (system-owned) algorithm at the user's path.
+            # This happens when the user originally created this algorithm and it was published
+            # (owner_id was removed during publish but the folder was not moved to global location).
+            # We need a separate private folder for the new draft.
+            draft_folder = target_folder.parent / f"_draft_{func_name}"
+            target_folder = draft_folder
+            target_file = draft_folder / f"{func_name}.py"
+            # If draft folder also already exists and is owned by this user, allow overwrite
+            if target_file.exists():
+                draft_cfg_path = draft_folder / "folder_config.json"
+                draft_owner: str | None = None
+                try:
+                    draft_cfg = json.loads(draft_cfg_path.read_text(encoding="utf-8"))
+                    draft_owner = draft_cfg.get("owner_id")
+                except Exception:
+                    pass
+                if not (current_user_id and draft_owner == current_user_id):
+                    raise HTTPException(status_code=409, detail=f"算法文件已存在：{func_name}，请换一个函数名")
+        else:
             raise HTTPException(status_code=409, detail=f"算法文件已存在：{target_file.name}，请换一个函数名")
-        # If user owns it, proceed to overwrite (upsert)
 
     try:
         function_names = _public_function_names(payload.code)
@@ -1344,7 +1616,7 @@ async def create_algorithm(
     except (OSError, SyntaxError) as exc:
         raise HTTPException(status_code=500, detail=f"创建算法失败：{exc}") from exc
 
-    entry = registry.get_by_id(f"{namespace}.{func_name}")
+    entry = _entry_by_owner(registry, f"{namespace}.{func_name}", current_user_id or "system") or registry.get_by_id(f"{namespace}.{func_name}")
     if entry is None:
         raise HTTPException(status_code=500, detail="算法文件已创建但无法注册，请刷新页面重试")
     # Write per-algorithm status file immediately so this entry's status is
@@ -1625,7 +1897,31 @@ async def snapshot_algorithm_version(
 
 
 @router.get("/algorithms/{algorithm_id:path}")
-async def get_algorithm(algorithm_id: str, registry: AlgorithmRegistry = Depends(get_registry)) -> dict[str, Any]:
+async def get_algorithm(
+    algorithm_id: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    if algorithm_id.endswith("/submit-check"):
+        base_id = algorithm_id[: -len("/submit-check")]
+        current_user = get_current_user(request)
+        entry_for_check = _entry_from_client_id(registry, base_id)
+        if entry_for_check is None:
+            raise HTTPException(status_code=404, detail=f"算法不存在：{base_id}")
+        if current_user.get("role") != "admin" and getattr(entry_for_check, "owner_id", "system") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="无权提交他人的算法审核")
+        public_entry = _public_conflict_for_entry(registry, entry_for_check)
+        if public_entry is None:
+            return {"success": True, "hasConflict": False, "isVersionIteration": False}
+        return {
+            "success": True,
+            "hasConflict": True,
+            "isVersionIteration": True,
+            "publicAlgorithm": _entry_dict(public_entry),
+            "baseVersion": public_entry.version,
+            "versionOptions": _version_bump_options(public_entry.version),
+            "message": "该命名空间已被公有算法占用，可作为现有公有算法的版本迭代提交审核；如果不是版本迭代，请先修改命名空间。",
+        }
     if algorithm_id.endswith("/review-draft"):
         base_id = algorithm_id[: -len("/review-draft")]
         entry_for_draft = registry.get_by_id(_normalize_call_namespace(base_id)) or registry.get_by_id(base_id)
@@ -1694,9 +1990,25 @@ async def update_algorithm_metadata(
             raise HTTPException(status_code=400, detail="分类命名空间由算法所在目录决定，请直接移动目录")
         target_func_name = _validate_identifier(parts[-1], "function name")
 
-    root = Path(registry._find_watch_root(str(source_path)) or _default_algorithm_root(registry)).resolve()  # noqa: SLF001
-    target_folder = root.joinpath(*target_namespace.split("."))
-    target_file = target_folder / f"{target_func_name}.py"
+    # Determine target file location.
+    # When the function name is not changing (most metadata updates), we always
+    # update the file in-place.  Recomputing the target path from _find_watch_root
+    # would return the GLOBAL algorithms_root for private algos (because it is
+    # registered first), causing the code to incorrectly target the public algo's
+    # path and raise a 409 conflict.
+    is_rename = target_func_name != entry.func_name
+    if not is_rename:
+        target_folder = source_path.parent
+        target_file = source_path
+    else:
+        is_folder_based = source_path.parent.name == entry.func_name
+        if is_folder_based:
+            # Folder-based algo: rename means a new sibling subfolder
+            target_folder = source_path.parent.parent / target_func_name
+        else:
+            root = Path(registry._find_watch_root(str(source_path)) or _default_algorithm_root(registry)).resolve()  # noqa: SLF001
+            target_folder = root.joinpath(*target_namespace.split("."))
+        target_file = target_folder / f"{target_func_name}.py"
 
     try:
         source = source_path.read_text(encoding="utf-8")
@@ -1716,7 +2028,12 @@ async def update_algorithm_metadata(
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"更新元数据失败：{exc}") from exc
 
-    updated = registry.get_by_id(f"{target_namespace}.{target_func_name}")
+    owner_id = str(getattr(entry, "owner_id", "system") or "system").strip()
+    base_new_id = f"{target_namespace}.{target_func_name}"
+    if owner_id and owner_id != "system":
+        updated = registry.get_by_id(f"{base_new_id}@@{owner_id}") or registry.get_by_id(base_new_id)
+    else:
+        updated = registry.get_by_id(base_new_id)
     if updated is None:
         raise HTTPException(status_code=500, detail="元数据已更新但无法重新加载算法，请刷新页面")
     _append_entry_version(updated, "metadata.updated", note="Metadata updated")
@@ -1801,9 +2118,11 @@ async def get_algorithm_source(
     if review_draft and review_draft.get("files"):
         draft_files = review_draft["files"]
         if not entry.package_id:
-            # Single-file: return draft content as the editable source
-            draft_source = str(draft_files[0].get("content", "")) if draft_files else source_path.read_text(encoding="utf-8")
-            draft_folder_files = [{"filename": f.get("filename", ""), "relative_path": f.get("relative_path", ""), "content": f.get("content", "")} for f in draft_files]
+            # Treat every algorithm as an editable folder. Draft files override
+            # physical files, but helper files created after the draft remain visible.
+            draft_folder_files = _merge_review_draft_files(entry, draft_files)
+            entry_file = next((item for item in draft_folder_files if item.get("is_entry")), None) or (draft_folder_files[0] if draft_folder_files else None)
+            draft_source = str((entry_file or {}).get("content") or source_path.read_text(encoding="utf-8"))
             return {
                 "success": True,
                 "algorithm": _entry_dict(entry),
@@ -1936,7 +2255,7 @@ def _update_publish_status(entry: AlgorithmEntry, status: str, registry: Algorit
         config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
         scan_root = str(Path(entry.package_root).parent)
     registry.scan_directory(scan_root)
-    refreshed = registry.get_by_id(entry.id) or entry
+    refreshed = _entry_by_owner(registry, entry.id, getattr(entry, "owner_id", "system")) or registry.get_by_id(entry.id) or entry
     sse_manager.broadcast({"event": "updated", "file": str(config_path), "algorithms": registry.to_completion_json()})
     return refreshed
 
@@ -1950,7 +2269,7 @@ async def submit_algorithm_review(
     """Submit an algorithm for review (draft → reviewing). Snapshots current code."""
 
     current_user = get_current_user(request)
-    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    entry = _entry_from_client_id(registry, algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
@@ -1967,12 +2286,34 @@ async def submit_algorithm_review(
     if not existing.get("files"):
         snap_files = _folder_files_for_entry(entry)
         existing["files"] = [{"filename": f["filename"], "relative_path": f["relative_path"], "content": f["content"]} for f in snap_files]
+    public_entry = _public_conflict_for_entry(registry, entry)
+    is_version_iteration = bool(body.get("is_version_iteration"))
+    if public_entry is not None and not is_version_iteration:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "namespace_conflict",
+                "message": "该命名空间已被公有算法占用；如果不是版本迭代，请先修改命名空间。",
+                "public_algorithm": _entry_dict(public_entry),
+                "version_options": _version_bump_options(public_entry.version),
+            },
+        )
+    bump_type = str(body.get("version_bump_type") or "patch")
+    version_bump = str(body.get("version_bump") or "")
+    if public_entry is not None and not version_bump:
+        version_bump = _bump_semver(public_entry.version, bump_type)
+
     draft: dict[str, Any] = {
         "algorithm_id": entry.id,
         "call_prefix": entry.call_prefix,
         "base_status": existing.get("base_status") or current,
         "status": "reviewing",
-        "version_bump": str(body.get("version_bump") or ""),
+        "review_kind": "version_iteration" if public_entry is not None else "new_publish",
+        "target_public_id": public_entry.id if public_entry is not None else "",
+        "target_public_call_prefix": public_entry.call_prefix if public_entry is not None else "",
+        "base_public_version": public_entry.version if public_entry is not None else "",
+        "version_bump_type": bump_type,
+        "version_bump": version_bump,
         "metadata": body.get("metadata") if isinstance(body.get("metadata"), dict) else {},
         "files": existing["files"],
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -2023,6 +2364,22 @@ async def approve_algorithm_review(
     current = _read_entry_publish_status(entry)
     if current not in ("reviewing", "draft"):
         raise HTTPException(status_code=400, detail=f"当前状态为 {current}，不允许审批")
+    draft = _load_review_draft(entry)
+    if draft and draft.get("review_kind") == "version_iteration":
+        try:
+            body: dict[str, Any] = await request.json()
+        except Exception:
+            body = {}
+        bump_type = str(body.get("version_bump_type") or draft.get("version_bump_type") or "patch")
+        base_version = str(draft.get("base_public_version") or entry.version or "1.0.0")
+        version_bump = str(body.get("version_bump") or draft.get("version_bump") or _bump_semver(base_version, bump_type))
+        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        metadata["version"] = version_bump
+        draft["metadata"] = metadata
+        draft["version_bump_type"] = bump_type
+        draft["version_bump"] = version_bump
+        draft["approved_at"] = datetime.now(timezone.utc).isoformat()
+        _save_review_draft(entry, draft)
     refreshed = _update_publish_status(entry, "approved", registry)
     return {"success": True, "algorithm": _entry_dict(refreshed)}
 
@@ -2099,21 +2456,62 @@ async def publish_algorithm(
         raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     # Apply review draft so code changes actually take effect (e.g. published → revised → approved → published)
     draft = _load_review_draft(entry)
+    if draft and draft.get("review_kind") == "version_iteration":
+        target_public_id = str(draft.get("target_public_id") or entry.id)
+        public_entry = _entry_by_owner(registry, target_public_id, "system") or registry.get_by_id(target_public_id)
+        if public_entry is None:
+            raise HTTPException(status_code=404, detail="没有找到要迭代的公有算法")
+        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        if draft.get("version_bump"):
+            metadata["version"] = str(draft.get("version_bump"))
+        public_entry = _apply_review_files_to_entry(public_entry, draft.get("files", []), metadata, registry)
+        public_entry = _update_publish_status(public_entry, "published", registry)
+        _delete_review_draft(entry)
+        _update_publish_status(entry, "draft", registry)
+        _append_entry_version(public_entry, "version.iterated", note=f"Version iteration from {entry.call_prefix}")
+        return {"success": True, "algorithm": _entry_dict(public_entry), "versionIteration": True}
     if draft and draft.get("files"):
         entry = _apply_review_draft(entry, registry)
-    # If private algorithm (has owner_id), promote to public by removing owner_id from config
+    # If private algorithm (has owner_id), promote to public.
+    # Attempt to MOVE the folder to the global algorithms_root so that the user's private
+    # directory is freed up and they can later create a same-named private draft without conflict.
     owner_id = getattr(entry, "owner_id", None) or "system"
     if owner_id != "system":
         config_path = _entry_config_path(entry)
         if config_path.exists():
             try:
-                config = json.loads(config_path.read_text(encoding="utf-8"))
-                config.pop("owner_id", None)
-                config_path.write_text(
-                    json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"
-                )
-                registry.scan_directory(str(config_path.parent.parent))
-                entry = registry.get_by_id(entry.id) or entry
+                current_folder = config_path.parent
+                namespace_parts = entry.namespace.split(".")
+                global_folder = _ALGORITHMS_ROOT.joinpath(*namespace_parts, entry.func_name)
+                moved = False
+                if not global_folder.exists() and current_folder != global_folder:
+                    # Move folder to global public location so user dir is freed
+                    try:
+                        global_folder.parent.mkdir(parents=True, exist_ok=True)
+                        # Unregister old file paths before moving
+                        for old_file in current_folder.glob("*.py"):
+                            registry.unregister_by_file(str(old_file))
+                        shutil.move(str(current_folder), str(global_folder))
+                        # Update config in new location: remove owner_id
+                        new_config_path = global_folder / "folder_config.json"
+                        cfg = json.loads(new_config_path.read_text(encoding="utf-8"))
+                        cfg.pop("owner_id", None)
+                        new_config_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+                        # Rescan global parent so new entry is picked up
+                        registry.scan_directory(str(global_folder.parent))
+                        entry = registry.get_by_id(entry.id) or entry
+                        moved = True
+                    except OSError:
+                        moved = False
+                if not moved:
+                    # Fall back: keep file in user dir, just remove owner_id from config
+                    config = json.loads(config_path.read_text(encoding="utf-8"))
+                    config.pop("owner_id", None)
+                    config_path.write_text(
+                        json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+                    registry.scan_directory(str(config_path.parent.parent))
+                    entry = registry.get_by_id(entry.id) or entry
             except (OSError, json.JSONDecodeError) as exc:
                 raise HTTPException(
                     status_code=500, detail=f"发布算法失败（无法移除私有标记）: {exc}"
@@ -2148,8 +2546,27 @@ async def add_algorithm_source_file(
         new_file.write_text(content, encoding="utf-8")
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"创建文件失败：{exc}") from exc
-    registry.rescan_file(str(new_file))
-    return {"success": True, "folder_files": _folder_files_for_entry(entry)}
+    if not entry.package_root:
+        extras = _load_entry_extra_files(entry)
+        if filename not in extras and Path(entry.source_file).name != filename:
+            extras.append(filename)
+            try:
+                _save_entry_extra_files(entry, extras)
+            except OSError as exc:
+                raise HTTPException(status_code=500, detail=f"保存文件关联失败：{exc}") from exc
+        draft = _load_review_draft(entry)
+        if draft and isinstance(draft.get("files"), list):
+            draft_files = [
+                item for item in draft["files"]
+                if isinstance(item, dict) and str(item.get("filename") or item.get("relative_path") or "") != filename
+            ]
+            draft_files.append({"filename": filename, "relative_path": filename, "content": content})
+            draft["files"] = draft_files
+            draft["updated_at"] = datetime.now(timezone.utc).isoformat()
+            _save_review_draft(entry, draft)
+    registry.scan_directory(str(folder))
+    refreshed = registry.get_by_id(_entry_client_id(entry)) or registry.get_by_id(entry.id) or entry
+    return {"success": True, "algorithm": _entry_dict(refreshed), "folder_files": _folder_files_for_entry(refreshed)}
 
 
 @router.patch("/algorithm-source/{algorithm_id:path}/rename-file")
@@ -2182,9 +2599,27 @@ async def rename_algorithm_source_file(
         old_path.rename(new_path)
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"重命名失败：{exc}") from exc
+    if not entry.package_root:
+        extras = [new_name if item == old_name else item for item in _load_entry_extra_files(entry)]
+        if Path(entry.source_file).name != new_name and new_name not in extras:
+            extras.append(new_name)
+        try:
+            _save_entry_extra_files(entry, extras)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"保存文件关联失败：{exc}") from exc
+        draft = _load_review_draft(entry)
+        if draft and isinstance(draft.get("files"), list):
+            for item in draft["files"]:
+                if not isinstance(item, dict):
+                    continue
+                if str(item.get("filename") or item.get("relative_path") or "") == old_name:
+                    item["filename"] = new_name
+                    item["relative_path"] = new_name
+            draft["updated_at"] = datetime.now(timezone.utc).isoformat()
+            _save_review_draft(entry, draft)
     registry.unregister_by_file(str(old_path))
-    registry.rescan_file(str(new_path))
-    refreshed = registry.get_by_id(entry.id) or entry
+    registry.scan_directory(str(folder))
+    refreshed = registry.get_by_id(_entry_client_id(entry)) or registry.get_by_id(entry.id) or entry
     return {
         "success": True,
         "old_name": old_name,
@@ -2240,12 +2675,84 @@ async def save_algorithm_folder_file(
         raise HTTPException(status_code=400, detail="文件路径不合法")
     if not target.exists():
         raise HTTPException(status_code=404, detail=f"文件不存在：{clean}")
+    current_status = _read_entry_publish_status(entry)
+    draft = _load_review_draft(entry)
+    if (draft and isinstance(draft.get("files"), list)) or current_status in {"published", "reviewing", "approved", "rejected"}:
+        draft = draft or {
+            "algorithm_id": entry.id,
+            "call_prefix": entry.call_prefix,
+            "base_status": current_status,
+            "status": "pending",
+            "metadata": {},
+            "files": [],
+        }
+        files = [
+            item for item in draft.get("files", [])
+            if isinstance(item, dict) and str(item.get("filename") or item.get("relative_path") or "") != clean
+        ]
+        files.append({"filename": clean, "relative_path": clean, "content": payload.content})
+        draft["files"] = files
+        draft["updated_at"] = datetime.now(timezone.utc).isoformat()
+        _save_review_draft(entry, draft)
+        merged_files = _merge_review_draft_files(entry, files)
+        return {"success": True, "algorithm": _entry_dict(entry), "folder_files": merged_files, "is_draft_mode": True}
     try:
         target.write_text(payload.content, encoding="utf-8")
         registry.rescan_file(str(target))
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"保存文件失败：{exc}") from exc
-    refreshed = registry.get_by_id(entry.id) or entry
+    refreshed = registry.get_by_id(_entry_client_id(entry)) or registry.get_by_id(entry.id) or entry
+    sse_manager.broadcast({"event": "updated", "file": str(target), "algorithms": registry.to_completion_json()})
+    return {"success": True, "algorithm": _entry_dict(refreshed), "folder_files": _folder_files_for_entry(refreshed)}
+
+
+@router.delete("/algorithm-source/{algorithm_id:path}/files/{filename:path}")
+async def delete_algorithm_folder_file(
+    algorithm_id: str,
+    filename: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Delete one non-entry Python file from an algorithm folder."""
+
+    current_user = get_current_user(request)
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
+    if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="无权修改他人的算法")
+    clean = filename.strip().replace("\\", "/")
+    if not clean.endswith(".py") or clean == "__init__.py" or ".." in Path(clean).parts:
+        raise HTTPException(status_code=400, detail="文件名必须是合法的 .py 文件")
+    folder = Path(entry.source_file).parent.resolve()
+    target = (folder / clean).resolve()
+    if not target.is_relative_to(folder):
+        raise HTTPException(status_code=400, detail="文件路径不合法")
+    if target == Path(entry.source_file).resolve():
+        raise HTTPException(status_code=400, detail="入口文件不能删除")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail=f"文件不存在：{clean}")
+    try:
+        target.unlink()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"删除文件失败：{exc}") from exc
+    if not entry.package_root:
+        extras = [item for item in _load_entry_extra_files(entry) if item != clean]
+        try:
+            _save_entry_extra_files(entry, extras)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"保存文件关联失败：{exc}") from exc
+        draft = _load_review_draft(entry)
+        if draft and isinstance(draft.get("files"), list):
+            draft["files"] = [
+                item for item in draft["files"]
+                if isinstance(item, dict) and str(item.get("filename") or item.get("relative_path") or "") != clean
+            ]
+            draft["updated_at"] = datetime.now(timezone.utc).isoformat()
+            _save_review_draft(entry, draft)
+    registry.unregister_by_file(str(target))
+    registry.scan_directory(str(folder))
+    refreshed = registry.get_by_id(_entry_client_id(entry)) or registry.get_by_id(entry.id) or entry
     sse_manager.broadcast({"event": "updated", "file": str(target), "algorithms": registry.to_completion_json()})
     return {"success": True, "algorithm": _entry_dict(refreshed), "folder_files": _folder_files_for_entry(refreshed)}
 
@@ -2507,7 +3014,7 @@ async def run_registered_algorithm(request: Request, registry: AlgorithmRegistry
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{namespace}.{func_name}")
     if not bool(payload.get("allow_unpublished", False)):
-        _ensure_callable_status(entry)
+        _ensure_user_callable_status(entry, request)
     return _execute_entry(entry, args if isinstance(args, list) else [], kwargs if isinstance(kwargs, dict) else {})
 
 
@@ -2516,12 +3023,13 @@ async def execute_algorithm(
     namespace: str,
     func_name: str,
     request: ExecuteRequest,
+    http_request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     entry = registry.get_by_id(f"{namespace}.{func_name}")
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{namespace}.{func_name}")
-    _ensure_callable_status(entry)
+    _ensure_user_callable_status(entry, http_request)
     return _execute_entry(entry, request.args, request.kwargs)
 
 
@@ -2529,13 +3037,14 @@ async def execute_algorithm(
 async def invoke_algorithm_by_namespace(
     call_namespace: str,
     request: ExecuteRequest,
+    http_request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
     normalized = _normalize_call_namespace(call_namespace)
     entry = registry.get_by_id(normalized)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{call_namespace}")
-    _ensure_callable_status(entry)
+    _ensure_user_callable_status(entry, http_request)
     return _execute_entry(entry, request.args, request.kwargs)
 
 

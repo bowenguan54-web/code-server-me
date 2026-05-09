@@ -46,6 +46,9 @@ const renderPage = async (req: Parameters<typeof replaceTemplates>[0]): Promise<
 export const router = Router()
 
 router.get(pageRoutes, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+  res.setHeader("Pragma", "no-cache")
+  res.setHeader("Expires", "0")
   res.send(await renderPage(req))
 })
 

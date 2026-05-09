@@ -512,9 +512,28 @@ class AlgorithmRegistry:
     # Mutation
     # ------------------------------------------------------------------
 
+    def _entry_store_key(self, entry: AlgorithmEntry) -> str:
+        """Return the internal key used to keep public and private entries apart."""
+
+        owner_id = (getattr(entry, "owner_id", "system") or "system").strip()
+        if owner_id and owner_id != "system":
+            return f"{entry.id}@@{owner_id}"
+        return entry.id
+
+    @staticmethod
+    def _split_store_key(algorithm_id: str) -> tuple[str, str | None]:
+        """Split an id that may include a private owner suffix."""
+
+        value = algorithm_id.strip()
+        if "@@" not in value:
+            return value, None
+        base, owner_id = value.split("@@", 1)
+        return base, owner_id or None
+
     def register(self, entry: AlgorithmEntry) -> None:
-        self._store[entry.id] = entry
-        logger.debug("Registered: %s", entry.id)
+        key = self._entry_store_key(entry)
+        self._store[key] = entry
+        logger.debug("Registered: %s", key)
 
     def unregister_by_file(self, file_path: str) -> None:
         abs_path = os.path.abspath(file_path)
@@ -555,7 +574,18 @@ class AlgorithmRegistry:
         return sorted(self._store.values(), key=lambda entry: entry.call_prefix)
 
     def get_by_id(self, algorithm_id: str) -> AlgorithmEntry | None:
-        return self._store.get(algorithm_id)
+        key = algorithm_id.strip()
+        exact = self._store.get(key)
+        if exact is not None:
+            return exact
+        base_id, owner_hint = self._split_store_key(key)
+        if owner_hint:
+            return next((entry for entry in self._store.values() if entry.id == base_id and getattr(entry, "owner_id", "system") == owner_hint), None)
+        public = self._store.get(base_id)
+        if public is not None:
+            return public
+        candidates = [entry for entry in self._store.values() if entry.id == base_id]
+        return next((entry for entry in candidates if getattr(entry, "owner_id", "system") == "system"), None) or (candidates[0] if candidates else None)
 
     def get_by_namespace(self, namespace: str) -> list[AlgorithmEntry]:
         return [entry for entry in self._store.values() if entry.namespace == namespace]
@@ -566,7 +596,8 @@ class AlgorithmRegistry:
     def to_completion_json(self) -> list[dict[str, Any]]:
         return [
             {
-                "id": entry.id,
+                "id": entry.id if entry.owner_id == "system" else f"{entry.id}@@{entry.owner_id}",
+                "registryId": entry.id,
                 "callPrefix": entry.call_prefix,
                 "callSnippet": entry.call_snippet,
                 "snippetBody": entry.snippet_body,
@@ -579,6 +610,10 @@ class AlgorithmRegistry:
                 "params": entry.params,
                 "namespace": entry.namespace,
                 "version": entry.version,
+                "ownerId": entry.owner_id,
+                "owner_id": entry.owner_id,
+                "visibility": "public" if entry.owner_id == "system" else "private",
+                "privacyLabel": "公有" if entry.owner_id == "system" else "私有",
             }
             for entry in self.get_all()
         ]

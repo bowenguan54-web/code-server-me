@@ -1544,6 +1544,7 @@
               <div class="file-name" style="display:flex;align-items:center;gap:4px">
                 <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(file.filename)}${file.isEntry ? " · entry" : ""}</span>
                 <button class="ghost" type="button" style="font-size:11px;padding:1px 5px;flex-shrink:0" data-rename-file="${esc(file.filename)}" onclick="event.stopPropagation();window.renameSourceFile(this.dataset.renameFile)" title="重命名">改名</button>
+                <button class="ghost danger" type="button" style="font-size:14px;line-height:1;padding:1px 6px;flex-shrink:0;color:${file.isEntry ? "var(--text-dim)" : "var(--danger)"};opacity:${file.isEntry ? ".55" : "1"}" data-delete-file="${esc(file.filename)}" ${file.isEntry ? 'data-entry-file="1" title="入口文件不能删除"' : 'title="删除文件"'}>×</button>
               </div>
               <div class="file-functions">${names.length ? `def ${esc(names.join(", "))}` : "无函数"}</div>
             </div>
@@ -1552,6 +1553,13 @@
       `;
       qsa("[data-file-name]", qs("#fileTree")).forEach(item => {
         item.addEventListener("click", () => switchFile(item.dataset.fileName || ""));
+      });
+      qsa("[data-delete-file]", qs("#fileTree")).forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          deleteSourceFile(button.dataset.deleteFile || "", button.dataset.entryFile === "1");
+        });
       });
     }
 
@@ -1596,6 +1604,30 @@
     function renameSourceFile(oldName) {
       if (!oldName) return;
       openSourceFileModal("rename", oldName);
+    }
+
+    async function deleteSourceFile(filename, isEntry = false) {
+      if (!filename) return;
+      if (isEntry) {
+        showToast("入口文件不能删除");
+        return;
+      }
+      showToast(`正在删除：${filename}`);
+      try {
+        const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/files/${encodeURIComponent(filename)}`, {
+          method: "DELETE"
+        });
+        if (result.algorithm) {
+          state.editing.algo = result.algorithm;
+          state.editing.id = result.algorithm.id || state.editing.id;
+        }
+        const files = result.folder_files || [];
+        const next = files.find(file => file.is_entry) || files[0];
+        await refreshEditorFolderFiles(files, next ? (next.relative_path || next.filename) : "");
+        showToast(`文件已删除：${filename}`);
+      } catch (error) {
+        showToast(error.message || `删除失败：${filename}`);
+      }
     }
 
     async function confirmSourceFileModal(mode, oldName = "") {
@@ -4289,6 +4321,7 @@
     window.addSourceFile = addSourceFile;
     window.openSourceFileModal = openSourceFileModal;
     window.confirmSourceFileModal = confirmSourceFileModal;
+    window.deleteSourceFile = deleteSourceFile;
     window.saveCurrentFile = saveCurrentFile;
     window.validateNamespace = validateNamespace;
     window.saveNamespace = saveNamespace;

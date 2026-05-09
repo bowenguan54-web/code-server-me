@@ -1771,16 +1771,49 @@
       const key = getGalleryFileKey(file)
       const active = key === state.currentGalleryFile ? " active" : ""
       const funcs = (file.functions || []).map((fn) => fn.func_name || fn.name).filter(Boolean)
+      const entry = file.is_entry ? " entry-file" : ""
       return `
-        <button class="pft-file${active}" data-gallery-file="${escapeHtml(key)}" type="button">
-          <span>${escapeHtml(file.filename || key)}</span>
+        <button class="pft-file${active}${entry}" data-gallery-file="${escapeHtml(key)}" type="button">
+          <span class="pft-ico">${file.is_entry ? "◇" : "PY"}</span>
+          <span class="pft-fname">${escapeHtml(file.filename || key)}</span>
           <small>${funcs.length ? `def ${escapeHtml(funcs.join(", "))}` : "无函数"}</small>
+          ${file.is_entry ? "" : `<span class="pft-del-btn" data-gallery-delete="${escapeHtml(key)}" title="删除文件">×</span>`}
         </button>
       `
     }).join("")
     body.querySelectorAll("[data-gallery-file]").forEach((button) => {
-      button.addEventListener("click", () => switchGallerySourceFile(button.getAttribute("data-gallery-file") || ""))
+      button.addEventListener("click", (event) => {
+        if (event.target.closest("[data-gallery-delete]")) return
+        switchGallerySourceFile(button.getAttribute("data-gallery-file") || "")
+      })
     })
+    body.querySelectorAll("[data-gallery-delete]").forEach((button) => {
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation()
+        await deleteGallerySourceFile(button.getAttribute("data-gallery-delete") || "")
+      })
+    })
+  }
+
+  function upsertGalleryFolderFiles(files, preferredFile = "") {
+    const current = (state.galleryFolderFiles || []).find((item) => getGalleryFileKey(item) === state.currentGalleryFile)
+    if (current) current.content = galleryEditorContent()
+    const normalized = (files || []).map((file) => ({
+      ...file,
+      filename: file.filename || file.relative_path || "",
+      relative_path: file.relative_path || file.filename || "",
+      content: file.content || "",
+      functions: Array.isArray(file.functions) ? file.functions : [],
+    })).filter((file) => getGalleryFileKey(file))
+    if (!normalized.length) return
+    state.galleryFolderFiles = normalized
+    renderGalleryFileTree()
+    const target = normalized.find((file) => getGalleryFileKey(file) === preferredFile || file.filename === preferredFile)
+      || normalized.find((file) => file.is_entry)
+      || normalized[0]
+    if (target) {
+      openGallerySourceFile(getGalleryFileKey(target))
+    }
   }
 
   const renderGalleryEditorShell = (item, content) => {
@@ -1942,10 +1975,52 @@
       if (!response.ok) {
         throw new Error(payload.detail || payload.message || `HTTP ${response.status}`)
       }
-      state.galleryFolderFiles = payload.folder_files || state.galleryFolderFiles
-      renderGalleryFileTree()
-      await openGallerySourceFile(normalized)
+      const nextFiles = Array.isArray(payload.folder_files) && payload.folder_files.length
+        ? payload.folder_files
+        : [
+            ...(state.galleryFolderFiles || []),
+            {
+              filename: normalized,
+              relative_path: normalized,
+              content: "# 新文件\n",
+              is_entry: false,
+              functions: [],
+            },
+          ]
+      upsertGalleryFolderFiles(nextFiles, normalized)
       showToast("文件已新增")
+    } catch (error) {
+      showToast(error.message || String(error), "error")
+    }
+  }
+
+  async function deleteGallerySourceFile(filename) {
+    const item = state.currentGalleryAlgorithm
+    if (!item || !filename) return
+    const file = (state.galleryFolderFiles || []).find((entry) => getGalleryFileKey(entry) === filename || entry.filename === filename)
+    if (file?.is_entry) {
+      showToast("入口文件不能删除", "error")
+      return
+    }
+    if (!window.confirm(`确认删除文件「${filename}」吗？`)) return
+    try {
+      const response = await fetch(`${packageServiceBase}/algorithm-source/${encodeURIComponent(item.id)}/files/${encodeURIComponent(filename)}`, {
+        method: "DELETE",
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload.detail || payload.message || `HTTP ${response.status}`)
+      }
+      const nextFiles = Array.isArray(payload.folder_files)
+        ? payload.folder_files
+        : (state.galleryFolderFiles || []).filter((entry) => getGalleryFileKey(entry) !== filename && entry.filename !== filename)
+      if (_monacoModels[filename]) {
+        _monacoModels[filename].dispose?.()
+        delete _monacoModels[filename]
+      }
+      const nextTarget = nextFiles.find((entry) => entry.is_entry) || nextFiles[0]
+      upsertGalleryFolderFiles(nextFiles, nextTarget ? getGalleryFileKey(nextTarget) : "")
+      showToast(`已删除：${filename}`)
     } catch (error) {
       showToast(error.message || String(error), "error")
     }
@@ -1961,13 +2036,16 @@
     const item = state.currentGalleryAlgorithm
     if (!item) return
     try {
-      const response = await fetch(`${packageServiceBase}/algorithm-source/${encodeURIComponent(item.id)}`, {
+      const currentFile = state.currentGalleryFile || getGalleryFileKey((state.galleryFolderFiles || []).find((file) => file.is_entry) || {})
+      if (!currentFile) {
+        throw new Error("当前没有可保存的文件")
+      }
+      const current = (state.galleryFolderFiles || []).find((file) => getGalleryFileKey(file) === currentFile || file.filename === currentFile)
+      if (current) current.content = galleryEditorContent()
+      const response = await fetch(`${packageServiceBase}/algorithm-source/${encodeURIComponent(item.id)}/files/${encodeURIComponent(currentFile)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: galleryEditorContent(),
-          namespace: document.getElementById("galleryNamespaceInput")?.value?.trim() || item.namespace,
-        }),
+        body: JSON.stringify({ content: galleryEditorContent() }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) {
@@ -1979,11 +2057,13 @@
         const nsInput = document.getElementById("galleryNamespaceInput")
         if (nsInput) nsInput.value = fullAlgorithmNamespace(payload.algorithm) || nsInput.value
       }
+      if (Array.isArray(payload.folder_files) && payload.folder_files.length) {
+        upsertGalleryFolderFiles(payload.folder_files, currentFile)
+      }
       const dot = document.getElementById("galleryModifiedDot")
       if (dot) dot.className = ""
       showToast(`保存成功，检测到函数：${(payload.functions_detected || []).join(", ") || "无"}`)
       await loadGalleryAlgorithms()
-      renderComponentGallery()
     } catch (error) {
       showToast(error.message || String(error), "error")
     }

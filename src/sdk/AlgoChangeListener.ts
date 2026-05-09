@@ -18,6 +18,10 @@ interface AlgorithmInfo {
   outputs: Record<string, string>;
   source: "builtin" | "custom";
   path?: string;
+  ownerId?: string;
+  owner_id?: string;
+  publishStatus?: string;
+  publish_status?: string;
 }
 
 interface SSEEvent {
@@ -335,11 +339,14 @@ export class AlgoChangeListener {
             return [];
           }
           return Array.from(this.customAlgos.values()).map((algo) => {
+            const privacy = this.privacyLabel(algo);
             const item = new vscode.CompletionItem(
-              algo.name,
+              `[${privacy}] ${algo.name}`,
               vscode.CompletionItemKind.Function
             );
-            item.detail = `[${algo.category}] ${algo.description}`;
+            item.filterText = algo.name;
+            item.sortText = `${privacy === "私有" ? "0" : "1"}_${algo.name}`;
+            item.detail = `[${privacy}] [${algo.category}] ${algo.description}`;
             item.documentation = new vscode.MarkdownString(
               this.generateDoc(algo)
             );
@@ -383,15 +390,24 @@ export class AlgoChangeListener {
       .join("\n");
   }
 
+  private privacyLabel(algo: AlgorithmInfo): "公有" | "私有" {
+    const owner = algo.ownerId || algo.owner_id || "";
+    const status = algo.publishStatus || algo.publish_status || "";
+    return owner === "system" || status === "published" ? "公有" : "私有";
+  }
+
   // ── 快速选择面板 ──────────────────────────────────────────────────────────
 
   private async showAlgorithmQuickPick(): Promise<void> {
-    const items = Array.from(this.customAlgos.values()).map((algo) => ({
-      label: `$(beaker) ${algo.name}`,
-      description: `[${algo.category}]`,
-      detail: algo.description,
-      algo,
-    }));
+    const items = Array.from(this.customAlgos.values()).map((algo) => {
+      const privacy = this.privacyLabel(algo);
+      return {
+        label: `$(beaker) [${privacy}] ${algo.name}`,
+        description: `[${algo.category}]`,
+        detail: algo.description,
+        algo,
+      };
+    });
 
     if (items.length === 0) {
       vscode.window.showInformationMessage(

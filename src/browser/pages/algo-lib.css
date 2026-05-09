@@ -3234,6 +3234,14 @@ body.is-loading button {
   text-overflow: ellipsis;
 }
 
+.pft-file small {
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
 .pft-modified-dot {
   width: 6px;
   height: 6px;

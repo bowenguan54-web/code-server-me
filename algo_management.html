@@ -246,6 +246,26 @@
       min-height: 420px;
       font: 13px/1.5 Consolas, "Courier New", monospace;
     }
+    .workspace-monaco-host {
+      min-height: 420px;
+      height: min(58vh, 620px);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #040e1f;
+    }
+    .code-check-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(15, 36, 72, .55);
+      color: var(--text-dim);
+      font-size: 12px;
+    }
     .spacer { flex: 1; }
     .stat-bar {
       display: grid;
@@ -735,7 +755,9 @@
       compTestMode: "params",
       compTestFileUploads: {},
       _compTestAlgo: null,
-      _compTestSource: null
+      _compTestSource: null,
+      tplEditor: null,
+      tplModel: null
     };
 
     function qs(selector, root = document) { return root.querySelector(selector); }
@@ -871,6 +893,15 @@
     function getDesc(item) { return item.zhDescription || item.zh_description || item.description || item.body || "暂无描述"; }
     function getTags(item) { return item.zhTags || item.zh_tags || item.tags || []; }
     function getStatus(item) { return item.publishStatus || item.publish_status || item.lifecycleStatus || (item.published ? "published" : "draft"); }
+    function isPublicItem(item) {
+      const status = getStatus(item);
+      const ownerId = item?.ownerId || item?.owner_id || "";
+      const scope = item?.scope || "";
+      return status === "published" || (!status && ownerId === "system" && scope === "team");
+    }
+    function privacyLabel(item) {
+      return isPublicItem(item) ? "\u516c\u6709" : "\u79c1\u6709";
+    }
     function getNs(item, page) {
       if (page === "snippets") return item.name || "";
       return item.callPrefix || item.displayNamespace || "";
@@ -897,11 +928,11 @@
     }
     function statusLabel(status) {
       return {
-        published: "应用中",
+        published: "公有",
         approved: "已通过",
         reviewing: "审核中",
         rejected: "审核未通过",
-        draft: "草稿",
+        draft: "私有",
         deprecated: "已下架"
       }[status] || status;
     }
@@ -910,10 +941,19 @@
       return !!(state.currentUser?.id && ownerId === state.currentUser.id);
     }
     function canManageAlgorithm(item) {
+      const status = getStatus(item);
+      if (status === "published" && state.currentUser?.role !== "admin") return false;
       return state.currentUser?.role === "admin" || ownsAlgorithm(item);
     }
     function canSubmitAlgorithm(item) {
       return ownsAlgorithm(item) && ["draft", "rejected"].includes(getStatus(item));
+    }
+    function ownsSnippet(item) {
+      const ownerId = item?.ownerId || item?.owner_id || "";
+      return !!(state.currentUser?.id && (ownerId === state.currentUser.id || (!ownerId && item?.scope === "private")));
+    }
+    function canSubmitSnippet(item) {
+      return ownsSnippet(item) && ["draft", "rejected"].includes(getStatus(item));
     }
     function parseVersion(value) {
       const parts = String(value || "1.0.0").split(".").map(part => Number.parseInt(part, 10) || 0);
@@ -922,10 +962,10 @@
     function versionUpgradeOptions(current) {
       const [major, minor, patch] = parseVersion(current);
       return [
-        { value: current || "1.0.0", label: `保持当前版本 ${current || "1.0.0"}` },
-        { value: `${major}.${minor}.${patch + 1}`, label: `补丁版本：${current || "1.0.0"} → ${major}.${minor}.${patch + 1}` },
-        { value: `${major}.${minor + 1}.0`, label: `小版本：${current || "1.0.0"} → ${major}.${minor + 1}.0` },
-        { value: `${major + 1}.0.0`, label: `大版本：${current || "1.0.0"} → ${major + 1}.0.0` }
+        { value: current || "1.0.0", type: "keep", label: `保持当前版本 ${current || "1.0.0"}` },
+        { value: `${major}.${minor}.${patch + 1}`, type: "patch", label: `补丁版本：${current || "1.0.0"} → ${major}.${minor}.${patch + 1}` },
+        { value: `${major}.${minor + 1}.0`, type: "minor", label: `次版本：${current || "1.0.0"} → ${major}.${minor + 1}.0` },
+        { value: `${major + 1}.0.0`, type: "major", label: `主版本：${current || "1.0.0"} → ${major + 1}.0.0` }
       ];
     }
     function safeId(id) { return encodeURIComponent(id); }
@@ -1080,7 +1120,7 @@
           <select id="filterCategory" onchange="window.applyFilters()"><option value="">全部分类</option></select>
           <select id="filterLanguage" onchange="window.applyFilters()"><option value="">全部语言</option></select>
           ${(page === "components" || page === "my-algos") ? '<select id="filterStatus" onchange="window.applyFilters()"><option value="">全部状态</option></select>' : ""}
-          ${page === "snippets" ? '<select id="filterScope" onchange="window.applyFilters()"><option value="">全部权限</option><option value="private">私有</option><option value="team">共享</option></select>' : ""}
+          ${page === "snippets" ? '<select id="filterScope" onchange="window.applyFilters()"><option value="">全部权限</option><option value="private">私有</option><option value="team">公有</option></select>' : ""}
           <button onclick="window.applyFilters()">筛选</button>
           <span class="spacer"></span>
           <div class="toolbar-actions">
@@ -1090,8 +1130,8 @@
         </div>
         ${(page === "components" || page === "my-algos") ? `<div class="quick-filters" id="quickFilters">
           <button class="active" data-qf="" onclick="window.setQuickFilter('','${page}')">全部</button>
-          <button class="qf-success" data-qf="published" onclick="window.setQuickFilter('published','${page}')">已发布</button>
-          <button data-qf="draft" onclick="window.setQuickFilter('draft','${page}')">草稿</button>
+          <button class="qf-success" data-qf="published" onclick="window.setQuickFilter('published','${page}')">公有</button>
+          <button data-qf="draft" onclick="window.setQuickFilter('draft','${page}')">私有</button>
           <button class="qf-warning" data-qf="reviewing" onclick="window.setQuickFilter('reviewing','${page}')">审核中</button>
           <button data-qf="rejected" onclick="window.setQuickFilter('rejected','${page}')">已驳回</button>
         </div>` : ""}
@@ -1149,7 +1189,7 @@
         const statLabel = page === "my-algos" ? "我的算法总数" : "算法组件总数";
         qs("#stats").innerHTML = [
           `<article class="stat-card accent-info"><div class="stat-label">${statLabel}</div><div class="stat-value">${items.length}</div><div class="stat-desc">${categoryCount} 个分类 · 今日更新 ${todayCount}</div></article>`,
-          `<article class="stat-card accent-success"><div class="stat-label">已发布</div><div class="stat-value">${publishedCount}</div><div class="stat-desc">草稿 ${draftCount} 个</div></article>`,
+          `<article class="stat-card accent-success"><div class="stat-label">公有</div><div class="stat-value">${publishedCount}</div><div class="stat-desc">私有 ${draftCount} 个</div></article>`,
           `<article class="stat-card${reviewingCount > 0 ? " accent-warning" : ""}"><div class="stat-label">待审核</div><div class="stat-value${reviewingCount > 0 ? " accent-warning" : ""}">${reviewingCount}</div><div class="stat-desc">等待审核中</div></article>`,
           ...(page === "components" ? [
             `<article class="stat-card"><div class="stat-label">公共组件</div><div class="stat-value">${items.filter(item => (item.ownerId || "system") === "system").length}</div><div class="stat-desc">所有账号可见</div></article>`,
@@ -1169,9 +1209,9 @@
         } // end if (page === "components")
       } else {
         const languageCount = new Set(items.map(item => item.language || "python")).size;
-        const fourthLabel = page === "snippets" ? "共享片段" : "可发布";
+        const fourthLabel = page === "snippets" ? "公有片段" : "可发布";
         const fourthValue = page === "snippets"
-          ? items.filter(item => item.scope === "team").length
+          ? items.filter(item => isPublicItem(item)).length
           : items.length;
         qs("#stats").innerHTML = [
           ["总数", items.length],
@@ -1220,11 +1260,15 @@
       const isAdmin = state.currentUser?.role === "admin";
       const isOwner = ownsAlgorithm(item);
       const canManage = canManageAlgorithm(item);
+      const privacyText = privacyLabel(item);
+      const privacyClass = isPublicItem(item) ? "success" : "warning";
       const isMyAlgosPage = page === "my-algos";
       const effectivePage = isMyAlgosPage ? "components" : page;
+      const reviewStatusVisible = ["reviewing", "rejected", "approved"].includes(status);
       let btns = [];
       if (effectivePage === "components") {
-        if (canManage) btns.push(`<button onclick="window.openEditorById('${esc(id)}','${esc(page)}')">编辑</button>`);
+        if (status === "published" && !isAdmin) btns.push(`<button onclick="window.openEditorById('${esc(id)}','${esc(page)}')">编辑</button>`);
+        else if (canManage) btns.push(`<button onclick="window.openEditorById('${esc(id)}','${esc(page)}')">编辑</button>`);
         else if (state.currentUser) btns.push(`<button onclick="window.openEditorById('${esc(id)}','components')">编辑</button>`);
         if (state.currentUser) btns.push(`<button onclick="window.openComponentTestModalById('${esc(id)}')">测试</button>`);
         if (canManage) btns.push(`<button onclick="window.editAlgorithmInfo('${esc(id)}','${esc(page)}')">基本信息</button>`);
@@ -1239,23 +1283,36 @@
         if (canManage && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
         if (isAdmin && status === "reviewing") btns.push(`<button onclick="window.approveReview('${esc(id)}')">审核通过</button>`);
         if (isAdmin && status === "approved") btns.push(`<button class="success" onclick="window.publishComponent('${esc(id)}')">正式发布</button>`);
-        if (canManage) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
+        if (isAdmin || (canManage && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
       } else if (effectivePage === "templates") {
-        if (canManage) btns.push(`<button onclick="window.openEditorById('${esc(id)}','templates')">编辑</button>`);
+        if (status === "published" && !isAdmin) btns.push(`<button onclick="window.openEditorById('${esc(id)}','templates')">编辑</button>`);
+        else if (canManage) btns.push(`<button onclick="window.openEditorById('${esc(id)}','templates')">编辑</button>`);
         else if (state.currentUser) btns.push(`<button onclick="window.openEditorById('${esc(id)}','templates')">编辑</button>`);
         if (canManage) btns.push(`<button onclick="window.editAlgorithmInfo('${esc(id)}','templates')">基本信息</button>`);
         btns.push(`<button class="primary" onclick="window.publishAsComponent('${esc(id)}',this)">基于模板新建组件</button>`);
-        if (canManage) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
+        if (canSubmitAlgorithm(item) || (isOwner && status === "published" && item.hasReviewDraft)) btns.push(`<button class="warning" onclick="window.openSubmitModal('${esc(id)}')">${status === "rejected" ? "重新提交" : "提交审核"}</button>`);
+        if (canManage && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
+        if (isAdmin && status === "reviewing") btns.push(`<button onclick="window.approveReview('${esc(id)}')">审核通过</button>`);
+        if (isAdmin && status === "approved") btns.push(`<button class="success" onclick="window.publishComponent('${esc(id)}')">正式发布</button>`);
+        if (isAdmin || (canManage && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
       } else {
-        if (canManage) btns.push(`<button onclick="window.editSnippet('${esc(id)}')">编辑</button>`);
+        if (status === "published" && !isAdmin) btns.push(`<button onclick="window.editSnippet('${esc(id)}', true)">编辑</button>`);
+        else if (canManage || ownsSnippet(item)) btns.push(`<button onclick="window.editSnippet('${esc(id)}')">编辑</button>`);
         btns.push(`<button onclick="window.copySnippet('${esc(id)}')">复制</button>`);
-        if (canManage) btns.push(`<button class="danger" onclick="window.deleteSnippet('${esc(id)}')">删除</button>`);
+        if (canSubmitSnippet(item)) btns.push(`<button class="warning" onclick="window.submitSnippetReview('${esc(id)}')">提交审核</button>`);
+        if ((ownsSnippet(item) || isAdmin) && status === "reviewing") btns.push(`<button onclick="window.withdrawSnippetReview('${esc(id)}')">撤回</button>`);
+        if (isAdmin && status === "reviewing") {
+          btns.push(`<button onclick="window.approveSnippetReview('${esc(id)}')">审核通过</button>`);
+          btns.push(`<button class="danger" onclick="window.rejectSnippetReview('${esc(id)}')">驳回</button>`);
+        }
+        if (isAdmin && status === "approved") btns.push(`<button class="success" onclick="window.publishSnippet('${esc(id)}')">正式发布</button>`);
+        if (isAdmin || ((ownsSnippet(item) || canManage) && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteSnippet('${esc(id)}')">删除</button>`);
       }
       const buttons = btns.join(" ");
       return `
         <article class="algo-card ${kind} ${state.highlightId === id ? "highlight" : ""}" data-id="${esc(id)}">
-          ${(effectivePage === "components" || effectivePage === "templates") ? `<span class="tag ${statusClass(status)} status-badge"${status === "rejected" ? ` style="cursor:pointer" onclick="window.viewRejectedDraft('${esc(id)}')" title="点击查看驳回内容"` : ""}>${esc(statusLabel(status))}${item.hasReviewDraft && status === "published" ? " (有草稿)" : ""}</span>` : ""}
-          ${effectivePage === "snippets" ? `<span class="tag ${item.scope === "team" ? "success" : "warning"} status-badge">${item.scope === "team" ? "共享" : "私有"}</span>` : ""}
+          ${reviewStatusVisible ? `<span class="tag ${statusClass(status)} status-badge"${status === "rejected" && effectivePage !== "snippets" ? ` style="cursor:pointer" onclick="window.viewRejectedDraft('${esc(id)}')" title="点击查看驳回内容"` : ""}>${esc(statusLabel(status))}</span>` : ""}
+          <span class="tag ${privacyClass}" style="position:absolute;right:14px;top:${reviewStatusVisible ? "42px" : "14px"}">${privacyText}</span>
           <div class="card-title">${esc(getName(item))}</div>
           <div class="card-ns">${esc(getNs(item, page))}</div>
           <div class="desc">${esc(getDesc(item))}</div>
@@ -1524,7 +1581,15 @@
       openAlgorithmWorkspace(page);
     }
 
-    const newAlgoState = { files: [], currentFile: "" };
+    const newAlgoState = {
+      files: [],
+      currentFile: "",
+      editor: null,
+      models: new Map(),
+      mode: "template",
+      importedFromPicker: false,
+      functions: []
+    };
 
     function defaultAlgorithmCode(name) {
       const funcName = name || "my_algorithm";
@@ -1554,6 +1619,8 @@
       const catOptions = cats.map(c => `<option value="${esc(c.namespace)}">${esc(c.zhName || c.zh_name || c.namespace)}</option>`).join("");
       newAlgoState.files = newTemplateFiles("simple", "my_algorithm", "basic");
       newAlgoState.currentFile = newAlgoState.files[0].relative_path;
+      newAlgoState.importedFromPicker = false;
+      newAlgoState.functions = [];
       qs("#main").innerHTML = `
         <div class="new-workspace">
           <div class="editor-top">
@@ -1561,6 +1628,7 @@
             <strong>${page === "templates" ? "新建算法模板" : "新建算法"}</strong>
             <span class="spacer"></span>
             <button onclick="window.testWorkspaceSource()">测试当前文件</button>
+            <button onclick="window.checkWorkspaceCode()">检查代码</button>
             <button class="primary" onclick="window.saveWorkspaceAlgorithm('${moduleKind}')">保存草稿</button>
           </div>
           ${page === "templates" ? `<details class="template-usage-details" open>
@@ -1577,6 +1645,7 @@
             </div>
           </details>` : ""}
           <div class="new-form-grid">
+            <label>创建模式<select id="wsCreateMode" onchange="window.onWorkspaceModeChange()"><option value="template">选择模板</option><option value="import">外部导入</option></select></label>
             <label>算法形态<select id="wsKind" onchange="window.applyWorkspaceTemplate()"><option value="simple">普通单文件</option><option value="complex">复杂多文件</option></select></label>
             <label>代码模板<select id="wsTemplate" onchange="window.applyWorkspaceTemplate()"><option value="basic">基础算法</option><option value="quality">数据质量</option><option value="complex">复杂算法示例</option></select></label>
             <label>函数/包名<input id="wsName" value="my_algorithm" /></label>
@@ -1598,9 +1667,22 @@
             <label class="full">描述<textarea id="wsDesc" rows="2">说明算法用途、输入输出和适用场景。</textarea></label>
             <label class="full">测试参数 JSON<textarea id="wsKwargs" rows="3">{"data":[0.1,0.6,0.9],"threshold":0.5}</textarea></label>
           </div>
+          <div class="code-check-row" id="wsImportHelp">
+            <span>外部导入：选择一个 .py 文件或整个算法文件夹，系统会读取代码、识别入口函数，并按所填分类封装为 <code>alg.分类.函数</code>。</span>
+            <button onclick="window.pickWorkspaceFile()">选择文件</button>
+            <button onclick="window.pickWorkspaceFolder()">选择文件夹</button>
+            <button onclick="window.inferWorkspaceNameFromCode()">重新识别函数名</button>
+            <input id="wsFilePicker" type="file" accept=".py" style="display:none" onchange="window.handleWorkspaceImportFiles(this.files)" />
+            <input id="wsFolderPicker" type="file" webkitdirectory directory multiple style="display:none" onchange="window.handleWorkspaceImportFiles(this.files)" />
+          </div>
+          <div class="code-check-row" id="wsImportMeta" style="display:none">
+            <label style="display:flex;align-items:center;gap:6px">入口文件<select id="wsEntryFile" onchange="window.onWorkspaceEntryChange()"></select></label>
+            <label style="display:flex;align-items:center;gap:6px">导出函数<select id="wsExportFunc" onchange="window.onWorkspaceExportChange()"></select></label>
+            <span id="wsImportSummary" class="desc"></span>
+          </div>
           <div class="file-editor-grid">
             <div class="file-list-panel" id="wsFileList"></div>
-            <textarea id="wsCode" class="file-edit-area" spellcheck="false" oninput="window.updateWorkspaceFileContent()"></textarea>
+            <div id="wsCodeHost" class="workspace-monaco-host"></div>
           </div>
           <div id="wsOutput" class="output hidden"></div>
         </div>
@@ -1608,6 +1690,7 @@
       const defOpt = [...(qs("#wsCategory")?.options || [])].find(o => o.value === defaultNs);
       if (defOpt) qs("#wsCategory").value = defaultNs;
       renderWorkspaceFiles();
+      await initWorkspaceMonaco(moduleKind);
     }
 
     function onWsCatChange() {
@@ -1617,6 +1700,7 @@
     }
 
     function applyWorkspaceTemplate() {
+      if (qs("#wsCreateMode")?.value === "import") return;
       const templateKey = qs("#wsTemplate").value;
       if (templateKey === "complex") qs("#wsKind").value = "complex";
       const kind = qs("#wsKind").value;
@@ -1625,27 +1709,327 @@
       newAlgoState.files = newTemplateFiles(kind, name, templateKey);
       newAlgoState.currentFile = newAlgoState.files[0].relative_path;
       renderWorkspaceFiles();
+      initWorkspaceMonaco();
+    }
+
+    function onWorkspaceModeChange() {
+      const mode = qs("#wsCreateMode")?.value || "template";
+      newAlgoState.mode = mode;
+      const templateSelect = qs("#wsTemplate");
+      if (templateSelect) templateSelect.disabled = mode === "import";
+      const meta = qs("#wsImportMeta");
+      if (meta) meta.style.display = mode === "import" && newAlgoState.importedFromPicker ? "" : "none";
+      if (mode === "import") {
+        newAlgoState.files = [];
+        newAlgoState.currentFile = "";
+        newAlgoState.functions = [];
+        newAlgoState.importedFromPicker = false;
+        qs("#wsKind").value = "simple";
+        renderWorkspaceFiles();
+        initWorkspaceMonaco();
+      } else {
+        applyWorkspaceTemplate();
+      }
+    }
+
+    function pickWorkspaceFile() {
+      const picker = qs("#wsFilePicker");
+      if (picker) {
+        picker.value = "";
+        picker.click();
+      }
+    }
+
+    function pickWorkspaceFolder() {
+      const picker = qs("#wsFolderPicker");
+      if (picker) {
+        picker.value = "";
+        picker.click();
+      }
+    }
+
+    async function handleWorkspaceImportFiles(fileList) {
+      const files = Array.from(fileList || [])
+        .filter(file => /\.py$/i.test(file.name) && !/(^|\/)__pycache__(\/|$)/.test(file.webkitRelativePath || file.name))
+        .sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
+      if (!files.length) {
+        showToast("请选择 .py 文件或包含 .py 文件的文件夹");
+        return;
+      }
+      const commonPrefix = longestCommonPathPrefix(files.map(file => file.webkitRelativePath || file.name));
+      const loaded = [];
+      for (const file of files) {
+        const rawPath = (file.webkitRelativePath || file.name).replace(/\\/g, "/");
+        let relativePath = rawPath;
+        if (commonPrefix && relativePath.startsWith(commonPrefix)) relativePath = relativePath.slice(commonPrefix.length);
+        relativePath = relativePath.replace(/^\/+/, "");
+        if (!relativePath || relativePath === "__init__.py") relativePath = file.name;
+        loaded.push({ relative_path: relativePath, content: await file.text() });
+      }
+      const functions = detectWorkspaceFunctions(loaded);
+      const entryName = chooseWorkspaceEntry(loaded, functions);
+      const exportFunc = chooseWorkspaceExport(entryName, functions) || inferFirstPythonFunction(loaded.find(file => file.relative_path === entryName)?.content || "") || (qs("#wsName")?.value.trim() || "my_algorithm");
+      newAlgoState.files = loaded;
+      newAlgoState.currentFile = entryName || loaded[0].relative_path;
+      newAlgoState.importedFromPicker = true;
+      newAlgoState.functions = functions;
+      if (qs("#wsKind")) qs("#wsKind").value = loaded.length > 1 ? "complex" : "simple";
+      if (qs("#wsCreateMode")) qs("#wsCreateMode").value = "import";
+      if (qs("#wsName") && exportFunc) qs("#wsName").value = exportFunc;
+      renderWorkspaceFiles();
+      await initWorkspaceMonaco();
+      renderWorkspaceImportMeta(entryName, exportFunc);
+      const summary = qs("#wsImportSummary");
+      if (summary) summary.textContent = `已导入 ${loaded.length} 个 Python 文件，识别到 ${functions.length} 个函数`;
+      showToast(`已导入 ${loaded.length} 个 Python 文件`);
+    }
+
+    function longestCommonPathPrefix(paths) {
+      const splitPaths = (paths || [])
+        .filter(path => path && path.includes("/"))
+        .map(path => path.split("/").slice(0, -1));
+      if (!splitPaths.length) return "";
+      let prefix = splitPaths[0];
+      splitPaths.slice(1).forEach(parts => {
+        let i = 0;
+        while (i < prefix.length && i < parts.length && prefix[i] === parts[i]) i += 1;
+        prefix = prefix.slice(0, i);
+      });
+      return prefix.length ? `${prefix.join("/")}/` : "";
+    }
+
+    function detectWorkspaceFunctions(files) {
+      const functions = [];
+      (files || []).forEach(file => {
+        const source = file.content || "";
+        const regex = /^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*([^:]+))?:/gm;
+        let match;
+        while ((match = regex.exec(source)) !== null) {
+          const params = splitTopLevelParams(match[2] || "").map(raw => {
+            const clean = raw.replace(/^\*\*?/, "").split("=")[0].trim();
+            const [name, type = "Any"] = clean.split(":").map(item => item.trim());
+            return name && !["self", "cls"].includes(name) ? { name, type: type || "Any" } : null;
+          }).filter(Boolean);
+          functions.push({ file: file.relative_path, name: match[1], params, return_type: (match[3] || "Any").trim() });
+        }
+      });
+      return functions;
+    }
+
+    function chooseWorkspaceEntry(files, functions) {
+      const names = (files || []).map(file => file.relative_path);
+      const preferred = ["main.py", "app.py", "algorithm.py", "model.py"];
+      for (const item of preferred) {
+        const exact = names.find(name => name.toLowerCase() === item);
+        if (exact) return exact;
+      }
+      const firstWithFunction = functions?.[0]?.file;
+      return firstWithFunction || names[0] || "";
+    }
+
+    function chooseWorkspaceExport(entryName, functions) {
+      const fromEntry = (functions || []).find(fn => fn.file === entryName);
+      return fromEntry?.name || functions?.[0]?.name || "";
+    }
+
+    function renderWorkspaceImportMeta(entryName = "", exportFunc = "") {
+      const meta = qs("#wsImportMeta");
+      const entrySelect = qs("#wsEntryFile");
+      const exportSelect = qs("#wsExportFunc");
+      if (!meta || !entrySelect || !exportSelect) return;
+      meta.style.display = "";
+      entrySelect.innerHTML = newAlgoState.files.map(file => `<option value="${esc(file.relative_path)}"${file.relative_path === entryName ? " selected" : ""}>${esc(file.relative_path)}</option>`).join("");
+      const funcs = newAlgoState.functions.filter(fn => !entrySelect.value || fn.file === entrySelect.value);
+      exportSelect.innerHTML = (funcs.length ? funcs : newAlgoState.functions).map(fn => `<option value="${esc(fn.name)}"${fn.name === exportFunc ? " selected" : ""}>${esc(fn.name)} (${esc(fn.file)})</option>`).join("");
+      if (!exportSelect.innerHTML) exportSelect.innerHTML = `<option value="${esc(qs("#wsName")?.value || "my_algorithm")}">${esc(qs("#wsName")?.value || "my_algorithm")}</option>`;
+    }
+
+    function onWorkspaceEntryChange() {
+      const entryName = qs("#wsEntryFile")?.value || "";
+      if (entryName) {
+        switchWorkspaceFile(entryName);
+        const exportFunc = chooseWorkspaceExport(entryName, newAlgoState.functions);
+        if (exportFunc && qs("#wsName")) qs("#wsName").value = exportFunc;
+        renderWorkspaceImportMeta(entryName, exportFunc);
+      }
+    }
+
+    function onWorkspaceExportChange() {
+      const exportFunc = qs("#wsExportFunc")?.value || "";
+      if (exportFunc && qs("#wsName")) qs("#wsName").value = exportFunc;
     }
 
     function renderWorkspaceFiles() {
-      qs("#wsFileList").innerHTML = newAlgoState.files.map(file => `
+      qs("#wsFileList").innerHTML = newAlgoState.files.length ? newAlgoState.files.map(file => `
         <div style="display:flex;align-items:center;gap:2px">
           <button class="${file.relative_path === newAlgoState.currentFile ? "active" : ""}" style="flex:1;text-align:left" onclick="window.switchWorkspaceFile('${esc(file.relative_path)}')">${esc(file.relative_path)}</button>
           <button class="ghost" style="font-size:11px;padding:2px 5px;flex-shrink:0" onclick="window.renameWorkspaceFile('${esc(file.relative_path)}')" title="重命名">改</button>
-        </div>`).join("");
+        </div>`).join("") : '<div class="empty" style="padding:14px">尚未导入文件</div>';
       const file = newAlgoState.files.find(item => item.relative_path === newAlgoState.currentFile);
-      qs("#wsCode").value = file?.content || "";
+      if (newAlgoState.editor && newAlgoState.models?.has(newAlgoState.currentFile)) {
+        newAlgoState.editor.setModel(newAlgoState.models.get(newAlgoState.currentFile));
+      }
     }
 
     function switchWorkspaceFile(path) {
       updateWorkspaceFileContent();
       newAlgoState.currentFile = path;
       renderWorkspaceFiles();
+      runWorkspaceDiagnostics();
     }
 
     function updateWorkspaceFileContent() {
       const file = newAlgoState.files.find(item => item.relative_path === newAlgoState.currentFile);
-      if (file) file.content = qs("#wsCode").value;
+      if (!file) return;
+      if (newAlgoState.editor) file.content = newAlgoState.editor.getValue();
+      else if (qs("#wsCode")) file.content = qs("#wsCode").value;
+    }
+
+    async function initWorkspaceMonaco(moduleKind = "") {
+      const host = qs("#wsCodeHost");
+      if (!host) return;
+      const m = await loadMonaco();
+      if (newAlgoState.editor) {
+        newAlgoState.editor.dispose();
+        newAlgoState.editor = null;
+      }
+      if (newAlgoState.models) {
+        newAlgoState.models.forEach(model => {
+          if (model && !model.isDisposed()) model.dispose();
+        });
+      }
+      newAlgoState.models = new Map();
+      newAlgoState.files.forEach(file => {
+        const uri = m.Uri.parse(`inmemory://algolib-new/${Date.now()}-${encodeURIComponent(file.relative_path)}`);
+        const model = m.editor.createModel(file.content || "", "python", uri);
+        newAlgoState.models.set(file.relative_path, model);
+      });
+      if (!newAlgoState.files.length) {
+        const blank = m.editor.createModel("", "python", m.Uri.parse(`inmemory://algolib-new/blank-${Date.now()}.py`));
+        newAlgoState.models.set("__blank__.py", blank);
+      }
+      const first = newAlgoState.currentFile || newAlgoState.files[0]?.relative_path || "__blank__.py";
+      newAlgoState.currentFile = first;
+      newAlgoState.editor = m.editor.create(host, {
+        model: newAlgoState.models.get(first),
+        theme: "algolib-dark",
+        language: "python",
+        automaticLayout: true,
+        fontSize: 14,
+        tabSize: 4,
+        insertSpaces: true,
+        autoIndent: "full",
+        formatOnPaste: true,
+        formatOnType: true,
+        folding: true,
+        bracketPairColorization: { enabled: true },
+        quickSuggestions: { other: true, comments: false, strings: false },
+        minimap: { enabled: true },
+        scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6, useShadows: false }
+      });
+      window._activeMonaco = newAlgoState.editor;
+      newAlgoState.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => saveWorkspaceAlgorithm(moduleKind || (qs("#wsCreateMode") ? currentModuleKind(state.page) : "component")));
+      newAlgoState.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
+      newAlgoState.editor.onDidChangeModelContent(() => {
+        updateWorkspaceFileContent();
+        runWorkspaceDiagnostics();
+      });
+      renderWorkspaceFiles();
+      runWorkspaceDiagnostics();
+    }
+
+    function getWorkspaceCode() {
+      updateWorkspaceFileContent();
+      return newAlgoState.files.find(item => item.relative_path === newAlgoState.currentFile)?.content || "";
+    }
+
+    function inferFirstPythonFunction(source) {
+      const match = String(source || "").match(/^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/m);
+      return match ? match[1] : "";
+    }
+
+    function inferWorkspaceNameFromCode() {
+      const name = inferFirstPythonFunction(getWorkspaceCode());
+      if (!name) { showToast("没有识别到 Python 函数定义"); return; }
+      const input = qs("#wsName");
+      if (input) input.value = name;
+      const current = newAlgoState.files.find(item => item.relative_path === newAlgoState.currentFile);
+      if (current && current.relative_path === "my_algorithm.py") {
+        current.relative_path = `${name}.py`;
+        newAlgoState.currentFile = current.relative_path;
+        initWorkspaceMonaco();
+      }
+      showToast(`已识别函数名：${name}`);
+    }
+
+    function parseImportedWorkspaceFiles(source, fallbackName) {
+      const text = String(source || "");
+      const marker = /^\s*#\s*(?:file|filename|path)\s*:\s*([A-Za-z0-9_./-]+\.py)\s*$/i;
+      const lines = text.split(/\r?\n/);
+      const files = [];
+      let current = null;
+      for (const line of lines) {
+        const matched = line.match(marker);
+        if (matched) {
+          current = { relative_path: matched[1].replace(/^\/+/, ""), content: "" };
+          files.push(current);
+          continue;
+        }
+        if (current) current.content += `${line}\n`;
+      }
+      if (files.length) return files.map(file => ({ ...file, content: file.content.replace(/\n$/, "") }));
+      return [{ relative_path: `${fallbackName || "my_algorithm"}.py`, content: text }];
+    }
+
+    function localPythonDiagnostics(source) {
+      const markers = [];
+      const stack = [];
+      const pairs = { "(": ")", "[": "]", "{": "}" };
+      const closing = { ")": "(", "]": "[", "}": "{" };
+      String(source || "").split(/\r?\n/).forEach((line, index) => {
+        const lineNo = index + 1;
+        if (/^\t+ +|^ +\t+/.test(line)) {
+          markers.push({ line: lineNo, col: 1, message: "同一缩进层混用了 Tab 和空格" });
+        }
+        if (/^\s*(def|class|if|elif|else|for|while|try|except|finally|with)\b.*[^:]\s*(#.*)?$/.test(line)) {
+          markers.push({ line: lineNo, col: Math.max(1, line.length), message: "语句块可能缺少冒号" });
+        }
+        for (let i = 0; i < line.length; i += 1) {
+          const ch = line[i];
+          if (pairs[ch]) stack.push({ ch, line: lineNo, col: i + 1 });
+          else if (closing[ch]) {
+            const last = stack.pop();
+            if (!last || last.ch !== closing[ch]) markers.push({ line: lineNo, col: i + 1, message: `括号不匹配：${ch}` });
+          }
+        }
+      });
+      stack.slice(-5).forEach(item => markers.push({ line: item.line, col: item.col, message: `括号未闭合：${item.ch}` }));
+      return markers;
+    }
+
+    function applyDiagnosticsToModel(model, diagnostics) {
+      if (!state.monaco || !model) return;
+      state.monaco.editor.setModelMarkers(model, "algolib-check", (diagnostics || []).map(item => ({
+        severity: state.monaco.MarkerSeverity.Error,
+        message: item.message || "代码检查错误",
+        startLineNumber: item.line || 1,
+        startColumn: item.col || 1,
+        endLineNumber: item.line || 1,
+        endColumn: Math.max((item.col || 1) + 1, 2)
+      })));
+    }
+
+    function runWorkspaceDiagnostics(showResult = false) {
+      const model = newAlgoState.editor?.getModel();
+      if (!model) return [];
+      const diagnostics = localPythonDiagnostics(model.getValue());
+      applyDiagnosticsToModel(model, diagnostics);
+      if (showResult) showToast(diagnostics.length ? `发现 ${diagnostics.length} 个代码问题` : "代码检查通过");
+      return diagnostics;
+    }
+
+    function checkWorkspaceCode() {
+      runWorkspaceDiagnostics(true);
     }
 
     async function testWorkspaceSource() {
@@ -1663,7 +2047,7 @@
       try {
         const result = await api("/api/v1/run-source", {
           method: "POST",
-          body: JSON.stringify({ content: newAlgoState.files[0].content, function: qs("#wsName").value.trim(), kwargs })
+          body: JSON.stringify({ content: getWorkspaceCode(), function: qs("#wsName").value.trim(), kwargs })
         });
         output.classList.remove("hidden");
         output.innerHTML = `<pre>${esc(JSON.stringify(result, null, 2))}</pre>`;
@@ -1675,10 +2059,38 @@
 
     async function saveWorkspaceAlgorithm(moduleKind) {
       updateWorkspaceFileContent();
-      const kind = qs("#wsKind").value;
-      const name = qs("#wsName").value.trim();
+      let kind = qs("#wsKind").value;
+      let name = qs("#wsName").value.trim();
       let catValue = qs("#wsCategory")?.value || "";
       const tags = qs("#wsTags").value.split(",").map(item => item.trim()).filter(Boolean);
+
+      if (qs("#wsCreateMode")?.value === "import") {
+        if (!newAlgoState.importedFromPicker || !newAlgoState.files.length) {
+          showToast("请先点击“选择文件”或“选择文件夹”导入本地代码");
+          return;
+        }
+        const imported = newAlgoState.importedFromPicker
+          ? newAlgoState.files
+          : parseImportedWorkspaceFiles(getWorkspaceCode(), name || "my_algorithm");
+        const detected = inferFirstPythonFunction(imported[0]?.content || "");
+        if ((!name || name === "my_algorithm") && detected) {
+          name = detected;
+          qs("#wsName").value = detected;
+        }
+        newAlgoState.files = imported.map((file, index) => ({
+          relative_path: file.relative_path || (index === 0 ? `${name}.py` : `helpers_${index}.py`),
+          content: file.content || ""
+        }));
+        const selectedEntry = qs("#wsEntryFile")?.value;
+        const selectedExport = qs("#wsExportFunc")?.value;
+        if (selectedExport) {
+          name = selectedExport;
+          qs("#wsName").value = selectedExport;
+        }
+        newAlgoState.currentFile = selectedEntry || newAlgoState.currentFile || newAlgoState.files[0]?.relative_path || `${name}.py`;
+        kind = newAlgoState.files.length > 1 ? "complex" : "simple";
+        if (qs("#wsKind")) qs("#wsKind").value = kind;
+      }
 
       // 前端校验
       if (!name) { showToast("函数名不能为空"); return; }
@@ -1719,7 +2131,7 @@
               namespace,
               zh_name: qs("#wsZhName").value.trim(),
               version: "1.0.0",
-              entry: "main.py",
+              entry: qs("#wsEntryFile")?.value || newAlgoState.currentFile || newAlgoState.files[0]?.relative_path || "main.py",
               exports: [name],
               zh_description: qs("#wsDesc").value.trim(),
               zh_tags: tags,
@@ -1741,7 +2153,7 @@
               version: "1.0.0",
               code: newAlgoState.files[0].content,
               module_kind: moduleKind,
-              publish_status: moduleKind === "template" ? "published" : "draft"
+              publish_status: "draft"
             })
           });
         }
@@ -1889,7 +2301,7 @@
         version: qs("#algVersion").value.trim() || "1.0.0",
         code: qs("#algCode").value,
         module_kind: moduleKind,
-        publish_status: moduleKind === "template" ? "published" : "draft",
+        publish_status: "draft",
         input_example: qs("#algInputExample")?.value.trim() || ""
       };
       try {
@@ -2033,13 +2445,14 @@
       const nsPrefix = namespacePrefix(e.algo);
       const nsFunc = namespaceFunction(e.algo);
       const isOwner = canManageAlgorithm(e.algo);
-      const isComponentEditor = e.page === "components" || e.page === "my-algos";
+      const isComponentEditor = e.page === "components" || e.page === "templates" || e.page === "my-algos";
       qs("#main").innerHTML = `
         <div class="editor-view" id="editorView">
           <div class="editor-top">
             <button onclick="window.closeEditor()">返回</button>
             <span class="breadcrumb">${esc(pageTitle(e.page))} / ${esc(getName(e.algo))}</span>
             <button onclick="window.openComponentTestModal()">测试</button>
+            <button onclick="window.checkCurrentEditorSyntax()">检查代码</button>
             <button onclick="window.editCurrentAlgorithmInfo()">基本信息</button>
             ${e.page === "templates" ? `<button onclick="window.editTemplateDescription('${esc(e.id)}')">编辑说明</button>` : ""}
             ${isComponentEditor && canSubmitAlgorithm(e.algo) ? `<button data-status-btn="1" onclick="window.openSubmitModal('${esc(e.id)}')">${getStatus(e.algo) === "rejected" ? "重新提交" : "提交审核"}</button>` : ""}
@@ -2063,7 +2476,7 @@
               <div class="field-error" id="nsErr"></div>
             </div>
             <button onclick="window.saveAndCloseEditor()">保存并退出</button>
-            <button class="primary" onclick="window.saveNamespace()">保存</button>
+            <button class="primary" onclick="window.saveEditorAll()">保存</button>
             ${!isOwner && state.currentUser ? `<div class="editor-notice">💡 此算法不属于您，点击「保存」将另存为您的私有草稿</div>` : ""}
           </div>
           <div class="editor-main" id="editorMain">
@@ -2170,8 +2583,40 @@
       window._activeMonaco = state.editor;
       state.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => saveCurrentFile());
       state.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
+      state.editor.onDidChangeModelContent(() => runEditorLocalDiagnostics());
       await registerCompletionProvider();
+      runEditorLocalDiagnostics();
       renderTestPanel();
+    }
+
+    function runEditorLocalDiagnostics(showResult = false) {
+      const model = state.editor?.getModel();
+      if (!model) return [];
+      const diagnostics = localPythonDiagnostics(model.getValue());
+      applyDiagnosticsToModel(model, diagnostics);
+      if (showResult) showToast(diagnostics.length ? `发现 ${diagnostics.length} 个本地代码问题` : "本地代码检查通过");
+      return diagnostics;
+    }
+
+    async function checkCurrentEditorSyntax() {
+      const model = state.editor?.getModel();
+      if (!model || !state.editing) { showToast("编辑器未就绪"); return; }
+      const localErrors = runEditorLocalDiagnostics(false);
+      try {
+        const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/check-syntax`, {
+          method: "POST",
+          body: JSON.stringify({ filename: state.currentFile || "source.py", content: model.getValue() })
+        });
+        const serverErrors = (result.errors || []).map(item => ({
+          line: item.line || 1,
+          col: item.col || 1,
+          message: item.message || "Python 语法错误"
+        }));
+        applyDiagnosticsToModel(model, [...localErrors, ...serverErrors]);
+        showToast(serverErrors.length || localErrors.length ? `发现 ${serverErrors.length + localErrors.length} 个代码问题` : "代码检查通过");
+      } catch (error) {
+        showToast(error.message || "代码检查失败");
+      }
     }
 
     function normalizeFunctions(functions) {
@@ -2244,6 +2689,7 @@
               <div class="file-name" style="display:flex;align-items:center;gap:4px">
                 <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(file.filename)}${file.isEntry ? " · entry" : ""}</span>
                 <button class="ghost" type="button" style="font-size:11px;padding:1px 5px;flex-shrink:0" data-rename-file="${esc(file.filename)}" onclick="event.stopPropagation();window.renameSourceFile(this.dataset.renameFile)" title="重命名">改名</button>
+                <button class="ghost danger" type="button" style="font-size:14px;line-height:1;padding:1px 6px;flex-shrink:0;color:${file.isEntry ? "var(--text-dim)" : "var(--danger)"};opacity:${file.isEntry ? ".55" : "1"}" data-delete-file="${esc(file.filename)}" ${file.isEntry ? 'data-entry-file="1" title="入口文件不能删除"' : 'title="删除文件"'}>×</button>
               </div>
               <div class="file-functions">${names.length ? `def ${esc(names.join(", "))}` : "无函数"}</div>
             </div>
@@ -2252,6 +2698,13 @@
       `;
       qsa("[data-file-name]", qs("#fileTree")).forEach(item => {
         item.addEventListener("click", () => switchFile(item.dataset.fileName || ""));
+      });
+      qsa("[data-delete-file]", qs("#fileTree")).forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          deleteSourceFile(button.dataset.deleteFile || "", button.dataset.entryFile === "1");
+        });
       });
     }
 
@@ -2296,6 +2749,30 @@
     function renameSourceFile(oldName) {
       if (!oldName) return;
       openSourceFileModal("rename", oldName);
+    }
+
+    async function deleteSourceFile(filename, isEntry = false) {
+      if (!filename) return;
+      if (isEntry) {
+        showToast("入口文件不能删除");
+        return;
+      }
+      showToast(`正在删除：${filename}`);
+      try {
+        const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/files/${encodeURIComponent(filename)}`, {
+          method: "DELETE"
+        });
+        if (result.algorithm) {
+          state.editing.algo = result.algorithm;
+          state.editing.id = result.algorithm.id || state.editing.id;
+        }
+        const files = result.folder_files || [];
+        const next = files.find(file => file.is_entry) || files[0];
+        await refreshEditorFolderFiles(files, next ? (next.relative_path || next.filename) : "");
+        showToast(`文件已删除：${filename}`);
+      } catch (error) {
+        showToast(error.message || `删除失败：${filename}`);
+      }
     }
 
     async function confirmSourceFileModal(mode, oldName = "") {
@@ -2362,10 +2839,23 @@
     async function _saveAsPrivateDraft() {
       const algo = state.editing?.algo;
       if (!algo) return;
-      const content = state.models.get(state.currentFile)?.getValue() || "";
-      const funcName = qs("#nsInput")?.value.trim() || algo.funcName || algo.name || "my_func";
+      const files = Array.from(state.models.entries()).map(([filename, model]) => ({
+        filename,
+        content: model?.getValue() || "",
+        isEntry: !!state.fileMeta.get(filename)?.is_entry
+      }));
+      const oldFuncName = namespaceFunction(algo) || algo.funcName || algo.name || "my_func";
+      const requestedName = qs("#nsInput")?.value.trim() || oldFuncName;
+      const funcName = requestedName;
       const category = algo.namespace || "custom";
       const moduleKind = state.editing.page === "templates" ? "template" : "component";
+      const entryFile = files.find(file => file.isEntry) || files.find(file => file.filename === state.currentFile) || files[0];
+      const escapeRegExp = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const renameEntryFunction = (code, fromName, toName) => {
+        if (!fromName || fromName === toName) return code;
+        return String(code || "").replace(new RegExp(`(def\\s+)${escapeRegExp(fromName)}(\\s*\\()`, "m"), `$1${toName}$2`);
+      };
+      const entryContent = renameEntryFunction(entryFile?.content || "", oldFuncName, funcName);
       try {
         const result = await api("/api/v1/algorithms/create", {
           method: "POST",
@@ -2376,7 +2866,7 @@
             version: algo.version || "1.0.0",
             zh_description: algo.zhDescription || "",
             zh_tags: algo.zhTags || [],
-            code: content,
+            code: entryContent,
             module_kind: moduleKind,
             publish_status: "draft",
             input_example: algo.inputExample || ""
@@ -2384,6 +2874,13 @@
         });
         const newAlgo = result.algorithm;
         if (newAlgo) {
+          for (const file of files) {
+            if (!file || file === entryFile) continue;
+            await api(`/api/v1/algorithm-source/${safeId(newAlgo.id)}/add-file`, {
+              method: "POST",
+              body: JSON.stringify({ filename: file.filename, content: file.content })
+            });
+          }
           state.editing.id = newAlgo.id;
           state.editing.algo = newAlgo;
           await loadModuleData(state.editing.page);
@@ -2392,9 +2889,40 @@
           // Update namespace display to new algo
           const nsInput = qs("#nsInput");
           if (nsInput) nsInput.value = namespaceFunction(newAlgo);
+          await openEditor(newAlgo, state.editing.page);
         }
       } catch (err) {
         showToast(err.message);
+      }
+    }
+
+    function nextPatchVersion(value) {
+      const [major, minor, patch] = parseVersion(value || "1.0.0");
+      return `${major}.${minor}.${patch + 1}`;
+    }
+
+    async function bumpVersionAfterCodeSave(algo, isDraftMode = false) {
+      if (!algo || isDraftMode) return;
+      const nextVersion = nextPatchVersion(algo.version || "1.0.0");
+      try {
+        const result = await api(`/api/v1/algorithms/${safeId(algo.id || state.editing.id)}/metadata`, {
+          method: "PATCH",
+          body: JSON.stringify({ version: nextVersion })
+        });
+        state.editing.algo = result.algorithm || { ...algo, version: nextVersion };
+        state.editing.id = state.editing.algo.id || state.editing.id;
+      } catch (error) {
+        console.warn("version bump failed", error);
+      }
+    }
+
+    async function saveEditorAll() {
+      await saveCurrentFile();
+      const input = qs("#nsInput");
+      if (state.editing?.algo && input && input.value.trim()) {
+        const desired = `${namespacePrefix(state.editing.algo)}${input.value.trim()}`;
+        const current = state.editing.algo.callPrefix || state.editing.algo.displayNamespace || `alg.${state.editing.algo.namespace || ""}.${state.editing.algo.funcName || ""}`;
+        if (desired !== current) await saveNamespace();
       }
     }
 
@@ -2418,7 +2946,8 @@
           if (result.is_draft_mode) {
             showToast("已保存为草稿（提交审核后生效）");
           } else {
-            showToast("文件已保存");
+            await bumpVersionAfterCodeSave(state.editing.algo, false);
+            showToast(`文件已保存，版本已更新为 ${state.editing.algo.version || "新版本"}`);
           }
           refreshEditorStatusButtons();
         } catch (error) {
@@ -2431,7 +2960,8 @@
           method: "POST",
           body: JSON.stringify({ content })
         });
-        showToast("文件已保存");
+        await bumpVersionAfterCodeSave(state.editing.algo, false);
+        showToast(`文件已保存，版本已更新为 ${state.editing.algo.version || "新版本"}`);
       } catch (error) {
         showToast(error.message);
       }
@@ -2446,6 +2976,7 @@
         state.completionItems = [];
       }
       if (state.completionDisposable) state.completionDisposable.dispose();
+      const completionPrivacy = item => privacyLabel(item);
       state.completionDisposable = m.languages.registerCompletionItemProvider("python", {
         triggerCharacters: ["."],
         provideCompletionItems(model, position) {
@@ -2467,7 +2998,7 @@
                 insertText,
                 insertTextRules: m.languages.CompletionItemInsertTextRule.InsertAsSnippet,
                 documentation: item.zhDescription || item.zh_description || item.documentation || "",
-                detail: item.detail || call,
+                detail: `${completionPrivacy(item)} · ${item.detail || call}`,
                 range: null
               };
             })
@@ -2825,7 +3356,24 @@
     async function editTemplateDescription(id) {
       const item = state.editing?.algo || (state.data.templates || []).find(e => e.id === id);
       if (!item) { showToast("未找到模板"); return; }
-      const curDesc = item.zhDescription || item.zh_description || "";
+      const defaultTemplateGuide = `用途：说明这个模板适合开发哪类算法，以及输入、输出和依赖环境。
+
+使用步骤：
+1. 点击“编辑”进入模板代码，先阅读顶部注释，确认配置区、核心逻辑区和验证区分别要修改什么。
+2. 在配置区填写默认参数，在核心逻辑函数中补全算法主体，并在注释中写清楚每个参数含义。
+3. 使用“测试”准备示例输入，确认输出结构符合说明。
+4. 点击“发布为组件”，填写组件名称、分类、版本和调用说明后提交审核。
+
+注释要求：
+- 文件顶部写清模板用途、适用场景、版本和依赖。
+- 每个需要用户修改的位置用清晰注释说明“为什么改、怎么改”。
+- 函数 docstring 中写明参数类型、默认值、返回值和异常情况。
+
+使用示例：
+from algolib import alg
+result = alg.<分类>.<组件函数>(data, **params)
+print(result)`;
+      const curDesc = item.zhDescription || item.zh_description || defaultTemplateGuide;
       qs("#modalRoot").classList.remove("hidden");
       qs("#modalRoot").innerHTML = `
         <div class="modal" style="max-width:600px">
@@ -2965,6 +3513,7 @@
             <strong>基于模板新建组件：${esc(item.zhName || defaultName)}</strong>
             <span class="spacer"></span>
             <button onclick="window.testTplSource()">测试代码</button>
+            <button onclick="window.checkTplCode()">检查代码</button>
             <button class="ghost" onclick="window.saveTplDraft('${esc(id)}')">保存草稿</button>
             <button class="primary" onclick="window.confirmPublishAsComponent('${esc(id)}')">提交审核</button>
           </div>
@@ -2996,7 +3545,7 @@
             <div class="file-list-panel" id="tplFileList">
               <button class="active">${esc(defaultName)}.py</button>
             </div>
-            <textarea id="tplCode" class="file-edit-area" spellcheck="false">${esc(templateCode)}</textarea>
+            <div id="tplCodeHost" class="workspace-monaco-host"></div>
           </div>
           <div id="tplOutput" class="output hidden"></div>
         </div>
@@ -3004,12 +3553,62 @@
       // 恢复分类默认选中
       const firstCat = compCats[0];
       if (firstCat && qs("#tplCategory")) qs("#tplCategory").value = firstCat.namespace;
+      await initTplMonaco(templateCode);
     }
 
     function onTplCatChange() {
       const v = qs("#tplCategory")?.value;
       const row = qs("#tplNewCatRow");
       if (row) row.style.display = v === "__new__" ? "" : "none";
+    }
+
+    async function initTplMonaco(content = "") {
+      const host = qs("#tplCodeHost");
+      if (!host) return;
+      const m = await loadMonaco();
+      if (state.tplEditor) {
+        state.tplEditor.dispose();
+        state.tplEditor = null;
+      }
+      if (state.tplModel && !state.tplModel.isDisposed()) state.tplModel.dispose();
+      state.tplModel = m.editor.createModel(content || "", "python", m.Uri.parse(`inmemory://algolib-template/${Date.now()}.py`));
+      state.tplEditor = m.editor.create(host, {
+        model: state.tplModel,
+        theme: "algolib-dark",
+        language: "python",
+        automaticLayout: true,
+        fontSize: 14,
+        tabSize: 4,
+        insertSpaces: true,
+        autoIndent: "full",
+        formatOnPaste: true,
+        formatOnType: true,
+        folding: true,
+        bracketPairColorization: { enabled: true },
+        quickSuggestions: { other: true, comments: false, strings: false },
+        minimap: { enabled: true },
+        scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6, useShadows: false }
+      });
+      window._activeMonaco = state.tplEditor;
+      state.tplEditor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => {
+        const templateId = state.data.templates?.find(item => (item.funcName || item.id || "").split(".").pop() === (qs("#tplName")?.value || ""))?.id;
+        if (templateId) saveTplDraft(templateId);
+      });
+      state.tplEditor.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
+      state.tplEditor.onDidChangeModelContent(() => checkTplCode(false));
+      checkTplCode(false);
+    }
+
+    function getTplCode() {
+      return state.tplEditor?.getValue() || qs("#tplCode")?.value || "";
+    }
+
+    function checkTplCode(showResult = true) {
+      const model = state.tplEditor?.getModel();
+      const diagnostics = localPythonDiagnostics(getTplCode());
+      if (model) applyDiagnosticsToModel(model, diagnostics);
+      if (showResult) showToast(diagnostics.length ? `发现 ${diagnostics.length} 个代码问题` : "代码检查通过");
+      return diagnostics;
     }
 
     function inferTplParamType(value) {
@@ -3039,7 +3638,7 @@
     }
 
     function getTplFunctionParams(functionName) {
-      const source = qs("#tplCode")?.value || "";
+      const source = getTplCode();
       if (!source.trim()) return [];
       const escapedName = String(functionName || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       if (!escapedName) return [];
@@ -3318,7 +3917,7 @@
         const result = await api("/api/v1/run-source", {
           method: "POST",
           body: JSON.stringify({
-            content: qs("#tplCode")?.value || "",
+            content: getTplCode(),
             function: fnName,
             kwargs,
             timeout
@@ -3344,7 +3943,7 @@
       const tags = (qs("#tplTags")?.value || "").split(",").map(t => t.trim()).filter(Boolean);
       const desc = qs("#tplDesc")?.value.trim() || "";
       const inputExample = qs("#tplInputExample")?.value.trim() || "";
-      const code = qs("#tplCode")?.value || "";
+      const code = getTplCode();
 
       if (!name || !/^[a-z_][a-z0-9_]*$/.test(name)) { showToast("函数名只能使用小写字母、数字和下划线"); return; }
       if (catValue === "__new__") {
@@ -3434,7 +4033,7 @@
       const tags = (qs("#pacTags")?.value || qs("#tplTags")?.value || "").split(",").map(t => t.trim()).filter(Boolean);
       const desc = qs("#pacDesc")?.value.trim() || qs("#tplDesc")?.value.trim() || "";
       const inputExample = qs("#tplInputExample")?.value.trim() || "";
-      const code = qs("#tplCode")?.value || "";
+      const code = getTplCode();
 
       const confirmBtn = qs("#modalRoot .primary");
       if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = "提交中..."; }
@@ -3474,28 +4073,46 @@
     async function submitReview(id) { return openSubmitModal(id); }
 
     function findAlgorithmInState(id) {
-      return [...(state.data.components || []), ...(state.data["my-algos"] || [])].find(a => a.id === id) || {};
+      return [...(state.data.components || []), ...(state.data.templates || []), ...(state.data["my-algos"] || [])].find(a => a.id === id) || {};
     }
 
-    function openSubmitModal(id) {
+    async function openSubmitModal(id) {
       const item = findAlgorithmInState(id);
       if (!item.id && state.editing?.id === id) Object.assign(item, state.editing.algo || {});
       if (!canSubmitAlgorithm(item) && !(ownsAlgorithm(item) && getStatus(item) === "published" && item.hasReviewDraft)) {
         showToast("只能提交您自己的私有算法");
         return;
       }
-      const currentVer = item.version || "1.0.0";
-      const isFirstRelease = currentVer === "1.0.0";
-      const vOpts = versionUpgradeOptions(currentVer);
-      const defaultIdx = isFirstRelease ? 0 : 1;
+      let submitCheck = { hasConflict: false, versionOptions: null };
+      try {
+        submitCheck = await api(`/api/v1/algorithms/${safeId(id)}/submit-check`);
+      } catch (error) {
+        showToast(error.message);
+        return;
+      }
+      const currentVer = submitCheck.baseVersion || item.version || "1.0.0";
+      const vOpts = submitCheck.versionOptions || versionUpgradeOptions(currentVer);
+      const conflictHtml = submitCheck.hasConflict ? `
+        <div class="form-row" style="grid-column:1/-1">
+          <label>命名空间冲突</label>
+          <div class="notice warning" style="margin:0">
+            该命名空间已被公有算法占用。若这是对现有公有算法的升级，请选择“作为版本迭代提交”；否则请先返回编辑界面修改命名空间。
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+            <input id="srIsVersionIteration" type="checkbox" checked />
+            作为版本迭代提交给管理员审核
+          </label>
+        </div>
+      ` : `<input id="srIsVersionIteration" type="hidden" value="" />`;
       qs("#modalRoot").classList.remove("hidden");
       qs("#modalRoot").innerHTML = `
         <div class="modal">
           <h3>提交审核</h3>
           <div class="form-grid">
+            ${conflictHtml}
             <div class="form-row"><label>版本迭代方式</label>
               <select id="srVersionBump">
-                ${vOpts.map((o, i) => `<option value="${esc(o.value)}"${i === defaultIdx ? " selected" : ""}>${esc(o.label)}</option>`).join("")}
+                ${vOpts.map((o, i) => `<option value="${esc(o.value)}" data-type="${esc(o.type || "")}"${i === 0 ? " selected" : ""}>${esc(o.label)}</option>`).join("")}
               </select>
             </div>
             <div class="form-row"><label>中文名称 <span style="color:var(--text-dim);font-size:12px">（可留空保持不变）</span></label><input id="srZhName" value="${esc(item.zhName || "")}" /></div>
@@ -3504,14 +4121,21 @@
           </div>
           <div class="modal-actions">
             <button onclick="window.closeModal()">取消</button>
-            <button class="warning" onclick="window.confirmSubmitReview('${esc(id)}')">确认提交审核</button>
+            <button class="warning" onclick="window.confirmSubmitReview('${esc(id)}', ${submitCheck.hasConflict ? "true" : "false"})">确认提交审核</button>
           </div>
         </div>
       `;
     }
 
-    async function confirmSubmitReview(id) {
-      const version = qs("#srVersionBump")?.value || "";
+    async function confirmSubmitReview(id, hasConflict = false) {
+      const versionSelect = qs("#srVersionBump");
+      const version = versionSelect?.value || "";
+      const versionType = versionSelect?.selectedOptions?.[0]?.dataset?.type || "patch";
+      const isVersionIteration = hasConflict ? !!qs("#srIsVersionIteration")?.checked : false;
+      if (hasConflict && !isVersionIteration) {
+        showToast("该命名空间已被公有算法占用。若不是版本迭代，请先修改命名空间。");
+        return;
+      }
       const zhName = qs("#srZhName")?.value.trim() || "";
       const desc = qs("#srDesc")?.value.trim() || "";
       const tagsRaw = qs("#srTags")?.value || "";
@@ -3529,19 +4153,19 @@
         }
         await api(`/api/v1/algorithms/${safeId(id)}/submit`, {
           method: "POST",
-          body: JSON.stringify({ version_bump: version })
+          body: JSON.stringify({ version_bump: version, version_bump_type: versionType, is_version_iteration: isVersionIteration })
         });
         showToast("已提交审核");
-        await loadModuleData(state.page === "my-algos" || state.editing?.page === "my-algos" ? "my-algos" : "components");
+        const targetPage = state.editing?.page || (state.page === "templates" ? "templates" : (state.page === "my-algos" ? "my-algos" : "components"));
+        await loadModuleData(targetPage);
         if (state.editing && state.editing.id === id) {
-          // In editor: update local algo state and refresh toolbar (no renderCards needed)
           const updated = findAlgorithmInState(id);
           if (updated) state.editing.algo = { ...state.editing.algo, ...updated };
           refreshEditorStatusButtons();
         } else if (state.page === "review") {
           await renderReviewPage();
         } else {
-          renderCards(state.page === "my-algos" ? "my-algos" : "components");
+          renderCards(targetPage);
         }
       } catch (error) {
         showToast(error.message);
@@ -3629,11 +4253,30 @@
     }
 
     async function approveReview(id) {
+      let draft = null;
+      try {
+        const data = await api(`/api/v1/algorithms/${safeId(id)}/review-draft`);
+        draft = data?.draft || null;
+      } catch (error) {
+        draft = null;
+      }
+      const isIteration = draft?.review_kind === "version_iteration";
+      const options = isIteration ? versionUpgradeOptions(draft.base_public_version || "1.0.0").filter(o => o.type !== "keep") : [];
+      const versionHtml = isIteration ? `
+        <div class="form-row">
+          <label>公有算法版本迭代</label>
+          <div class="notice warning" style="margin:0 0 8px">该提交会覆盖现有公有算法 ${esc(draft.target_public_call_prefix || "")}。请核对代码差异后选择版本号。</div>
+          <select id="approveVersionBump">
+            ${options.map((o, i) => `<option value="${esc(o.value)}" data-type="${esc(o.type || "")}"${i === 0 ? " selected" : ""}>${esc(o.label)}</option>`).join("")}
+          </select>
+        </div>
+      ` : "";
       qs("#modalRoot").classList.remove("hidden");
       qs("#modalRoot").innerHTML = `
         <div class="modal">
           <h3>审核通过确认</h3>
-          <p style="color:var(--text-dim);margin:0 0 16px">确认通过此算法审核？通过后状态变为"待发布"，可进行正式发布。</p>
+          <p style="color:var(--text-dim);margin:0 0 16px">确认通过此算法审核？通过后状态变为待发布，可进行正式发布。</p>
+          ${versionHtml}
           <div class="modal-actions">
             <button onclick="window.closeModal()">取消</button>
             <button class="success" onclick="window.confirmApproveReview('${esc(id)}')">确认通过</button>
@@ -3643,9 +4286,14 @@
     }
 
     async function confirmApproveReview(id) {
+      const versionSelect = qs("#approveVersionBump");
+      const body = versionSelect ? {
+        version_bump: versionSelect.value,
+        version_bump_type: versionSelect.selectedOptions?.[0]?.dataset?.type || "patch"
+      } : {};
       closeModal();
       try {
-        await api(`/api/v1/algorithms/${safeId(id)}/approve`, { method: "POST" });
+        await api(`/api/v1/algorithms/${safeId(id)}/approve`, { method: "POST", body: JSON.stringify(body) });
         showToast("审核已通过");
         if (state.page === "review") await renderReviewPage();
         else { await loadModuleData("components"); renderCards("components"); }
@@ -3821,24 +4469,39 @@
       }
     }
 
-    async function editSnippet(id) {
-      const snippet = id ? (await api(`/api/v1/snippets/${safeId(id)}`)).snippet : {
+    async function editSnippet(id, fork = false) {
+      let snippet = id ? (await api(`/api/v1/snippets/${safeId(id)}`)).snippet : {
         name: "", zh_name: "", body: "", language: "python", tags: [], scope: "private", version: "1.0"
       };
-      state.snippetEditing = { id, snippet };
+      const publishedReadOnly = getStatus(snippet) === "published" && state.currentUser?.role !== "admin";
+      const saveId = (fork || publishedReadOnly) ? "" : id;
+      if (fork || publishedReadOnly) {
+        const baseName = String(snippet.name || "snippet").replace(/_copy(?:_\d+)?$/, "");
+        snippet = {
+          ...snippet,
+          id: "",
+          name: `${baseName}_copy`,
+          zh_name: `${snippet.zh_name || snippet.name || "代码片段"} 副本`,
+          scope: "private",
+          owner_id: state.currentUser?.id || "",
+          publish_status: "draft"
+        };
+      }
+      state.snippetEditing = { id: saveId, snippet };
       qs("#main").innerHTML = `
         <div class="editor-view snippet-editor" id="snippetEditorView">
           <div class="editor-top">
             <button onclick="window.closeSnippetEditor()">返回</button>
             <span class="breadcrumb">代码片段 / ${esc(snippet.zh_name || snippet.name || "新建片段")}</span>
+            ${saveId ? `<span class="tag ${statusClass(getStatus(snippet))}">${esc(statusLabel(getStatus(snippet)))}</span>` : `<span class="tag warning">私有草稿</span>`}
             <span class="spacer"></span>
             <button onclick="window.copySnippetFromEditor()">复制</button>
-            <button class="primary" onclick="window.saveSnippet('${esc(id)}')">保存</button>
+            <button class="primary" onclick="window.saveSnippet('${esc(saveId)}')">保存</button>
           </div>
           <div class="snippet-meta">
             <div class="snippet-top-field"><label>触发名</label><input id="snName" value="${esc(snippet.name)}" placeholder="例如 csv_to_records" /></div>
             <div class="snippet-top-field"><label>中文名</label><input id="snZhName" value="${esc(snippet.zh_name || "")}" placeholder="例如 CSV 转记录片段" /></div>
-            <div class="snippet-top-field"><label>权限</label><select id="snScope"><option value="private">私有</option><option value="team">共享</option></select></div>
+            <div class="snippet-top-field"><label>权限</label><input value="私有（审核通过后变为公有）" disabled /></div>
             <div class="snippet-top-field"><label>语言</label><input id="snLanguage" value="${esc(snippet.language || "python")}" /></div>
             <div class="snippet-top-field"><label>标签</label><input id="snTags" value="${esc((snippet.tags || []).join(","))}" placeholder="逗号分隔，如 CSV,DataFrame" /></div>
             <div class="snippet-top-field"><label>版本</label><input id="snVersion" value="${esc(snippet.version || "1.0")}" /></div>
@@ -3849,7 +4512,6 @@
           </div>
         </div>
       `;
-      qs("#snScope").value = snippet.scope || "private";
       await initSnippetEditor(snippet.body || "");
     }
 
@@ -3862,10 +4524,11 @@
         name: qs("#snName").value.trim(),
         zh_name: qs("#snZhName").value.trim(),
         language: qs("#snLanguage").value.trim() || "python",
-        scope: qs("#snScope").value,
+        scope: "private",
         tags: qs("#snTags").value.split(",").map(item => item.trim()).filter(Boolean),
         version: qs("#snVersion").value.trim() || "1.0",
-        body: state.snippetEditing?.snippet?.body || ""
+        body: state.snippetEditing?.snippet?.body || "",
+        publish_status: id ? (state.snippetEditing?.snippet?.publish_status || state.snippetEditing?.snippet?.publishStatus || "draft") : "draft"
       };
       try {
         await api(id ? `/api/v1/snippets/${safeId(id)}` : "/api/v1/snippets", {
@@ -3982,12 +4645,80 @@
     }
 
     async function deleteSnippet(id) {
-      if (!confirm("确认删除这个代码片段？")) return;
+      openModal(`
+        <div class="modal-card">
+          <h3>删除代码片段</h3>
+          <p>确认删除这个私有代码片段？删除后不可恢复。</p>
+          <div class="modal-actions">
+            <button onclick="window.closeModal()">取消</button>
+            <button class="danger" onclick="window.confirmDeleteSnippet('${esc(id)}')">确认删除</button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function confirmDeleteSnippet(id) {
       try {
         await api(`/api/v1/snippets/${safeId(id)}`, { method: "DELETE" });
+        closeModal();
         showToast("片段已删除");
         await loadModuleData("snippets");
         renderCards("snippets");
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    async function refreshSnippetsAfterReview(message) {
+      showToast(message);
+      await loadModuleData("snippets");
+      if (state.page === "snippets") renderCards("snippets");
+    }
+
+    async function submitSnippetReview(id) {
+      try {
+        await api(`/api/v1/snippets/${safeId(id)}/submit`, { method: "POST" });
+        await refreshSnippetsAfterReview("代码片段已提交审核");
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    async function withdrawSnippetReview(id) {
+      try {
+        await api(`/api/v1/snippets/${safeId(id)}/withdraw`, { method: "POST" });
+        await refreshSnippetsAfterReview("代码片段已撤回");
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    async function approveSnippetReview(id) {
+      try {
+        await api(`/api/v1/snippets/${safeId(id)}/approve`, { method: "POST" });
+        await refreshSnippetsAfterReview("代码片段审核已通过");
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    async function rejectSnippetReview(id) {
+      const comment = prompt("请输入驳回原因", "请补充代码片段说明或修正实现。") || "";
+      try {
+        await api(`/api/v1/snippets/${safeId(id)}/reject`, {
+          method: "POST",
+          body: JSON.stringify({ comment })
+        });
+        await refreshSnippetsAfterReview("代码片段已驳回");
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    async function publishSnippet(id) {
+      try {
+        await api(`/api/v1/snippets/${safeId(id)}/publish`, { method: "POST" });
+        await refreshSnippetsAfterReview("代码片段已发布为公有");
       } catch (error) {
         showToast(error.message);
       }
@@ -4066,7 +4797,8 @@
       qs("#main").innerHTML = `<h1>算法审核</h1><div class="empty">加载审核队列...</div>`;
       try {
         await loadModuleData("components");
-        const items = (state.data.components || []).filter(item => {
+        await loadModuleData("templates");
+        const items = [...(state.data.components || []), ...(state.data.templates || [])].filter(item => {
           const s = getStatus(item);
           return ["reviewing", "rejected", "approved"].includes(s) || (s === "published" && item.hasReviewDraft);
         });
@@ -4083,11 +4815,11 @@
               const status = getStatus(item);
               return `<tr>
                 <td>${esc(getName(item))}</td>
-                <td><code>${esc(getNs(item, "components"))}</code></td>
+                <td><code>${esc(getNs(item, item.moduleKind === "template" || item.type === "template" ? "templates" : "components"))}</code></td>
                 <td><span class="tag ${statusClass(status)}">${esc(statusLabel(status))}${item.hasReviewDraft && status === "published" ? " (有草稿)" : ""}</span></td>
                 <td>${esc(getDesc(item))}</td>
                 <td>
-                  <button onclick="window.openEditorById('${esc(item.id)}','components',true)">查看/测试</button>
+                  <button onclick="window.openEditorById('${esc(item.id)}','${item.moduleKind === "template" || item.type === "template" ? "templates" : "components"}',true)">查看/测试</button>
                   ${status === "published" && item.hasReviewDraft ? `<button onclick="window.openSubmitModal('${esc(item.id)}')">提交审核</button>` : ""}
                   ${status === "rejected" ? `<button class="ghost" onclick="window.viewRejectReason('${esc(item.id)}')">查看驳回原因</button><button class="warning" onclick="window.undoRejectReview('${esc(item.id)}')">撤销驳回</button>` : ""}
                   ${status === "reviewing" ? `<button onclick="window.approveReview('${esc(item.id)}')">通过</button><button class="danger" onclick="window.rejectReview('${esc(item.id)}')">驳回</button>` : ""}
@@ -4254,8 +4986,8 @@
         </div>
         <div class="quick-filters" id="quickFilters">
           <button class="active" data-qf="" onclick="window.setQuickFilter('','my-algos')">全部</button>
-          <button class="qf-success" data-qf="published" onclick="window.setQuickFilter('published','my-algos')">已发布</button>
-          <button data-qf="draft" onclick="window.setQuickFilter('draft','my-algos')">草稿</button>
+          <button class="qf-success" data-qf="published" onclick="window.setQuickFilter('published','my-algos')">公有</button>
+          <button data-qf="draft" onclick="window.setQuickFilter('draft','my-algos')">私有</button>
           <button class="qf-warning" data-qf="reviewing" onclick="window.setQuickFilter('reviewing','my-algos')">审核中</button>
           <button data-qf="rejected" onclick="window.setQuickFilter('rejected','my-algos')">已驳回</button>
         </div>
@@ -4294,14 +5026,18 @@
         listEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:4px 0">
           ${algos.map(a => {
             const ps = a.publishStatus || "draft";
+            const reviewVisible = ["reviewing", "rejected", "approved"].includes(ps);
+            const privacyTxt = ps === "published" ? "公有" : "私有";
+            const privacyCls = privacyTxt === "公有" ? "success" : "warning";
             const statusCls = statusClass(ps);
-            const statusTxt = { draft: "草稿", reviewing: "审核中", rejected: "已拒绝", approved: "已批准", published: "已发布" }[ps] || ps;
+            const statusTxt = { reviewing: "审核中", rejected: "已拒绝", approved: "待发布" }[ps] || ps;
             const canEdit = ps === "draft" || ps === "rejected";
             const canSubmit = ps === "draft" || ps === "rejected";
             const canWithdraw = ps === "reviewing";
             const canDelete = ps === "draft" || ps === "rejected";
             return `<div class="card" style="position:relative;padding:16px">
-              <span class="tag ${statusCls} status-badge">${esc(statusTxt)}</span>
+              ${reviewVisible ? `<span class="tag ${statusCls} status-badge">${esc(statusTxt)}</span>` : ""}
+              <span class="tag ${privacyCls}" style="position:absolute;right:10px;top:${reviewVisible ? "38px" : "10px"}">${esc(privacyTxt)}</span>
               <div style="font-weight:600;margin-bottom:4px;padding-right:60px">${esc(a.zhName || a.callPrefix || a.id)}</div>
               <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">${esc(a.callPrefix || a.id)}</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -4398,7 +5134,7 @@
         const src = await api(`/api/v1/algorithm-source/${encodeURIComponent(algoId)}`);
         const algo = src.algorithm || {};
         const ps = algo.publishStatus || "draft";
-        const statusTxt = { draft: "草稿", reviewing: "审核中", rejected: "已拒绝", approved: "已批准", published: "已发布" }[ps] || ps;
+        const statusTxt = { draft: "私有", reviewing: "审核中", rejected: "已拒绝", approved: "待发布", published: "公有" }[ps] || ps;
         qs("#myeditor-title").textContent = algo.zhName || algo.callPrefix || algoId;
         const statusEl = qs("#myeditor-status");
         statusEl.textContent = statusTxt;
@@ -4989,7 +5725,9 @@
     window.addSourceFile = addSourceFile;
     window.openSourceFileModal = openSourceFileModal;
     window.confirmSourceFileModal = confirmSourceFileModal;
+    window.deleteSourceFile = deleteSourceFile;
     window.saveCurrentFile = saveCurrentFile;
+    window.saveEditorAll = saveEditorAll;
     window.validateNamespace = validateNamespace;
     window.saveNamespace = saveNamespace;
     window.setTestHeight = setTestHeight;
@@ -5052,6 +5790,14 @@
     window.onWsCatChange = onWsCatChange;
     window.saveWorkspaceAlgorithm = saveWorkspaceAlgorithm;
     window.testWorkspaceSource = testWorkspaceSource;
+    window.checkWorkspaceCode = checkWorkspaceCode;
+    window.onWorkspaceModeChange = onWorkspaceModeChange;
+    window.pickWorkspaceFile = pickWorkspaceFile;
+    window.pickWorkspaceFolder = pickWorkspaceFolder;
+    window.handleWorkspaceImportFiles = handleWorkspaceImportFiles;
+    window.onWorkspaceEntryChange = onWorkspaceEntryChange;
+    window.onWorkspaceExportChange = onWorkspaceExportChange;
+    window.inferWorkspaceNameFromCode = inferWorkspaceNameFromCode;
     window.applyWorkspaceTemplate = applyWorkspaceTemplate;
     window.switchWorkspaceFile = switchWorkspaceFile;
     window.updateWorkspaceFileContent = updateWorkspaceFileContent;
@@ -5078,6 +5824,12 @@
     window.copyTextToClipboard = copyTextToClipboard;
     window.copySnippet = copySnippet;
     window.deleteSnippet = deleteSnippet;
+    window.confirmDeleteSnippet = confirmDeleteSnippet;
+    window.submitSnippetReview = submitSnippetReview;
+    window.withdrawSnippetReview = withdrawSnippetReview;
+    window.approveSnippetReview = approveSnippetReview;
+    window.rejectSnippetReview = rejectSnippetReview;
+    window.publishSnippet = publishSnippet;
     window.openSnippetOverlay = openSnippetOverlay;
     window.closeSnippetOverlay = closeSnippetOverlay;
     window.searchSnippetOverlay = searchSnippetOverlay;

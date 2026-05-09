@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from .algorithms import _append_entry_version, get_registry
+from .algorithms import _append_entry_version, _upsert_algo_meta, get_registry
 from ..sdk.auth_utils import get_current_user
 from ..sdk.registry import AlgorithmRegistry
 
@@ -107,6 +107,24 @@ async def create_package(
         if namespace and name:
             root_dir = str(_ALGORITHMS_ROOT / "users" / current_user_id)
         payload["owner_id"] = current_user_id
+
+    entry_name = str(payload.get("entry", "main.py")).strip() or "main.py"
+    export_name = str((payload.get("exports") or [""])[0] or "").strip()
+    if export_name:
+        for file_item in files:
+            relative_path = str(file_item.get("relative_path") or file_item.get("filename") or "").strip().replace("\\", "/")
+            if relative_path == entry_name:
+                file_item["content"] = _upsert_algo_meta(
+                    str(file_item.get("content", "")),
+                    export_name,
+                    {
+                        "zh_name": str(payload.get("zh_name", "")).strip() or export_name,
+                        "zh_description": str(payload.get("zh_description", "")).strip(),
+                        "zh_tags": payload.get("zh_tags", []),
+                        "version": str(payload.get("version", "1.0.0")).strip() or "1.0.0",
+                    },
+                )
+                break
 
     try:
         package = registry.create_package(payload, files, root_dir)
