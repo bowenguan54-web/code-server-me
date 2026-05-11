@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "blocks": [
+    {
+      "id": "blk_step1",
+      "order": 1,
+      "title": "步骤一：导入依赖与数据读取",
+      "description": "标准数据管道的导入和数据加载阶段，此部分由模板设计者固定，不可修改",
+      "code": "\"\"\"数据处理管道模板 — 展示分块编辑功能\"\"\"\nfrom __future__ import annotations\nfrom typing import Any\nfrom algo_service.sdk.decorators import algo_meta\n\n@algo_meta(\n    zh_name=\"数据处理管道模板\",\n    zh_description=\"一个标准的数据 ETL 管道模板：读取→清洗→转换→校验→输出。部分步骤锁定不可修改，中间步骤可自由编辑。\",\n    zh_tags=[\"模板\", \"数据管道\", \"ETL\", \"分块演示\"],\n    version=\"1.0.0\",\n    input_example='{\"raw_data\": [{\"name\": \"张三\", \"age\": 28, \"score\": null}, {\"name\": \"李四\", \"age\": -1, \"score\": 85}]}',\n)\ndef data_pipeline_template(raw_data: list[dict[str, Any]]) -> dict[str, Any]:\n    \"\"\"标准数据处理管道。\"\"\"\n    if not raw_data:\n        raise ValueError(\"raw_data 不能为空\")\n    data = [dict(row) for row in raw_data]\n",
+      "locked": true,
+      "hint": ""
+    },
+    {
+      "id": "blk_step2",
+      "order": 2,
+      "title": "步骤二：数据清洗",
+      "description": "对原始数据进行清洗，处理缺失值、异常值。你可以修改此部分的逻辑。",
+      "code": "    # ---- 数据清洗 ----\n    for row in data:\n        for key, value in row.items():\n            if value is None:\n                row[key] = 0\n",
+      "locked": false,
+      "hint": "可调用 alg.preprocess.fill_missing(data, strategy=\"mean\") 等组件"
+    },
+    {
+      "id": "blk_step3",
+      "order": 3,
+      "title": "步骤三：数据转换与特征工程",
+      "description": "对清洗后的数据进行类型转换、衍生字段计算等操作",
+      "code": "    # ---- 数据转换 ----\n    for row in data:\n        if \"age\" in row and isinstance(row[\"age\"], (int, float)) and row[\"age\"] < 0:\n            row[\"age\"] = abs(row[\"age\"])\n",
+      "locked": false,
+      "hint": "可自由编写转换逻辑，或调用 alg.data_utils 中的组件"
+    },
+    {
+      "id": "blk_step4",
+      "order": 4,
+      "title": "步骤四：业务规则校验",
+      "description": "根据业务需求对数据进行校验和过滤",
+      "code": "    # ---- 业务规则 ----\n    valid_data = [row for row in data if row.get(\"age\", 0) > 0]\n    invalid_count = len(data) - len(valid_data)\n",
+      "locked": false,
+      "hint": "可调用 alg.statistics 中的统计组件进行异常检测"
+    },
+    {
+      "id": "blk_step5",
+      "order": 5,
+      "title": "步骤五：结果格式化与输出",
+      "description": "将处理结果格式化为标准输出结构。此部分由模板设计者固定，不可修改。",
+      "code": "    result = {\n        \"processed_data\": valid_data,\n        \"total_count\": len(data),\n        \"valid_count\": len(valid_data),\n        \"invalid_count\": invalid_count,\n        \"status\": \"success\",\n    }\n    return result\n",
+      "locked": true,
+      "hint": ""
+    }
+  ]
+}

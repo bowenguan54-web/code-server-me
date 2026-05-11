@@ -148,3 +148,27 @@ class SnippetResponse(SnippetBase):
     updated_at: str
     owner_id: str = "system"
     publish_status: str = "draft"
+
+
+class TemplateBlock(BaseModel):
+    """Single template code block."""
+
+    id: str = ""
+    order: int = 0
+    title: str = ""
+    description: str = ""
+    code: str = ""
+    locked: bool = False
+    hint: str = ""
+
+
+class TemplateBlocksSaveRequest(BaseModel):
+    """Full save of template blocks (Design Mode)."""
+
+    blocks: list[TemplateBlock]
+
+
+class TemplateBlocksEditableRequest(BaseModel):
+    """Save only editable blocks' code (Use Mode)."""
+
+    blocks: list[dict]  # [{"id": "blk_xxx", "code": "..."}]

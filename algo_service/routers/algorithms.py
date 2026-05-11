@@ -3232,6 +3232,281 @@ async def invoke_algorithm_by_namespace(
     return _execute_entry(entry, request.args, request.kwargs)
 
 
+# ============================================================
+# 模板分块编辑 (Template Blocks) — 工具函数
+# ============================================================
+
+def _template_blocks_path(entry: AlgorithmEntry) -> Path:
+    """返回模板 blocks JSON 的存储路径。"""
+    return Path(entry.source_file).parent / f"{entry.func_name}.blocks.json"
+
+
+def _parse_blocks_from_source(source: str) -> list[dict[str, Any]] | None:
+    """从源码中的特殊注释标记解析 blocks。
+    标记格式：# === BLOCK: 标题 [LOCKED] ===
+    如果源码中没有任何 BLOCK 标记，返回 None。
+    """
+    import re
+    lines = source.split("\n")
+    block_pattern = re.compile(r"^#\s*===\s*BLOCK:\s*(.+?)(?:\s*\[LOCKED\])?\s*===\s*$")
+    locked_pattern = re.compile(r"\[LOCKED\]")
+    desc_pattern = re.compile(r"^#\s*DESC:\s*(.+)$")
+    hint_pattern = re.compile(r"^#\s*HINT:\s*(.+)$")
+
+    markers: list[tuple[int, str, bool]] = []
+    for i, line in enumerate(lines):
+        m = block_pattern.match(line)
+        if m:
+            title = m.group(1).strip()
+            locked = bool(locked_pattern.search(line))
+            title = re.sub(r"\s*\[LOCKED\]\s*", "", title).strip()
+            markers.append((i, title, locked))
+
+    if not markers:
+        return None
+
+    blocks: list[dict[str, Any]] = []
+    for idx, (line_idx, title, locked) in enumerate(markers):
+        start = line_idx + 1
+        end = markers[idx + 1][0] if idx + 1 < len(markers) else len(lines)
+        description = ""
+        hint = ""
+        code_start = start
+        for j in range(start, min(start + 5, end)):
+            dm = desc_pattern.match(lines[j])
+            hm = hint_pattern.match(lines[j])
+            if dm:
+                description = dm.group(1).strip()
+                code_start = j + 1
+            elif hm:
+                hint = hm.group(1).strip()
+                code_start = j + 1
+            else:
+                break
+        code = "\n".join(lines[code_start:end])
+        code = code.rstrip("\n") + "\n" if code.strip() else "\n"
+        blocks.append({
+            "id": f"blk_{idx + 1:03d}",
+            "order": idx + 1,
+            "title": title,
+            "description": description,
+            "code": code,
+            "locked": locked,
+            "hint": hint,
+        })
+    return blocks
+
+
+def _load_template_blocks(entry: AlgorithmEntry) -> list[dict[str, Any]] | None:
+    """加载模板的 blocks 数据。
+    优先级：1) .blocks.json 文件  2) 从源码注释解析  3) 返回 None
+    """
+    blocks_path = _template_blocks_path(entry)
+    if blocks_path.exists():
+        try:
+            data = json.loads(blocks_path.read_text(encoding="utf-8"))
+            blocks = data.get("blocks") if isinstance(data, dict) else data
+            if isinstance(blocks, list) and blocks:
+                return blocks
+        except (OSError, json.JSONDecodeError):
+            pass
+    try:
+        source = Path(entry.source_file).read_text(encoding="utf-8")
+        parsed = _parse_blocks_from_source(source)
+        if parsed:
+            return parsed
+    except OSError:
+        pass
+    return None
+
+
+def _save_template_blocks(entry: AlgorithmEntry, blocks: list[dict[str, Any]]) -> None:
+    """保存 blocks 到 sidecar JSON 文件。"""
+    blocks_path = _template_blocks_path(entry)
+    payload = {"schema_version": "1.0", "blocks": blocks}
+    blocks_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _assemble_source_from_blocks(blocks: list[dict[str, Any]]) -> str:
+    """将 blocks 按 order 排序后拼接为完整的 .py 源码（含注释标记）。"""
+    sorted_blocks = sorted(blocks, key=lambda b: b.get("order", 0))
+    parts: list[str] = []
+    for block in sorted_blocks:
+        locked_tag = " [LOCKED]" if block.get("locked") else ""
+        marker = f"# === BLOCK: {block.get('title', '未命名步骤')}{locked_tag} ==="
+        parts.append(marker)
+        if block.get("description"):
+            parts.append(f"# DESC: {block['description']}")
+        if block.get("hint"):
+            parts.append(f"# HINT: {block['hint']}")
+        code = block.get("code", "")
+        parts.append(code.rstrip("\n"))
+        parts.append("")  # 块之间空一行
+    return "\n".join(parts).rstrip("\n") + "\n"
+
+
+# ============================================================
+# 模板分块编辑 (Template Blocks) — API 路由
+# ============================================================
+
+@router.get("/templates/{algorithm_id}/blocks")
+async def get_template_blocks(
+    algorithm_id: str,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """获取模板的分块信息。"""
+    entry = _entry_from_client_id(registry, algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="算法不存在")
+    if entry.type != "template":
+        raise HTTPException(status_code=400, detail="仅模板类型支持分块编辑")
+    blocks = _load_template_blocks(entry)
+    if blocks is None:
+        try:
+            source = Path(entry.source_file).read_text(encoding="utf-8")
+        except OSError:
+            source = ""
+        return {
+            "success": True,
+            "algorithm_id": entry.id,
+            "has_blocks": False,
+            "blocks": [{
+                "id": "blk_full",
+                "order": 1,
+                "title": "完整代码",
+                "description": "",
+                "code": source,
+                "locked": False,
+                "hint": "",
+            }],
+        }
+    return {
+        "success": True,
+        "algorithm_id": entry.id,
+        "has_blocks": True,
+        "blocks": blocks,
+    }
+
+
+@router.put("/templates/{algorithm_id}/blocks")
+async def save_template_blocks(
+    algorithm_id: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """完整保存模板分块（Design Mode — 创建者/管理员使用）。"""
+    entry = _entry_from_client_id(registry, algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="算法不存在")
+    if entry.type != "template":
+        raise HTTPException(status_code=400, detail="仅模板类型支持分块编辑")
+    body = await request.json()
+    blocks = body.get("blocks", [])
+    if not blocks:
+        raise HTTPException(status_code=400, detail="blocks 不能为空")
+    for i, block in enumerate(blocks):
+        if not block.get("id"):
+            block["id"] = f"blk_{i + 1:03d}"
+        if "order" not in block:
+            block["order"] = i + 1
+        if "code" not in block:
+            block["code"] = ""
+    _save_template_blocks(entry, blocks)
+    full_source = _assemble_source_from_blocks(blocks)
+    try:
+        ast.parse(full_source)
+    except SyntaxError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"拼接后的代码存在语法错误（第 {exc.lineno} 行）：{exc.msg}",
+        ) from exc
+    Path(entry.source_file).write_text(full_source, encoding="utf-8")
+    registry.rescan_file(entry.source_file)
+    return {"success": True, "message": "模板分块已保存"}
+
+
+@router.put("/templates/{algorithm_id}/blocks/editable")
+async def save_template_editable_blocks(
+    algorithm_id: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """仅保存可编辑块的代码（Use Mode — 普通用户使用）。"""
+    entry = _entry_from_client_id(registry, algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="算法不存在")
+    if entry.type != "template":
+        raise HTTPException(status_code=400, detail="仅模板类型支持分块编辑")
+    existing_blocks = _load_template_blocks(entry)
+    if not existing_blocks:
+        raise HTTPException(status_code=400, detail="该模板未配置分块信息")
+    body = await request.json()
+    editable_updates = body.get("blocks", [])
+    updates_map: dict[str, str] = {}
+    for item in editable_updates:
+        if isinstance(item, dict) and "id" in item and "code" in item:
+            updates_map[item["id"]] = item["code"]
+    for block in existing_blocks:
+        block_id = block.get("id", "")
+        if block_id in updates_map:
+            if block.get("locked"):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"块 '{block.get('title', block_id)}' 已锁定，不允许修改",
+                )
+            block["code"] = updates_map[block_id]
+    _save_template_blocks(entry, existing_blocks)
+    full_source = _assemble_source_from_blocks(existing_blocks)
+    try:
+        ast.parse(full_source)
+    except SyntaxError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"代码存在语法错误（第 {exc.lineno} 行）：{exc.msg}",
+        ) from exc
+    Path(entry.source_file).write_text(full_source, encoding="utf-8")
+    registry.rescan_file(entry.source_file)
+    return {"success": True, "message": "可编辑块已保存"}
+
+
+@router.post("/templates/{algorithm_id}/blocks/convert")
+async def convert_to_block_template(
+    algorithm_id: str,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """将旧模板转换为分块模板（从源码注释解析或创建单块）。"""
+    entry = _entry_from_client_id(registry, algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="算法不存在")
+    if entry.type != "template":
+        raise HTTPException(status_code=400, detail="仅模板类型支持此操作")
+    blocks_path = _template_blocks_path(entry)
+    if blocks_path.exists():
+        return {"success": True, "message": "该模板已有分块配置", "has_blocks": True}
+    try:
+        source = Path(entry.source_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    blocks = _parse_blocks_from_source(source)
+    if not blocks:
+        blocks = [{
+            "id": "blk_001",
+            "order": 1,
+            "title": "完整代码",
+            "description": "此模板尚未分块，请在设计模式下进行分块设置",
+            "code": source,
+            "locked": False,
+            "hint": "",
+        }]
+    _save_template_blocks(entry, blocks)
+    return {
+        "success": True,
+        "message": "已转换为分块模板",
+        "has_blocks": True,
+        "block_count": len(blocks),
+    }
+
+
 @external_router.post("/{namespace}/{func_name}")
 async def invoke_external_algorithm(
     namespace: str,
