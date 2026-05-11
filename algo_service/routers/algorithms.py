@@ -982,6 +982,42 @@ def _find_entries_for_docs(registry: AlgorithmRegistry, call_namespace: str) -> 
 from ..sdk.auth_utils import get_current_user
 
 _ALGORITHMS_ROOT = Path(__file__).resolve().parents[2] / "algorithms_root"
+_REVIEW_LOG_PATH = _ALGORITHMS_ROOT / ".review_log.json"
+
+
+def _load_review_log() -> list[dict[str, Any]]:
+    """Load the persistent review history log."""
+    try:
+        if _REVIEW_LOG_PATH.exists():
+            data = json.loads(_REVIEW_LOG_PATH.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+    except (OSError, json.JSONDecodeError):
+        pass
+    return []
+
+
+def _save_review_log(log: list[dict[str, Any]]) -> None:
+    try:
+        _ALGORITHMS_ROOT.mkdir(parents=True, exist_ok=True)
+        _REVIEW_LOG_PATH.write_text(json.dumps(log, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _upsert_review_log(algorithm_id: str, updates: dict[str, Any]) -> None:
+    """Create or update the most recent active (non-terminal) log entry for an algorithm."""
+    log = _load_review_log()
+    # Find the most recent entry that is still active (not published/rejected already)
+    target = next(
+        (e for e in reversed(log)
+         if e.get("algorithm_id") == algorithm_id and e.get("status") not in ("published", "rejected", "withdrawn")),
+        None,
+    )
+    if target is not None:
+        target.update(updates)
+    else:
+        log.append({"algorithm_id": algorithm_id, **updates})
+    _save_review_log(log)
 
 
 def _visible_entries_for_request(entries: list[AlgorithmEntry], request: Request | None) -> list[AlgorithmEntry]:
@@ -2320,6 +2356,23 @@ async def submit_algorithm_review(
     }
     _save_review_draft(entry, draft)
     refreshed = _update_publish_status(entry, "reviewing", registry)
+    _upsert_review_log(
+        _entry_client_id(refreshed),
+        {
+            "name": refreshed.zh_name or refreshed.func_name,
+            "call_prefix": refreshed.call_prefix,
+            "owner_id": getattr(refreshed, "owner_id", "system"),
+            "review_kind": draft["review_kind"],
+            "target_public_call_prefix": draft.get("target_public_call_prefix", ""),
+            "status": "reviewing",
+            "submitted_at": draft["updated_at"],
+            "approved_at": None,
+            "published_at": None,
+            "rejected_at": None,
+            "reject_reason": "",
+            "version_bump": draft.get("version_bump", ""),
+        },
+    )
     return {"success": True, "algorithm": _entry_dict(refreshed)}
 
 
@@ -2353,7 +2406,7 @@ async def approve_algorithm_review(
     request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict[str, Any]:
-    """Approve a review (reviewing → approved)."""
+    """Approve a review and immediately publish (reviewing → published)."""
 
     current_user = get_current_user(request)
     if current_user.get("role") != "admin":
@@ -2365,6 +2418,7 @@ async def approve_algorithm_review(
     if current not in ("reviewing", "draft"):
         raise HTTPException(status_code=400, detail=f"当前状态为 {current}，不允许审批")
     draft = _load_review_draft(entry)
+    now_iso = datetime.now(timezone.utc).isoformat()
     if draft and draft.get("review_kind") == "version_iteration":
         try:
             body: dict[str, Any] = await request.json()
@@ -2378,10 +2432,16 @@ async def approve_algorithm_review(
         draft["metadata"] = metadata
         draft["version_bump_type"] = bump_type
         draft["version_bump"] = version_bump
-        draft["approved_at"] = datetime.now(timezone.utc).isoformat()
+        draft["approved_at"] = now_iso
         _save_review_draft(entry, draft)
-    refreshed = _update_publish_status(entry, "approved", registry)
-    return {"success": True, "algorithm": _entry_dict(refreshed)}
+    # Auto-publish immediately — no separate "正式发布" step required
+    client_id = _entry_client_id(entry)
+    published = await _do_publish_algorithm(entry, registry)
+    _upsert_review_log(
+        client_id,
+        {"status": "published", "approved_at": now_iso, "published_at": now_iso},
+    )
+    return {"success": True, "algorithm": _entry_dict(published), "autoPublished": True}
 
 
 @router.post("/algorithms/{algorithm_id:path}/reject")
@@ -2416,6 +2476,10 @@ async def reject_algorithm_review(
     existing["updated_at"] = datetime.now(timezone.utc).isoformat()
     _save_review_draft(entry, existing)
     refreshed = _update_publish_status(entry, "rejected", registry)
+    _upsert_review_log(
+        _entry_client_id(refreshed),
+        {"status": "rejected", "rejected_at": existing["updated_at"], "reject_reason": reason},
+    )
     return {"success": True, "algorithm": _entry_dict(refreshed)}
 
 
@@ -2454,7 +2518,16 @@ async def publish_algorithm(
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
-    # Apply review draft so code changes actually take effect (e.g. published → revised → approved → published)
+    result = await _do_publish_algorithm(entry, registry)
+    return {"success": True, "algorithm": _entry_dict(result)}
+
+
+async def _do_publish_algorithm(
+    entry: AlgorithmEntry,
+    registry: AlgorithmRegistry,
+) -> AlgorithmEntry:
+    """Core publish logic shared by approve (auto-publish) and publish endpoints."""
+
     draft = _load_review_draft(entry)
     if draft and draft.get("review_kind") == "version_iteration":
         target_public_id = str(draft.get("target_public_id") or entry.id)
@@ -2467,14 +2540,24 @@ async def publish_algorithm(
         public_entry = _apply_review_files_to_entry(public_entry, draft.get("files", []), metadata, registry)
         public_entry = _update_publish_status(public_entry, "published", registry)
         _delete_review_draft(entry)
-        _update_publish_status(entry, "draft", registry)
+        # Delete the private draft entry (no longer needed after version iteration)
+        try:
+            if getattr(entry, "package_root", None):
+                pkg_root = Path(entry.package_root).resolve()
+                if pkg_root.exists():
+                    shutil.rmtree(pkg_root, ignore_errors=True)
+                registry.scan_directory(str(pkg_root.parent))
+            else:
+                src = Path(entry.source_file).resolve()
+                src.unlink(missing_ok=True)
+                registry.unregister_by_file(str(src))
+        except Exception:
+            pass  # Non-fatal: public entry already published
         _append_entry_version(public_entry, "version.iterated", note=f"Version iteration from {entry.call_prefix}")
-        return {"success": True, "algorithm": _entry_dict(public_entry), "versionIteration": True}
+        return public_entry
     if draft and draft.get("files"):
         entry = _apply_review_draft(entry, registry)
     # If private algorithm (has owner_id), promote to public.
-    # Attempt to MOVE the folder to the global algorithms_root so that the user's private
-    # directory is freed up and they can later create a same-named private draft without conflict.
     owner_id = getattr(entry, "owner_id", None) or "system"
     if owner_id != "system":
         config_path = _entry_config_path(entry)
@@ -2485,39 +2568,140 @@ async def publish_algorithm(
                 global_folder = _ALGORITHMS_ROOT.joinpath(*namespace_parts, entry.func_name)
                 moved = False
                 if not global_folder.exists() and current_folder != global_folder:
-                    # Move folder to global public location so user dir is freed
                     try:
                         global_folder.parent.mkdir(parents=True, exist_ok=True)
-                        # Unregister old file paths before moving
                         for old_file in current_folder.glob("*.py"):
                             registry.unregister_by_file(str(old_file))
                         shutil.move(str(current_folder), str(global_folder))
-                        # Update config in new location: remove owner_id
                         new_config_path = global_folder / "folder_config.json"
                         cfg = json.loads(new_config_path.read_text(encoding="utf-8"))
                         cfg.pop("owner_id", None)
                         new_config_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-                        # Rescan global parent so new entry is picked up
                         registry.scan_directory(str(global_folder.parent))
                         entry = registry.get_by_id(entry.id) or entry
                         moved = True
                     except OSError:
                         moved = False
                 if not moved:
-                    # Fall back: keep file in user dir, just remove owner_id from config
                     config = json.loads(config_path.read_text(encoding="utf-8"))
                     config.pop("owner_id", None)
-                    config_path.write_text(
-                        json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"
-                    )
+                    config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
                     registry.scan_directory(str(config_path.parent.parent))
                     entry = registry.get_by_id(entry.id) or entry
             except (OSError, json.JSONDecodeError) as exc:
-                raise HTTPException(
-                    status_code=500, detail=f"发布算法失败（无法移除私有标记）: {exc}"
-                ) from exc
-    refreshed = _update_publish_status(entry, "published", registry)
-    return {"success": True, "algorithm": _entry_dict(refreshed)}
+                raise HTTPException(status_code=500, detail=f"发布算法失败（无法移除私有标记）: {exc}") from exc
+    return _update_publish_status(entry, "published", registry)
+
+
+@router.get("/review-log")
+async def get_review_log(
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Return the full review submission history log."""
+
+    current_user = get_current_user(request)
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可查看审核日志")
+    log = _load_review_log()
+    return {"log": log}
+
+
+@router.post("/algorithms/{algorithm_id:path}/admin-publish")
+async def admin_publish_algorithm(
+    algorithm_id: str,
+    request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Admin direct publish without review. Accepts version_bump and metadata overrides."""
+
+    current_user = get_current_user(request)
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可直接发布算法")
+    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
+    try:
+        body: dict[str, Any] = await request.json()
+    except Exception:
+        body = {}
+    version_bump = str(body.get("version_bump") or "").strip()
+    metadata_override = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+
+    # For public algo admin edit (version iteration): check if there's a public conflict
+    public_entry = _public_conflict_for_entry(registry, entry)
+    is_iteration = public_entry is not None
+
+    # Prefer an existing review draft. Normal users may have saved the changed
+    # code into the draft layer, so publishing from the physical folder would
+    # lose the actual submitted changes.
+    existing_draft = _load_review_draft(entry)
+    existing_files = existing_draft.get("files") if isinstance(existing_draft, dict) else None
+    if isinstance(existing_files, list) and existing_files:
+        draft_files = [
+            {
+                "filename": str(f.get("filename") or f.get("relative_path") or ""),
+                "relative_path": str(f.get("relative_path") or f.get("filename") or ""),
+                "content": str(f.get("content") or ""),
+            }
+            for f in existing_files
+            if isinstance(f, dict)
+        ]
+    else:
+        snap_files = _folder_files_for_entry(entry)
+        draft_files = [
+            {"filename": f["filename"], "relative_path": f["relative_path"], "content": f["content"]}
+            for f in snap_files
+        ]
+    if not version_bump and is_iteration:
+        bump_type = str(body.get("version_bump_type") or "patch")
+        version_bump = _bump_semver(public_entry.version if public_entry else entry.version, bump_type)
+    existing_metadata = existing_draft.get("metadata") if isinstance(existing_draft, dict) and isinstance(existing_draft.get("metadata"), dict) else {}
+    metadata = {
+        "zh_name": str(metadata_override.get("zh_name") or existing_metadata.get("zh_name") or entry.zh_name or ""),
+        "zh_description": str(metadata_override.get("zh_description") or existing_metadata.get("zh_description") or entry.zh_description or ""),
+        "zh_tags": metadata_override.get("zh_tags") if isinstance(metadata_override.get("zh_tags"), list) else (existing_metadata.get("zh_tags") if isinstance(existing_metadata.get("zh_tags"), list) else (entry.zh_tags or [])),
+        "version": version_bump or entry.version or "1.0.0",
+    }
+
+    synthetic_draft: dict[str, Any] = {
+        "algorithm_id": entry.id,
+        "call_prefix": entry.call_prefix,
+        "base_status": str(existing_draft.get("base_status") or _read_entry_publish_status(entry)) if isinstance(existing_draft, dict) else _read_entry_publish_status(entry),
+        "status": "reviewing",
+        "review_kind": str(existing_draft.get("review_kind") or ("version_iteration" if is_iteration else "new_publish")) if isinstance(existing_draft, dict) else ("version_iteration" if is_iteration else "new_publish"),
+        "target_public_id": str(existing_draft.get("target_public_id") or (public_entry.id if is_iteration else "")) if isinstance(existing_draft, dict) else (public_entry.id if is_iteration else ""),
+        "target_public_call_prefix": str(existing_draft.get("target_public_call_prefix") or (public_entry.call_prefix if is_iteration else "")) if isinstance(existing_draft, dict) else (public_entry.call_prefix if is_iteration else ""),
+        "base_public_version": str(existing_draft.get("base_public_version") or (public_entry.version if is_iteration else "")) if isinstance(existing_draft, dict) else (public_entry.version if is_iteration else ""),
+        "version_bump": version_bump or entry.version or "1.0.0",
+        "version_bump_type": str(body.get("version_bump_type") or "patch"),
+        "metadata": metadata,
+        "files": draft_files,
+        "approved_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _save_review_draft(entry, synthetic_draft)
+    published = await _do_publish_algorithm(entry, registry)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    _upsert_review_log(
+        _entry_client_id(entry),
+        {
+            "name": entry.zh_name or entry.func_name,
+            "call_prefix": entry.call_prefix,
+            "owner_id": getattr(entry, "owner_id", "system"),
+            "review_kind": synthetic_draft["review_kind"],
+            "target_public_call_prefix": synthetic_draft.get("target_public_call_prefix", ""),
+            "status": "published",
+            "submitted_at": now_iso,
+            "approved_at": now_iso,
+            "published_at": now_iso,
+            "rejected_at": None,
+            "reject_reason": "",
+            "version_bump": version_bump,
+            "admin_direct": True,
+        },
+    )
+    return {"success": True, "algorithm": _entry_dict(published), "adminDirect": True}
 
 
 @router.post("/algorithm-source/{algorithm_id:path}/add-file")

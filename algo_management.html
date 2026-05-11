@@ -380,6 +380,30 @@
     .algo-card.template { border-left-color: var(--success); }
     .algo-card.snippet { border-left-color: var(--snippet); }
     .algo-card.highlight { animation: highlight 2s ease; }
+    .readme-view { padding-bottom: 32px; }
+    .panel-card {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 16px;
+    }
+    .panel-card h2 {
+      margin: 0 0 10px;
+      color: #fff;
+      font-size: 16px;
+    }
+    .panel-card h2:not(:first-child) { margin-top: 18px; }
+    .code-block {
+      margin: 0;
+      background: #040e1f;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      color: var(--text);
+      font: 12px/1.6 Consolas, "Courier New", monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     .status-badge { position: absolute; top: 10px; right: 10px; }
     @keyframes highlight {
       0%, 100% { box-shadow: none; }
@@ -936,13 +960,22 @@
         deprecated: "已下架"
       }[status] || status;
     }
+    function reviewStatusLabel(status) {
+      return {
+        published: "已通过",
+        approved: "已通过",
+        reviewing: "审核中",
+        rejected: "已驳回",
+        draft: "待提交",
+        private: "待提交"
+      }[status] || status || "待提交";
+    }
     function ownsAlgorithm(item) {
       const ownerId = item?.ownerId || item?.owner_id || "system";
       return !!(state.currentUser?.id && ownerId === state.currentUser.id);
     }
     function canManageAlgorithm(item) {
-      const status = getStatus(item);
-      if (status === "published" && state.currentUser?.role !== "admin") return false;
+      if (isPublicItem(item)) return false;
       return state.currentUser?.role === "admin" || ownsAlgorithm(item);
     }
     function canSubmitAlgorithm(item) {
@@ -1273,46 +1306,51 @@
         if (state.currentUser) btns.push(`<button onclick="window.openComponentTestModalById('${esc(id)}')">测试</button>`);
         if (canManage) btns.push(`<button onclick="window.editAlgorithmInfo('${esc(id)}','${esc(page)}')">基本信息</button>`);
         btns.push(`<button onclick="window.showApiDoc('${esc(id)}')">查看 API 文档</button>`);
-        if (canSubmitAlgorithm(item) || (isOwner && status === "published" && item.hasReviewDraft)) {
-          btns.push(`<button class="warning" onclick="window.openSubmitModal('${esc(id)}')">${status === "rejected" ? "重新提交" : "提交审核"}</button>`);
-        }
         if (canManage && status === "rejected") {
           btns.push(`<button class="ghost" onclick="window.viewRejectedDraft('${esc(id)}')">查看驳回内容</button>`);
           btns.push(`<button onclick="window.discardRejectedDraft('${esc(id)}')">放弃修改</button>`);
         }
-        if (canManage && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
-        if (isAdmin && status === "reviewing") btns.push(`<button onclick="window.approveReview('${esc(id)}')">审核通过</button>`);
-        if (isAdmin && status === "approved") btns.push(`<button class="success" onclick="window.publishComponent('${esc(id)}')">正式发布</button>`);
+        if (isAdmin && !isPublicItem(item)) {
+          btns.push(`<button class="success" onclick="window.openAdminPublishModal('${esc(id)}')" >正式发布</button>`);
+        } else if (canSubmitAlgorithm(item)) {
+          btns.push(`<button class="warning" onclick="window.openSubmitModal('${esc(id)}')" >${status === "rejected" ? "重新提交" : "提交审核"}</button>`);
+        }
+        if (!isAdmin && isOwner && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
         if (isAdmin || (canManage && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
       } else if (effectivePage === "templates") {
         if (status === "published" && !isAdmin) btns.push(`<button onclick="window.openEditorById('${esc(id)}','templates')">编辑</button>`);
         else if (canManage) btns.push(`<button onclick="window.openEditorById('${esc(id)}','templates')">编辑</button>`);
         else if (state.currentUser) btns.push(`<button onclick="window.openEditorById('${esc(id)}','templates')">编辑</button>`);
         if (canManage) btns.push(`<button onclick="window.editAlgorithmInfo('${esc(id)}','templates')">基本信息</button>`);
+        btns.push(`<button onclick="window.showTemplateUsage('${esc(id)}')">使用说明</button>`);
         btns.push(`<button class="primary" onclick="window.publishAsComponent('${esc(id)}',this)">基于模板新建组件</button>`);
-        if (canSubmitAlgorithm(item) || (isOwner && status === "published" && item.hasReviewDraft)) btns.push(`<button class="warning" onclick="window.openSubmitModal('${esc(id)}')">${status === "rejected" ? "重新提交" : "提交审核"}</button>`);
-        if (canManage && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
-        if (isAdmin && status === "reviewing") btns.push(`<button onclick="window.approveReview('${esc(id)}')">审核通过</button>`);
-        if (isAdmin && status === "approved") btns.push(`<button class="success" onclick="window.publishComponent('${esc(id)}')">正式发布</button>`);
+        if (isAdmin && !isPublicItem(item)) {
+          btns.push(`<button class="success" onclick="window.openAdminPublishModal('${esc(id)}')">正式发布</button>`);
+        } else if (canSubmitAlgorithm(item)) {
+          btns.push(`<button class="warning" onclick="window.openSubmitModal('${esc(id)}')">${status === "rejected" ? "重新提交" : "提交审核"}</button>`);
+        }
+        if (!isAdmin && isOwner && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
         if (isAdmin || (canManage && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
       } else {
         if (status === "published" && !isAdmin) btns.push(`<button onclick="window.editSnippet('${esc(id)}', true)">编辑</button>`);
         else if (canManage || ownsSnippet(item)) btns.push(`<button onclick="window.editSnippet('${esc(id)}')">编辑</button>`);
         btns.push(`<button onclick="window.copySnippet('${esc(id)}')">复制</button>`);
         if (canSubmitSnippet(item)) btns.push(`<button class="warning" onclick="window.submitSnippetReview('${esc(id)}')">提交审核</button>`);
-        if ((ownsSnippet(item) || isAdmin) && status === "reviewing") btns.push(`<button onclick="window.withdrawSnippetReview('${esc(id)}')">撤回</button>`);
+        if (!isAdmin && ownsSnippet(item) && status === "reviewing") btns.push(`<button onclick="window.withdrawSnippetReview('${esc(id)}')">撤回</button>`);
         if (isAdmin && status === "reviewing") {
-          btns.push(`<button onclick="window.approveSnippetReview('${esc(id)}')">审核通过</button>`);
+          btns.push(`<button class="success" onclick="window.publishSnippet('${esc(id)}')">正式发布</button>`);
           btns.push(`<button class="danger" onclick="window.rejectSnippetReview('${esc(id)}')">驳回</button>`);
         }
-        if (isAdmin && status === "approved") btns.push(`<button class="success" onclick="window.publishSnippet('${esc(id)}')">正式发布</button>`);
         if (isAdmin || ((ownsSnippet(item) || canManage) && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteSnippet('${esc(id)}')">删除</button>`);
       }
       const buttons = btns.join(" ");
       return `
         <article class="algo-card ${kind} ${state.highlightId === id ? "highlight" : ""}" data-id="${esc(id)}">
           ${reviewStatusVisible ? `<span class="tag ${statusClass(status)} status-badge"${status === "rejected" && effectivePage !== "snippets" ? ` style="cursor:pointer" onclick="window.viewRejectedDraft('${esc(id)}')" title="点击查看驳回内容"` : ""}>${esc(statusLabel(status))}</span>` : ""}
-          <span class="tag ${privacyClass}" style="position:absolute;right:14px;top:${reviewStatusVisible ? "42px" : "14px"}">${privacyText}</span>
+          ${reviewStatusVisible
+            ? `<span class="tag ${item.reviewKind === "version_iteration" ? "warning" : ""}" style="position:absolute;right:14px;top:42px">${item.reviewKind === "version_iteration" ? "版本迭代" : "新建"}</span>`
+            : `<span class="tag ${privacyClass}" style="position:absolute;right:14px;top:14px">${privacyText}</span>`
+          }
           <div class="card-title">${esc(getName(item))}</div>
           <div class="card-ns">${esc(getNs(item, page))}</div>
           <div class="desc">${esc(getDesc(item))}</div>
@@ -2454,11 +2492,11 @@
             <button onclick="window.openComponentTestModal()">测试</button>
             <button onclick="window.checkCurrentEditorSyntax()">检查代码</button>
             <button onclick="window.editCurrentAlgorithmInfo()">基本信息</button>
+            ${e.page === "templates" ? `<button onclick="window.showTemplateUsage('${esc(e.id)}')">使用说明</button>` : ""}
             ${e.page === "templates" ? `<button onclick="window.editTemplateDescription('${esc(e.id)}')">编辑说明</button>` : ""}
-            ${isComponentEditor && canSubmitAlgorithm(e.algo) ? `<button data-status-btn="1" onclick="window.openSubmitModal('${esc(e.id)}')">${getStatus(e.algo) === "rejected" ? "重新提交" : "提交审核"}</button>` : ""}
-            ${isComponentEditor && ownsAlgorithm(e.algo) && getStatus(e.algo) === "published" && e.algo.hasReviewDraft ? `<button data-status-btn="1" class="warning" onclick="window.openSubmitModal('${esc(e.id)}')">提交审核</button>` : ""}
-            ${isComponentEditor && ownsAlgorithm(e.algo) && getStatus(e.algo) === "reviewing" ? `<button data-status-btn="1" onclick="window.withdrawReview('${esc(e.id)}')">撤回审核</button>` : ""}
-            ${isComponentEditor && state.currentUser?.role === "admin" && getStatus(e.algo) === "approved" ? `<button data-status-btn="1" class="success" onclick="window.publishComponent('${esc(e.id)}')">正式发布</button>` : ""}
+            ${isComponentEditor && state.currentUser?.role === "admin" && !isPublicItem(e.algo) ? `<button data-status-btn="1" class="success" onclick="window.openAdminPublishModal('${esc(e.id)}')">正式发布</button>` : ""}
+            ${isComponentEditor && state.currentUser?.role !== "admin" && (canSubmitAlgorithm(e.algo)) ? `<button data-status-btn="1" onclick="window.openSubmitModal('${esc(e.id)}')">${getStatus(e.algo) === "rejected" ? "重新提交" : "提交审核"}</button>` : ""}
+            ${isComponentEditor && state.currentUser?.role !== "admin" && ownsAlgorithm(e.algo) && getStatus(e.algo) === "reviewing" ? `<button data-status-btn="1" onclick="window.withdrawReview('${esc(e.id)}')">撤回审核</button>` : ""}
             <div class="more-menu-wrap" style="position:relative">
               <button onclick="this.nextElementSibling.classList.toggle('hidden')">更多 ▾</button>
               <div class="more-menu hidden" style="position:absolute;top:100%;right:0;z-index:200;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;min-width:120px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,.4)">
@@ -3176,7 +3214,7 @@
       const e = state.editing;
       const status = getStatus(e.algo);
       const id = e.id;
-      const isComponentEditor = e.page === "components" || e.page === "my-algos";
+      const isComponentEditor = e.page === "components" || e.page === "my-algos" || e.page === "templates";
       // Remove both static (data-status-btn) and previously dynamic (data-dynamic) buttons
       topBar.querySelectorAll("[data-status-btn],[data-dynamic]").forEach(b => b.remove());
       const insertBefore = topBar.querySelector(".spacer") || topBar.querySelector(".more-menu-wrap");
@@ -3188,14 +3226,13 @@
         btn.onclick = fn;
         topBar.insertBefore(btn, insertBefore);
       };
-      if (isComponentEditor && canSubmitAlgorithm(e.algo)) {
+      const isAdminUser = state.currentUser?.role === "admin";
+      if (isComponentEditor && isAdminUser && !isPublicItem(e.algo)) {
+        addBtn("正式发布", "success", () => window.openAdminPublishModal(id));
+      } else if (isComponentEditor && canSubmitAlgorithm(e.algo)) {
         addBtn(status === "rejected" ? "重新提交" : "提交审核", "", () => window.openSubmitModal(id));
-      } else if (isComponentEditor && ownsAlgorithm(e.algo) && status === "published" && e.algo.hasReviewDraft) {
-        addBtn("提交审核", "warning", () => window.openSubmitModal(id));
-      } else if (isComponentEditor && ownsAlgorithm(e.algo) && status === "reviewing") {
+      } else if (isComponentEditor && !isAdminUser && ownsAlgorithm(e.algo) && status === "reviewing") {
         addBtn("撤回审核", "", () => window.withdrawReview(id));
-      } else if (isComponentEditor && state.currentUser?.role === "admin" && status === "approved") {
-        addBtn("正式发布", "success", () => window.publishComponent(id));
       }
     }
 
@@ -3475,6 +3512,195 @@ print(result)`;
         if (state.page === page) renderCards(page);
       } catch (error) {
         qs("#infoErr").textContent = error.message;
+      }
+    }
+
+    async function showTemplateUsage(id) {
+      let item = state.data.templates?.find(t => t.id === id)
+        || state.data.components?.find(c => c.id === id)
+        || state.data["my-algos"]?.find(c => c.id === id);
+      if (!item) {
+        try {
+          const source = await api(`/api/v1/algorithm-source/${safeId(id)}`);
+          item = source.algorithm || { id, zhName: id, callPrefix: id, zhDescription: "" };
+        } catch (error) {
+          showToast(error.message || "未找到模板");
+          return;
+        }
+      }
+      let code = "";
+      try {
+        const source = await api(`/api/v1/algorithm-source/${safeId(id)}`);
+        const files = source.folder_files || [];
+        const entry = files.find(f => f.is_entry) || files[0];
+        code = entry?.content || source.source || "";
+      } catch (_error) {
+        code = "";
+      }
+      const name = item.zhName || item.zh_name || item.funcName || id;
+      const desc = item.zhDescription || item.zh_description || "该模板提供算法开发骨架，适合复制后按业务场景补充参数、校验、核心逻辑和返回结构。";
+      const callPrefix = item.callPrefix || item.displayNamespace || item.funcName || id;
+      const tags = getTags(item).slice(0, 6);
+      const prevPage = state.page || "templates";
+      qs("#main").innerHTML = `
+        <section class="readme-view">
+          <div class="editor-top" style="margin-bottom:14px">
+            <button onclick="window.switchPage('${esc(prevPage)}')">返回</button>
+            <strong>使用说明 / ${esc(name)}</strong>
+            <span class="spacer"></span>
+            <button onclick="window.openEditorById('${esc(id)}','templates')">编辑模板</button>
+            <button class="primary" onclick="window.publishAsComponent('${esc(id)}',this)">基于模板新建组件</button>
+          </div>
+          <article class="algo-card template" style="max-width:none;margin-bottom:14px">
+            <span class="tag ${isPublicItem(item) ? "success" : "warning"}" style="position:absolute;right:14px;top:14px">${esc(privacyLabel(item))}</span>
+            <h1 style="margin:0 0 8px;font-size:26px">${esc(name)}</h1>
+            <div class="card-ns" style="margin-bottom:14px">${esc(callPrefix)}</div>
+            <p style="color:var(--text);line-height:1.8;margin:0 0 12px;max-width:920px">${esc(desc)}</p>
+            <div class="tags">
+              <span class="tag">python</span><span class="tag">v${esc(item.version || "1.0.0")}</span>
+              ${tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}
+            </div>
+          </article>
+          <div class="readme-grid" style="display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:16px;align-items:start">
+            <article class="panel-card">
+              <h2>使用步骤</h2>
+              <ol style="line-height:1.9;color:var(--text);padding-left:20px">
+                <li>阅读模板顶部注释，确认适用场景、输入数据格式和返回结构。</li>
+                <li>点击 <code>基于模板新建组件</code>，填写组件函数名、所属分类、中文名、版本和标签。</li>
+                <li>进入编辑器后，优先修改配置区和核心函数，不要删除必要的装饰器与入口函数。</li>
+                <li>点击 <code>检查代码</code> 修正语法、缩进和命名问题，再用测试面板填入示例参数运行。</li>
+                <li>测试通过后，普通用户点击 <code>提交审核</code>；管理员可直接 <code>正式发布</code>。</li>
+              </ol>
+              <h2>调用示例</h2>
+              <pre class="code-block">from algolib import alg
+
+# 发布成组件后，可通过命名空间调用
+result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
+              <h2>注意事项</h2>
+              <ul style="line-height:1.8;color:var(--text);padding-left:20px">
+                <li>函数名应与命名空间最后一段保持一致。</li>
+                <li>输入参数请写清类型和默认值，便于测试面板自动识别。</li>
+                <li>返回值建议使用 dict，方便 API 调用方解析。</li>
+              </ul>
+            </article>
+            <article class="panel-card">
+              <h2>模板代码预览</h2>
+              <pre class="code-block" style="max-height:520px;overflow:auto">${esc(code || "暂无源码")}</pre>
+            </article>
+          </div>
+        </section>
+      `;
+    }
+
+    async function openAdminPublishModal(id) {
+      const item = (state.data.components || []).concat(state.data.templates || []).find(i => i.id === id)
+        || (state.editing?.id === id ? state.editing.algo : null);
+      if (!item) { showToast("算法不存在"); return; }
+      let draftInfo = null;
+      try {
+        const draftResp = await api(`/api/v1/algorithms/${safeId(id)}/review-draft`);
+        draftInfo = draftResp?.draft || null;
+      } catch (error) {
+        draftInfo = null;
+      }
+      const draftMeta = draftInfo?.metadata || {};
+      const name = draftMeta.zh_name || item.zhName || item.funcName || id;
+      const desc = draftMeta.zh_description || item.zhDescription || "";
+      const itemTags = item.zhTags || item.tags || [];
+      const tags = Array.isArray(draftMeta.zh_tags) ? draftMeta.zh_tags.join(",") : (Array.isArray(itemTags) ? itemTags.join(",") : "");
+      const baseVersion = draftInfo?.base_public_version || item.version || "1.0.0";
+      const isIteration = draftInfo?.review_kind === "version_iteration" || !!draftInfo?.target_public_call_prefix || !!item.targetPublicCallPrefix;
+      const defaultType = draftInfo?.version_bump_type || (isIteration ? "patch" : "keep");
+      const bumpOptions = [
+        { type: "keep", label: "保持当前版本", v: baseVersion },
+        { type: "patch", label: "补丁版本 patch", v: _bumpSemver(baseVersion, "patch") },
+        { type: "minor", label: "次版本 minor", v: _bumpSemver(baseVersion, "minor") },
+        { type: "major", label: "主版本 major", v: _bumpSemver(baseVersion, "major") },
+      ];
+      const selectedVersion = draftInfo?.version_bump || (bumpOptions.find(o => o.type === defaultType)?.v || baseVersion);
+      qs("#modalRoot").classList.remove("hidden");
+      qs("#modalRoot").innerHTML = `
+        <div class="modal" style="max-width:680px">
+          <h3>正式发布：${esc(name)}</h3>
+          <p class="desc" style="margin:0 0 12px">
+            ${isIteration
+              ? `这是对现有公有算法 <code>${esc(draftInfo?.target_public_call_prefix || item.targetPublicCallPrefix || item.callPrefix || "")}</code> 的版本迭代，请确认版本策略和提交信息后发布。`
+              : "这是一次新建发布，确认后将进入公有算法库。"}
+          </p>
+          <div class="form-grid">
+            <div class="form-row">
+              <label>发布类型</label>
+              <span class="tag ${isIteration ? "warning" : "success"}">${isIteration ? "版本迭代" : "新建发布"}</span>
+            </div>
+            <div class="form-row">
+              <label>基础版本</label>
+              <span style="padding:6px 0;display:block">${esc(baseVersion)}</span>
+            </div>
+            <div class="form-row">
+              <label>版本迭代方式</label>
+              <select id="adminPublishBump" style="width:100%">
+                ${bumpOptions.map(o => `<option value="${esc(o.v)}" data-type="${esc(o.type)}" ${o.v === selectedVersion ? "selected" : ""}>${esc(o.label)} -> ${esc(o.v)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="form-row">
+              <label>中文名称（可微调）</label>
+              <input id="adminPublishZhName" value="${esc(name)}" />
+            </div>
+            <div class="form-row">
+              <label>描述（可微调）</label>
+              <textarea id="adminPublishDesc" rows="3">${esc(desc)}</textarea>
+            </div>
+            <div class="form-row">
+              <label>标签（逗号分隔）</label>
+              <input id="adminPublishTags" value="${esc(tags)}" />
+            </div>
+            <div class="form-row">
+              <label>发布说明 <span style="color:var(--text-dim);font-size:12px">（可选）</span></label>
+              <textarea id="adminPublishNote" rows="2" placeholder="本次发布的主要变更...">${esc(draftInfo?.note || "")}</textarea>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button onclick="window.closeModal()">取消</button>
+            <button class="success" onclick="window.confirmAdminPublish('${esc(id)}')">确认发布</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function _bumpSemver(v, type) {
+      const parts = String(v || "1.0.0").split(".").map(Number);
+      while (parts.length < 3) parts.push(0);
+      if (type === "major") return `${parts[0]+1}.0.0`;
+      if (type === "minor") return `${parts[0]}.${parts[1]+1}.0`;
+      return `${parts[0]}.${parts[1]}.${parts[2]+1}`;
+    }
+
+    async function confirmAdminPublish(id) {
+      const sel = qs("#adminPublishBump");
+      const version_bump = sel ? sel.value : "";
+      const version_bump_type = sel?.selectedOptions?.[0]?.dataset?.type || "patch";
+      const note = qs("#adminPublishNote")?.value.trim() || "";
+      const zh_name = qs("#adminPublishZhName")?.value.trim() || "";
+      const zh_description = qs("#adminPublishDesc")?.value.trim() || "";
+      const zh_tags = (qs("#adminPublishTags")?.value || "").split(",").map(s => s.trim()).filter(Boolean);
+      closeModal();
+      try {
+        const result = await api(`/api/v1/algorithms/${safeId(id)}/admin-publish`, {
+          method: "POST",
+          body: JSON.stringify({ version_bump, version_bump_type, note, metadata: { zh_name, zh_description, zh_tags } }),
+        });
+        showToast("已正式发布");
+        await loadModuleData("components");
+        await loadModuleData("templates");
+        if (state.page === "review") await renderReviewPage();
+        else if (state.page === "components" || state.page === "my-algos") renderCards(state.page);
+        else if (state.page === "templates") renderCards("templates");
+        if (state.editing?.id === id) {
+          state.editing.algo = result.algorithm;
+          refreshEditorStatusButtons();
+        }
+      } catch (err) {
+        showToast(err.message || "发布失败");
       }
     }
 
@@ -4079,8 +4305,8 @@ print(result)`;
     async function openSubmitModal(id) {
       const item = findAlgorithmInState(id);
       if (!item.id && state.editing?.id === id) Object.assign(item, state.editing.algo || {});
-      if (!canSubmitAlgorithm(item) && !(ownsAlgorithm(item) && getStatus(item) === "published" && item.hasReviewDraft)) {
-        showToast("只能提交您自己的私有算法");
+      if (!canSubmitAlgorithm(item)) {
+        showToast("只能提交您自己的私有草稿或被驳回算法");
         return;
       }
       let submitCheck = { hasConflict: false, versionOptions: null };
@@ -4254,6 +4480,7 @@ print(result)`;
 
     async function approveReview(id) {
       let draft = null;
+      let publicFiles = [];
       try {
         const data = await api(`/api/v1/algorithms/${safeId(id)}/review-draft`);
         draft = data?.draft || null;
@@ -4261,22 +4488,72 @@ print(result)`;
         draft = null;
       }
       const isIteration = draft?.review_kind === "version_iteration";
-      const options = isIteration ? versionUpgradeOptions(draft.base_public_version || "1.0.0").filter(o => o.type !== "keep") : [];
+      const baseVer = draft?.base_public_version || "1.0.0";
+
+      // Version options for version_iteration: patch/minor/major only (no "keep")
+      const bumpV = (ver, type) => {
+        const [ma, mi, pa] = parseVersion(ver);
+        if (type === "major") return `${ma + 1}.0.0`;
+        if (type === "minor") return `${ma}.${mi + 1}.0`;
+        return `${ma}.${mi}.${pa + 1}`;
+      };
+      const options = isIteration ? [
+        { type: "patch", value: bumpV(baseVer, "patch"), label: `补丁版本：${baseVer} → ${bumpV(baseVer, "patch")}` },
+        { type: "minor", value: bumpV(baseVer, "minor"), label: `次版本：${baseVer} → ${bumpV(baseVer, "minor")}` },
+        { type: "major", value: bumpV(baseVer, "major"), label: `主版本：${baseVer} → ${bumpV(baseVer, "major")}` },
+      ] : [];
+
+      // Load public algorithm files for side-by-side comparison
+      if (isIteration && draft.target_public_id) {
+        try {
+          const src = await api(`/api/v1/algorithm-source/${safeId(draft.target_public_id)}`);
+          publicFiles = src.folder_files || [];
+        } catch (_) { /* ignore */ }
+      }
+
+      // Build diff HTML
+      let diffHtml = "";
+      if (isIteration) {
+        const draftFiles = draft.files || [];
+        const entryPublic = publicFiles.find(f => f.is_entry) || publicFiles[0];
+        const entryDraft = draftFiles.find(f => f.filename === entryPublic?.filename) || draftFiles[0];
+        if (entryPublic || entryDraft) {
+          diffHtml = `
+            <div class="form-row" style="grid-column:1/-1">
+              <label>代码对比 <span style="color:var(--text-dim);font-size:12px">左：当前公有版本 v${esc(baseVer)} &nbsp;|&nbsp; 右：新提交版本</span></label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:340px">
+                <div>
+                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryPublic?.relative_path || entryPublic?.filename) || "(无)")}</div>
+                  <pre style="margin:0;padding:10px;background:var(--bg-deep);border-radius:6px;font-size:11px;overflow:auto;max-height:310px;border:1px solid var(--line)">${esc(entryPublic?.content || "（无文件）")}</pre>
+                </div>
+                <div>
+                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryDraft?.relative_path || entryDraft?.filename) || "(无)")}</div>
+                  <pre style="margin:0;padding:10px;background:var(--bg-deep);border-radius:6px;font-size:11px;overflow:auto;max-height:310px;border:1px solid rgba(88,166,255,.5)">${esc(entryDraft?.content || "（无文件）")}</pre>
+                </div>
+              </div>
+            </div>`;
+        }
+      }
+
       const versionHtml = isIteration ? `
-        <div class="form-row">
-          <label>公有算法版本迭代</label>
-          <div class="notice warning" style="margin:0 0 8px">该提交会覆盖现有公有算法 ${esc(draft.target_public_call_prefix || "")}。请核对代码差异后选择版本号。</div>
-          <select id="approveVersionBump">
-            ${options.map((o, i) => `<option value="${esc(o.value)}" data-type="${esc(o.type || "")}"${i === 0 ? " selected" : ""}>${esc(o.label)}</option>`).join("")}
+        <div class="form-row" style="grid-column:1/-1">
+          <label>目标公有算法 <span style="color:var(--text-dim);font-size:12px">${esc(draft.target_public_call_prefix || "")}</span></label>
+          <div class="notice warning" style="margin:0 0 8px">该提交将覆盖现有公有算法的代码，请核对无误后选择版本号并通过。</div>
+          <select id="approveVersionBump" style="width:100%;min-width:260px">
+            ${options.map((o, i) => `<option value="${esc(o.value)}" data-type="${esc(o.type)}"${i === 0 ? " selected" : ""}>${esc(o.label)}</option>`).join("")}
           </select>
         </div>
       ` : "";
+
       qs("#modalRoot").classList.remove("hidden");
       qs("#modalRoot").innerHTML = `
-        <div class="modal">
+        <div class="modal" style="max-width:${isIteration ? "900px" : "480px"}">
           <h3>审核通过确认</h3>
-          <p style="color:var(--text-dim);margin:0 0 16px">确认通过此算法审核？通过后状态变为待发布，可进行正式发布。</p>
-          ${versionHtml}
+          <p style="color:var(--text-dim);margin:0 0 12px">确认通过审核？通过后将自动发布，无需再手动正式发布。</p>
+          <div class="form-grid">
+            ${diffHtml}
+            ${versionHtml}
+          </div>
           <div class="modal-actions">
             <button onclick="window.closeModal()">取消</button>
             <button class="success" onclick="window.confirmApproveReview('${esc(id)}')">确认通过</button>
@@ -4293,8 +4570,8 @@ print(result)`;
       } : {};
       closeModal();
       try {
-        await api(`/api/v1/algorithms/${safeId(id)}/approve`, { method: "POST", body: JSON.stringify(body) });
-        showToast("审核已通过");
+        const result = await api(`/api/v1/algorithms/${safeId(id)}/approve`, { method: "POST", body: JSON.stringify(body) });
+        showToast(result?.autoPublished ? "审核已通过并自动发布" : "审核已通过");
         if (state.page === "review") await renderReviewPage();
         else { await loadModuleData("components"); renderCards("components"); }
       } catch (error) {
@@ -4476,11 +4753,10 @@ print(result)`;
       const publishedReadOnly = getStatus(snippet) === "published" && state.currentUser?.role !== "admin";
       const saveId = (fork || publishedReadOnly) ? "" : id;
       if (fork || publishedReadOnly) {
-        const baseName = String(snippet.name || "snippet").replace(/_copy(?:_\d+)?$/, "");
         snippet = {
           ...snippet,
           id: "",
-          name: `${baseName}_copy`,
+          name: snippet.name || "snippet",
           zh_name: `${snippet.zh_name || snippet.name || "代码片段"} 副本`,
           scope: "private",
           owner_id: state.currentUser?.id || "",
@@ -4793,37 +5069,78 @@ print(result)`;
       `;
     }
 
-    async function renderReviewPage() {
+    async function renderReviewPage(filterStatus) {
+      const activeFilter = filterStatus || state.reviewFilter || "all";
+      state.reviewFilter = activeFilter;
       qs("#main").innerHTML = `<h1>算法审核</h1><div class="empty">加载审核队列...</div>`;
       try {
         await loadModuleData("components");
         await loadModuleData("templates");
-        const items = [...(state.data.components || []), ...(state.data.templates || [])].filter(item => {
+        // Fetch historical log
+        let logEntries = [];
+        try { const r = await api("/api/v1/review-log"); logEntries = r.log || []; } catch (_) {}
+        // Active entries from registry
+        const liveItems = [...(state.data.components || []), ...(state.data.templates || [])].filter(item => {
           const s = getStatus(item);
           return ["reviewing", "rejected", "approved"].includes(s) || (s === "published" && item.hasReviewDraft);
         });
+        // Build merged list: log entries as the source of truth for history
+        // For active items, prefer live data
+        const liveById = Object.fromEntries(liveItems.map(i => [i.id, i]));
+        // Convert log entries to display rows
+        const logRows = logEntries.map(e => ({
+          ...e,
+          _isLog: true,
+          _live: liveById[e.algorithm_id] || null,
+        }));
+        // De-duplicate: if a live item has a matching log entry, use log (which has history context)
+        const liveOnlyIds = new Set(liveItems.map(i => i.id).filter(id => !logEntries.some(e => e.algorithm_id === id)));
+        const liveOnlyRows = liveItems.filter(i => liveOnlyIds.has(i.id)).map(i => ({
+          algorithm_id: i.id, name: i.zhName || i.funcName, call_prefix: i.callPrefix,
+          owner_id: i.ownerId, review_kind: i.reviewKind || "", status: getStatus(i),
+          submitted_at: "", _live: i, _isLog: false,
+        }));
+        const allRows = [...logRows, ...liveOnlyRows];
+        const cntAll = allRows.length;
+        const cntReviewing = allRows.filter(r => r.status === "reviewing").length;
+        const cntPublished = allRows.filter(r => r.status === "published").length;
+        const cntRejected = allRows.filter(r => r.status === "rejected").length;
+        const filtered = activeFilter === "all" ? allRows
+          : allRows.filter(r => r.status === activeFilter);
+        const filterBtn = (key, label, cnt) => `<button class="ghost${activeFilter === key ? " active" : ""}" style="border-radius:20px;padding:4px 14px" onclick="window.renderReviewPage('${key}')">${label}<span class="count" style="margin-left:6px">${cnt}</span></button>`;
         qs("#main").innerHTML = `
           <h1>算法审核</h1>
           <section class="stat-bar">
-            <article class="stat-card"><div class="stat-label">审核中</div><div class="stat-value">${items.filter(i => getStatus(i) === "reviewing").length}</div></article>
-            <article class="stat-card"><div class="stat-label">未通过</div><div class="stat-value">${items.filter(i => getStatus(i) === "rejected").length}</div></article>
-            <article class="stat-card"><div class="stat-label">待发布</div><div class="stat-value">${items.filter(i => getStatus(i) === "approved").length}</div></article>
+            <article class="stat-card" style="cursor:pointer" onclick="window.renderReviewPage('reviewing')"><div class="stat-label">审核中</div><div class="stat-value">${cntReviewing}</div></article>
+            <article class="stat-card" style="cursor:pointer" onclick="window.renderReviewPage('published')"><div class="stat-label">已通过</div><div class="stat-value">${cntPublished}</div></article>
+            <article class="stat-card" style="cursor:pointer" onclick="window.renderReviewPage('rejected')"><div class="stat-label">已驳回</div><div class="stat-value">${cntRejected}</div></article>
           </section>
+          <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+            ${filterBtn("all", "全部", cntAll)}
+            ${filterBtn("reviewing", "审核中", cntReviewing)}
+            ${filterBtn("published", "已通过", cntPublished)}
+            ${filterBtn("rejected", "已驳回", cntRejected)}
+          </div>
           <table class="api-table">
-            <thead><tr><th>算法</th><th>命名空间</th><th>状态</th><th>描述</th><th>操作</th></tr></thead>
-            <tbody>${items.map(item => {
-              const status = getStatus(item);
+            <thead><tr><th>算法</th><th>命名空间</th><th style="width:110px;white-space:nowrap">审核状态</th><th style="width:80px">类型</th><th style="width:240px;white-space:nowrap;text-align:center">操作</th></tr></thead>
+            <tbody>${filtered.map(row => {
+              const live = row._live;
+              const rowStatus = row.status;
+              const kindLabel = row.review_kind === "version_iteration" ? "版本迭代" : (row.review_kind === "new_publish" ? "新建" : "");
+              const kindCls = row.review_kind === "version_iteration" ? "warning" : "";
+              const ns = live ? getNs(live, live.moduleKind === "template" || live.type === "template" ? "templates" : "components") : (row.call_prefix || row.algorithm_id || "");
+              const liveId = live ? live.id : (row.algorithm_id || "");
+              const liveKind = live ? (live.moduleKind === "template" || live.type === "template" ? "templates" : "components") : "components";
               return `<tr>
-                <td>${esc(getName(item))}</td>
-                <td><code>${esc(getNs(item, item.moduleKind === "template" || item.type === "template" ? "templates" : "components"))}</code></td>
-                <td><span class="tag ${statusClass(status)}">${esc(statusLabel(status))}${item.hasReviewDraft && status === "published" ? " (有草稿)" : ""}</span></td>
-                <td>${esc(getDesc(item))}</td>
-                <td>
-                  <button onclick="window.openEditorById('${esc(item.id)}','${item.moduleKind === "template" || item.type === "template" ? "templates" : "components"}',true)">查看/测试</button>
-                  ${status === "published" && item.hasReviewDraft ? `<button onclick="window.openSubmitModal('${esc(item.id)}')">提交审核</button>` : ""}
-                  ${status === "rejected" ? `<button class="ghost" onclick="window.viewRejectReason('${esc(item.id)}')">查看驳回原因</button><button class="warning" onclick="window.undoRejectReview('${esc(item.id)}')">撤销驳回</button>` : ""}
-                  ${status === "reviewing" ? `<button onclick="window.approveReview('${esc(item.id)}')">通过</button><button class="danger" onclick="window.rejectReview('${esc(item.id)}')">驳回</button>` : ""}
-                  ${status === "approved" ? `<button class="success" onclick="window.publishComponent('${esc(item.id)}')">发布</button>` : ""}
+                <td>${esc(row.name || (live ? getName(live) : ""))}</td>
+                <td><code>${esc(ns)}</code></td>
+                <td style="white-space:nowrap"><span class="tag ${statusClass(rowStatus)}">${esc(reviewStatusLabel(rowStatus))}</span></td>
+                <td>${kindLabel ? `<span class="tag ${kindCls}">${esc(kindLabel)}</span>` : ""}</td>
+                <td style="white-space:nowrap;text-align:center">
+                  ${live ? `<button onclick="window.openEditorById('${esc(liveId)}','${liveKind}',true)">查看/测试</button>` : ""}
+                  ${live && rowStatus === "rejected" ? `<button class="ghost" onclick="window.viewRejectReason('${esc(liveId)}')">驳回原因</button><button class="warning" onclick="window.undoRejectReview('${esc(liveId)}')">撤销驳回</button>` : ""}
+                  ${live && rowStatus === "reviewing" ? `<button class="success" onclick="window.openAdminPublishModal('${esc(liveId)}')">正式发布</button><button class="danger" onclick="window.rejectReview('${esc(liveId)}')">驳回</button>` : ""}
+                  ${row.reject_reason ? `<span title="${esc(row.reject_reason)}" style="color:var(--danger);font-size:11px;cursor:pointer" onclick="showToast('${esc(row.reject_reason.slice(0,80))}')">⚠ 驳回原因</span>` : ""}
                 </td>
               </tr>`;
             }).join("")}</tbody>
@@ -5668,17 +5985,16 @@ print(result)`;
         });
         const newId = result.algorithm?.id || "";
         if (action === "submit" && newId) {
-          try {
-            await api(`/api/v1/algorithms/${safeId(newId)}/submit`, { method: "POST", body: JSON.stringify({ version_bump: version }) });
-            showToast("✅ 已保存并提交审核");
-          } catch { showToast("✅ 已保存草稿（提交审核失败，请在列表中手动提交）"); }
+          await loadModuleData(dataKey);
+          switchPage(dataKey);
+          window.setTimeout(() => window.openSubmitModal(newId), 300);
         } else {
           showToast("✅ 已保存为草稿");
+          state.highlightId = newId;
+          await loadModuleData(dataKey);
+          switchPage(dataKey);
+          window.setTimeout(() => { state.highlightId = ""; if (state.page === dataKey) renderCards(dataKey); }, 2000);
         }
-        state.highlightId = newId;
-        await loadModuleData(dataKey);
-        switchPage(dataKey);
-        window.setTimeout(() => { state.highlightId = ""; if (state.page === dataKey) renderCards(dataKey); }, 2000);
       } catch (err) {
         if (errEl) errEl.textContent = err.message;
       }
@@ -5781,6 +6097,10 @@ print(result)`;
     window.saveFork = saveFork;
     window.submitReview = submitReview;
     window.openSubmitModal = openSubmitModal;
+    window.showTemplateUsage = showTemplateUsage;
+    window.openAdminPublishModal = openAdminPublishModal;
+    window.confirmAdminPublish = confirmAdminPublish;
+    window.renderReviewPage = renderReviewPage;
     window.confirmSubmitReview = confirmSubmitReview;
     window.viewRejectedDraft = viewRejectedDraft;
     window.viewRejectReason = viewRejectReason;
@@ -5885,3 +6205,4 @@ print(result)`;
   </script>
 </body>
 </html>
+
