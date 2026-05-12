@@ -139,6 +139,8 @@
       transition: transform .2s;
     }
     .nav-collapse-btn.collapsed { transform: rotate(-90deg); }
+    .nav-sub-group { overflow: hidden; max-height: 400px; transition: max-height .28s ease; }
+    .nav-sub-group.collapsed { max-height: 0; }
     .nav-item { position: relative; }
     .main {
       grid-row: 1;
@@ -1169,39 +1171,33 @@
           <span class="nav-dot"></span>算法
           <button class="nav-collapse-btn ${algoCollapsed ? "collapsed" : ""}" data-toggle="components-group" style="margin-left:auto" title="${algoCollapsed ? "展开" : "收起"}">▾</button>
         </div>`,
-        ...(!algoCollapsed ? [
-          subItem("components-general", "通用算法"),
-          subItem("components-system", "系统算法"),
-          subItem("components-domain", "领域算法"),
-        ] : []),
+        `<div class="nav-sub-group ${algoCollapsed ? "collapsed" : ""}" data-sub="components-group">${
+          [subItem("components-general", "通用算法"), subItem("components-system", "系统算法"), subItem("components-domain", "领域算法")].join("")
+        }</div>`,
         // 算法模板 group
         `<div class="nav-item nav-group-hd ${isTemplateGroupActive ? "active" : ""}" data-group="templates-group" style="display:flex;align-items:center;gap:10px">
           <span class="nav-dot"></span>算法模板
           <button class="nav-collapse-btn ${templateCollapsed ? "collapsed" : ""}" data-toggle="templates-group" style="margin-left:auto" title="${templateCollapsed ? "展开" : "收起"}">▾</button>
         </div>`,
-        ...(!templateCollapsed ? [
-          subItem("templates-general", "通用模板"),
-          subItem("templates-system", "系统模板"),
-          subItem("templates-domain", "领域模板"),
-        ] : []),
+        `<div class="nav-sub-group ${templateCollapsed ? "collapsed" : ""}" data-sub="templates-group">${
+          [subItem("templates-general", "通用模板"), subItem("templates-system", "系统模板"), subItem("templates-domain", "领域模板")].join("")
+        }</div>`,
         ...(() => {
           const snippetCats = state.categories["snippets"] || [];
           const snippetCollapsed = state.navCollapsed["snippets-group"];
           const isSnippetActive = state.page === "snippets";
-          const lines = [
+          const subItems = snippetCats.map(cat => {
+            const ns = cat.namespace;
+            const isSubActive = isSnippetActive && state.selectedNavNs === ns;
+            return `<div class="nav-item nav-snippet-cat${isSubActive ? " active" : ""}" data-ns="${esc(ns)}" style="padding-left:26px"><span class="nav-dot" style="width:5px;height:5px;opacity:.7"></span>${esc(cat.zh_name || ns)}</div>`;
+          }).join("");
+          return [
             `<div class="nav-item ${isSnippetActive ? "active" : ""}" data-page="snippets" style="display:flex;align-items:center;gap:10px">
               <span class="nav-dot"></span>代码片段
               <button class="nav-collapse-btn ${snippetCollapsed ? "collapsed" : ""}" data-toggle="snippets-group" style="margin-left:auto" title="${snippetCollapsed ? "展开" : "收起"}">▾</button>
-            </div>`
+            </div>`,
+            `<div class="nav-sub-group ${snippetCollapsed ? "collapsed" : ""}" data-sub="snippets-group">${subItems}</div>`
           ];
-          if (snippetCats.length > 0 && !snippetCollapsed) {
-            snippetCats.forEach(cat => {
-              const ns = cat.namespace;
-              const isSubActive = isSnippetActive && state.selectedNavNs === ns;
-              lines.push(`<div class="nav-item nav-snippet-cat${isSubActive ? " active" : ""}" data-ns="${esc(ns)}" style="padding-left:26px"><span class="nav-dot" style="width:5px;height:5px;opacity:.7"></span>${esc(cat.zh_name || ns)}</div>`);
-            });
-          }
-          return lines;
         })(),
         ...(state.currentUser ? [
           `<div class="nav-item ${state.page === "my-algos" ? "active" : ""}" data-page="my-algos"><span class="nav-dot"></span>我的算法</div>`,
@@ -1259,8 +1255,12 @@
         btn.addEventListener("click", (evt) => {
           evt.stopPropagation();
           const key = btn.dataset.toggle;
-          state.navCollapsed[key] = !state.navCollapsed[key];
-          renderNav();
+          const isNowCollapsed = !state.navCollapsed[key];
+          state.navCollapsed[key] = isNowCollapsed;
+          const sub = qs(`.nav-sub-group[data-sub="${key}"]`);
+          if (sub) sub.classList.toggle("collapsed", isNowCollapsed);
+          btn.classList.toggle("collapsed", isNowCollapsed);
+          btn.title = isNowCollapsed ? "展开" : "收起";
         });
       });
     }
@@ -3276,61 +3276,40 @@
         provideCompletionItems(model, position) {
           const lineText = model.getLineContent(position.lineNumber);
           const textBefore = lineText.substring(0, position.column - 1);
-          // Match: alg.{ns}.{partial}  OR  alg.{partial}
-          const m2 = textBefore.match(/alg((?:\.\w+)*)\.(\w*)$/);
-          if (!m2) return { suggestions: [] };
-          const prefixParts = m2[1]; // "" | ".custom" | ".custom.sub"
-          const typed = m2[2];       // partial word after last dot
-          const depth = prefixParts.split(".").filter(Boolean).length;
+          // Match the full alg.xxx.yyy expression up to cursor
+          const algMatch = textBefore.match(/\balg(?:\.\w+)*\.?\w*$/);
+          if (!algMatch) return { suggestions: [] };
+          const startColumn = position.column - algMatch[0].length;
           const range = {
             startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
-            startColumn: position.column - typed.length, endColumn: position.column
+            startColumn, endColumn: position.column
           };
-          if (depth === 0) {
-            // alg.<typed> → suggest unique namespaces
-            const nsSet = new Set();
-            state.completionItems.forEach(item => {
+          return {
+            suggestions: state.completionItems.map(item => {
               const call = item.callPrefix || item.call_prefix || "";
-              const seg = call.split(".")[1]; // alg.{ns}.func → ns
-              if (seg) nsSet.add(seg);
-            });
-            return {
-              suggestions: [...nsSet].map(ns => ({
-                label: ns, filterText: ns, sortText: ns,
-                kind: m.languages.CompletionItemKind.Module,
-                insertText: ns + ".",
-                command: { id: "editor.action.triggerSuggest", title: "" },
-                detail: "命名空间", range
-              }))
-            };
-          } else {
-            // alg.ns.<typed>  (depth >= 1) → suggest functions under that namespace
-            const ns = prefixParts.substring(1); // ".custom" → "custom"
-            const prefix = `alg.${ns}.`;
-            const filtered = state.completionItems.filter(item => {
-              const call = item.callPrefix || item.call_prefix || "";
-              return call.startsWith(prefix);
-            });
-            return {
-              suggestions: filtered.map(item => {
-                const call = item.callPrefix || item.call_prefix || "";
-                const funcName = call.substring(prefix.length);
-                const params = item.params || [];
-                const insertText = item.callSnippet
-                  ? item.callSnippet.substring(prefix.length)
-                  : `${funcName}(${params.map((p, i) => `\${${i + 1}:${p.name || "arg"}}`).join(", ")})`;
-                return {
-                  label: funcName, filterText: funcName, sortText: funcName,
-                  kind: m.languages.CompletionItemKind.Function,
-                  insertText,
-                  insertTextRules: m.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                  documentation: (item.zhDescription || item.zh_description || "") + (item.zhName ? `\n\n**${item.zhName}**` : ""),
-                  detail: `${completionPrivacy(item)} · ${call}`,
-                  range
-                };
-              })
-            };
-          }
+              if (!call) return null;
+              const ns = item.namespace || call.split(".")[1] || "";
+              const params = item.params || [];
+              const insertText = item.callSnippet ||
+                `${call}(${params.map((p, i) => `\${${i + 1}:${p.name || "arg"}}`).join(", ")})`;
+              const zhName = item.zhName || item.zh_name || "";
+              const zhDesc = item.zhDescription || item.zh_description || "";
+              const tags = (item.zhTags || item.zh_tags || []).join("、");
+              return {
+                label: { label: call, description: zhName ? `${zhName} | ${ns}` : ns },
+                filterText: call,
+                sortText: call,
+                kind: m.languages.CompletionItemKind.Function,
+                insertText,
+                insertTextRules: m.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                detail: completionPrivacy(item),
+                documentation: {
+                  value: [zhName ? `**${zhName}**` : "", zhDesc, tags ? `\n标签: ${tags}` : ""].filter(Boolean).join("\n\n")
+                },
+                range
+              };
+            }).filter(Boolean)
+          };
         }
       });
     }

@@ -2553,7 +2553,19 @@
               { token: "number", foreground: "b5cea8" },
               { token: "identifier", foreground: "dcdcaa" }
             ],
-            colors: { "editor.background": "#040e1f" }
+            colors: {
+              "editor.background": "#040e1f",
+              "editorSuggestWidget.background": "#0d1e35",
+              "editorSuggestWidget.border": "#1e3a5f",
+              "editorSuggestWidget.foreground": "#d4e6f1",
+              "editorSuggestWidget.selectedBackground": "#1a3a60",
+              "editorSuggestWidget.selectedForeground": "#ffffff",
+              "editorSuggestWidget.highlightForeground": "#7dd3fc",
+              "editorSuggestWidget.selectedHighlightForeground": "#bae6fd",
+              "editorHoverWidget.background": "#0d1e35",
+              "editorHoverWidget.border": "#1e3a5f",
+              "editorHoverWidget.foreground": "#d4e6f1"
+            }
           });
           state.monaco = monaco;
           resolve(monaco);
@@ -3030,28 +3042,41 @@
       state.completionDisposable = m.languages.registerCompletionItemProvider("python", {
         triggerCharacters: ["."],
         provideCompletionItems(model, position) {
-          const before = model.getValueInRange({
-            startLineNumber: position.lineNumber,
-            startColumn: Math.max(1, position.column - 12),
-            endLineNumber: position.lineNumber,
-            endColumn: position.column
-          });
-          if (!before.includes("alg.")) return { suggestions: [] };
+          const lineText = model.getLineContent(position.lineNumber);
+          const textBefore = lineText.substring(0, position.column - 1);
+          // Match the full alg.xxx.yyy expression up to cursor
+          const algMatch = textBefore.match(/\balg(?:\.\w+)*\.?\w*$/);
+          if (!algMatch) return { suggestions: [] };
+          const startColumn = position.column - algMatch[0].length;
+          const range = {
+            startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+            startColumn, endColumn: position.column
+          };
           return {
             suggestions: state.completionItems.map(item => {
-              const call = item.callPrefix || item.call_prefix || item.label || "";
+              const call = item.callPrefix || item.call_prefix || "";
+              if (!call) return null;
+              const ns = item.namespace || call.split(".")[1] || "";
               const params = item.params || [];
-              const insertText = item.insertText || item.callSnippet || `${call}(${params.map((param, index) => `\${${index + 1}:${param.name || "arg"}}`).join(", ")})`;
+              const insertText = item.callSnippet ||
+                `${call}(${params.map((p, i) => `\${${i + 1}:${p.name || "arg"}}`).join(", ")})`;
+              const zhName = item.zhName || item.zh_name || "";
+              const zhDesc = item.zhDescription || item.zh_description || "";
+              const tags = (item.zhTags || item.zh_tags || []).join("、");
               return {
-                label: call,
+                label: { label: call, description: zhName ? `${zhName} | ${ns}` : ns },
+                filterText: call,
+                sortText: call,
                 kind: m.languages.CompletionItemKind.Function,
                 insertText,
                 insertTextRules: m.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                documentation: item.zhDescription || item.zh_description || item.documentation || "",
-                detail: `${completionPrivacy(item)} · ${item.detail || call}`,
-                range: null
+                detail: completionPrivacy(item),
+                documentation: {
+                  value: [zhName ? `**${zhName}**` : "", zhDesc, tags ? `\n标签: ${tags}` : ""].filter(Boolean).join("\n\n")
+                },
+                range
               };
-            })
+            }).filter(Boolean)
           };
         }
       });
