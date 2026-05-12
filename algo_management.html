@@ -404,6 +404,17 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+    /* ===== 预览视图全屏布局 ===== */
+    .main.preview-active { padding: 10px 12px; overflow: hidden; }
+    .preview-fullscreen {
+      height: calc(100vh - 82px);
+      min-height: 560px;
+      display: flex;
+      flex-direction: column;
+    }
+    .preview-fullscreen .readme-grid { flex: 1; min-height: 0; overflow: auto; }
+    .preview-fullscreen .code-panel { display: flex; flex-direction: column; }
+    .preview-fullscreen .code-panel .code-block { flex: 1; min-height: 300px; max-height: none; overflow: auto; }
     .status-badge { position: absolute; top: 10px; right: 10px; }
     @keyframes highlight {
       0%, 100% { box-shadow: none; }
@@ -1088,6 +1099,7 @@
 
     function switchPage(page) {
       state.page = page;
+      qs("#main").classList.remove("preview-active");
       qsa(".nav-item").forEach(el => el.classList.toggle("active", el.dataset.page === page));
       renderPage(page);
     }
@@ -3542,16 +3554,17 @@ print(result)`;
       const callPrefix = item.callPrefix || item.displayNamespace || item.funcName || id;
       const tags = getTags(item).slice(0, 6);
       const prevPage = state.page || "templates";
+      qs("#main").classList.add("preview-active");
       qs("#main").innerHTML = `
-        <section class="readme-view">
-          <div class="editor-top" style="margin-bottom:14px">
+        <section class="readme-view preview-fullscreen">
+          <div class="editor-top" style="margin-bottom:14px;flex-shrink:0">
             <button onclick="window.switchPage('${esc(prevPage)}')">返回</button>
             <strong>使用说明 / ${esc(name)}</strong>
             <span class="spacer"></span>
             <button onclick="window.openEditorById('${esc(id)}','templates')">编辑模板</button>
             <button class="primary" onclick="window.publishAsComponent('${esc(id)}',this)">基于模板新建组件</button>
           </div>
-          <article class="algo-card template" style="max-width:none;margin-bottom:14px">
+          <article class="algo-card template" style="max-width:none;margin-bottom:14px;flex-shrink:0">
             <span class="tag ${isPublicItem(item) ? "success" : "warning"}" style="position:absolute;right:14px;top:14px">${esc(privacyLabel(item))}</span>
             <h1 style="margin:0 0 8px;font-size:26px">${esc(name)}</h1>
             <div class="card-ns" style="margin-bottom:14px">${esc(callPrefix)}</div>
@@ -3561,7 +3574,7 @@ print(result)`;
               ${tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}
             </div>
           </article>
-          <div class="readme-grid" style="display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:16px;align-items:start">
+          <div class="readme-grid" style="flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:16px;align-items:start;padding-bottom:16px">
             <article class="panel-card">
               <h2>使用步骤</h2>
               <ol style="line-height:1.9;color:var(--text);padding-left:20px">
@@ -3583,9 +3596,9 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
                 <li>返回值建议使用 dict，方便 API 调用方解析。</li>
               </ul>
             </article>
-            <article class="panel-card">
-              <h2>模板代码预览</h2>
-              <pre class="code-block" style="max-height:520px;overflow:auto">${esc(code || "暂无源码")}</pre>
+            <article class="panel-card code-panel" style="display:flex;flex-direction:column;min-height:400px">
+              <h2 style="flex-shrink:0">模板代码预览</h2>
+              <pre class="code-block" style="flex:1;min-height:300px;max-height:none;overflow:auto">${esc(code || "暂无源码")}</pre>
             </article>
           </div>
         </section>
@@ -6176,6 +6189,41 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.doResetPassword = doResetPassword;
     window.toggleUserStatus = toggleUserStatus;
     window.deleteUser = deleteUser;
+
+    // ===== Block 编辑器删除功能 =====
+    function deleteBlock(blockId) {
+      const blocks = state.templateBlocks || [];
+      const index = blocks.findIndex(b => b.id === blockId);
+      if (index === -1) {
+        showToast("未找到该代码块");
+        return;
+      }
+      const block = blocks[index];
+      if (block.locked) {
+        showToast("锁定的代码块不可删除");
+        return;
+      }
+      const editableCount = blocks.filter(b => !b.locked).length;
+      if (editableCount <= 1) {
+        showToast("至少保留一个可编辑代码块");
+        return;
+      }
+      if (!confirm(`确定删除代码块「${block.title || block.id}」吗？此操作不可撤销。`)) return;
+      blocks.splice(index, 1);
+      blocks.forEach((b, i) => { b.order = i; });
+      const blockEl = document.querySelector(`[data-block-id="${blockId}"]`);
+      if (blockEl) {
+        blockEl.style.transition = "opacity 0.2s, transform 0.2s";
+        blockEl.style.opacity = "0";
+        blockEl.style.transform = "translateX(-20px)";
+        setTimeout(() => { blockEl.remove(); }, 200);
+      } else if (typeof renderBlocksView === "function") {
+        renderBlocksView();
+      }
+      showToast("代码块已删除");
+    }
+    window.deleteBlock = deleteBlock;
+    window.removeBlock = deleteBlock;
 
     (async function initWithAuth() {
       tickClock();

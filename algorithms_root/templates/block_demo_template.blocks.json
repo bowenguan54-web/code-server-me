@@ -1,0 +1,49 @@
+{
+  "blocks": [
+    {
+      "id": "blk_001",
+      "order": 0,
+      "title": "数据加载与验证",
+      "description": "接收并验证输入数据格式，提取目标列的有效数值。此块由平台锁定，确保所有下游分析块获得规范数据。",
+      "locked": true,
+      "hint": "",
+      "code": "    if not data or not isinstance(data, list):\n        raise ValueError(\"data 必须为非空列表\")\n    if not target_column:\n        raise ValueError(\"target_column 不能为空\")\n    if not isinstance(data[0], dict):\n        raise ValueError(\"data 中的每一项必须为字典\")\n    if target_column not in data[0]:\n        raise ValueError(f\"目标列 '{target_column}' 不存在于数据中\")\n\n    # 提取目标列数值\n    raw_values = []\n    for i, row in enumerate(data):\n        val = row.get(target_column)\n        if val is None:\n            continue\n        try:\n            raw_values.append(float(val))\n        except (TypeError, ValueError):\n            pass  # 跳过无法转换的值\n\n    if len(raw_values) < 2:\n        raise ValueError(f\"目标列 '{target_column}' 中有效数值不足 2 个，无法分析\")"
+    },
+    {
+      "id": "blk_002",
+      "order": 1,
+      "title": "统计特征计算",
+      "description": "计算目标列的基础统计指标（均值、中位数、标准差、四分位数、偏度）。可在此块中添加自定义统计量。",
+      "locked": false,
+      "hint": "提示：可在此处添加更多统计指标，例如峰度（kurtosis）或自定义百分位数。变量 raw_values 包含已提取的有效数值列表。",
+      "code": "    import statistics\n    import math\n\n    # 基础统计指标\n    n = len(raw_values)\n    mean_val = statistics.mean(raw_values)\n    median_val = statistics.median(raw_values)\n    std_val = statistics.stdev(raw_values) if n > 1 else 0.0\n    min_val = min(raw_values)\n    max_val = max(raw_values)\n    variance = statistics.variance(raw_values) if n > 1 else 0.0\n\n    # 四分位数\n    sorted_vals = sorted(raw_values)\n    q1_idx = max(0, int(n * 0.25) - 1)\n    q3_idx = min(n - 1, int(n * 0.75))\n    q1 = sorted_vals[q1_idx]\n    q3 = sorted_vals[q3_idx]\n    iqr = q3 - q1\n\n    # 偏度（Pearson 近似）\n    if std_val > 0:\n        skewness = 3 * (mean_val - median_val) / std_val\n    else:\n        skewness = 0.0\n\n    stats_summary = {\n        \"n\": n,\n        \"mean\": round(mean_val, 4),\n        \"median\": round(median_val, 4),\n        \"std\": round(std_val, 4),\n        \"variance\": round(variance, 4),\n        \"min\": round(min_val, 4),\n        \"max\": round(max_val, 4),\n        \"q1\": round(q1, 4),\n        \"q3\": round(q3, 4),\n        \"iqr\": round(iqr, 4),\n        \"skewness\": round(skewness, 4),\n    }"
+    },
+    {
+      "id": "blk_003",
+      "order": 2,
+      "title": "预测模型（可自定义）",
+      "description": "根据统计特征对目标列进行短期预测。支持三种方法：default（线性外推）、weighted（加权移动均值）、robust（基于中位数）。",
+      "locked": false,
+      "hint": "提示：可在此修改或替换预测算法。变量 raw_values（数值列表）、n（样本数）、mean_val、median_val、std_val、iqr 均可直接使用。predictions 应为一个 float 列表（最多 5 个预测值）。",
+      "code": "    predictions = []\n\n    if method == \"weighted\":\n        # 加权移动平均预测（近期数据权重更高）\n        weights = [1.0 / (n - i) for i in range(n)]\n        total_w = sum(weights)\n        weighted_mean = sum(v * w for v, w in zip(raw_values, weights)) / total_w\n        trend = (raw_values[-1] - raw_values[0]) / max(n - 1, 1)\n        for i in range(min(5, n)):\n            predictions.append(round(weighted_mean + trend * (i + 1), 4))\n\n    elif method == \"robust\":\n        # 基于中位数 + IQR 的鲁棒预测\n        for i in range(min(5, n)):\n            noise = (iqr * 0.1) * math.sin(i * 0.5)\n            predictions.append(round(median_val + noise, 4))\n\n    else:\n        # 默认：线性外推预测\n        if n >= 2:\n            slope = (raw_values[-1] - raw_values[-2])\n        else:\n            slope = 0.0\n        for i in range(min(5, n)):\n            predictions.append(round(raw_values[-1] + slope * (i + 1), 4))"
+    },
+    {
+      "id": "blk_004",
+      "order": 3,
+      "title": "数据可视化构建",
+      "description": "构建折线图数据和预测对比表格，计算 MAE 和 RMSE 误差指标。可在此调整图表配置或增加更多可视化。",
+      "locked": false,
+      "hint": "提示：可调整 actual_series 的截取范围，或修改 compare_rows 的列定义。误差计算基于最后 5 条实际值与前 5 个预测值对比。",
+      "code": "    # 构造折线图数据（训练序列 + 预测序列）\n    actual_series = [round(v, 4) for v in raw_values]\n    pred_start_idx = n\n    pred_indices = list(range(pred_start_idx, pred_start_idx + len(predictions)))\n\n    # 构造对比表格（最后 5 行实际值 vs 预测值）\n    compare_rows = []\n    tail = raw_values[-min(5, n):]\n    for i, (actual, pred) in enumerate(zip(tail, predictions)):\n        err = abs(actual - pred)\n        pct = (err / abs(actual) * 100) if actual != 0 else 0.0\n        compare_rows.append({\n            \"序号\": n - len(tail) + i + 1,\n            \"实际值\": round(actual, 4),\n            \"预测值\": round(pred, 4),\n            \"绝对误差\": round(err, 4),\n            \"误差率(%)\": round(pct, 2),\n        })\n\n    # MAE / RMSE\n    if compare_rows:\n        errors = [abs(r[\"实际值\"] - r[\"预测值\"]) for r in compare_rows]\n        mae = round(statistics.mean(errors), 4)\n        rmse = round(math.sqrt(statistics.mean([e ** 2 for e in errors])), 4)\n    else:\n        mae = rmse = 0.0"
+    },
+    {
+      "id": "blk_005",
+      "order": 4,
+      "title": "组装输出结果",
+      "description": "将统计摘要、折线图、对比表格汇总为统一的 multi_output 格式返回。此块由平台锁定，确保输出格式与渲染器兼容。",
+      "locked": true,
+      "hint": "",
+      "code": "    model_summary = (\n        f\"模型方法: {method}\\n\"\n        f\"样本数量: {n}\\n\"\n        f\"目标列: {target_column}\\n\"\n        f\"均值: {stats_summary['mean']}  标准差: {stats_summary['std']}\\n\"\n        f\"MAE: {mae}  RMSE: {rmse}\\n\"\n        f\"预测步数: {len(predictions)}\"\n    )\n\n    output = {\n        \"type\": \"multi_output\",\n        \"outputs\": [\n            {\n                \"type\": \"text_output\",\n                \"title\": \"模型摘要\",\n                \"content\": model_summary,\n            },\n            {\n                \"type\": \"line_output\",\n                \"title\": f\"{target_column} — 实际值与预测值折线图\",\n                \"x\": list(range(n)) + pred_indices,\n                \"series\": [\n                    {\"name\": \"实际值\", \"data\": actual_series + [None] * len(predictions)},\n                    {\"name\": \"预测值\", \"data\": [None] * n + predictions},\n                ],\n                \"x_label\": \"数据索引\",\n                \"y_label\": target_column,\n            },\n            {\n                \"type\": \"table_output\",\n                \"title\": \"预测对比（最近 5 条）\",\n                \"columns\": [\"序号\", \"实际值\", \"预测值\", \"绝对误差\", \"误差率(%)\"],\n                \"rows\": [[r[\"序号\"], r[\"实际值\"], r[\"预测值\"], r[\"绝对误差\"], r[\"误差率(%)\"]] for r in compare_rows],\n            },\n        ],\n        \"statistics\": stats_summary,\n        \"predictions\": predictions,\n    }\n\n    return output"
+    }
+  ]
+}

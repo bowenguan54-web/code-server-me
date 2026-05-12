@@ -95,6 +95,8 @@
       color: var(--text-dim);
       cursor: pointer;
       user-select: none;
+      font-size: 14px;
+      font-weight: 500;
     }
     .nav-item:hover, .nav-item.active {
       background: rgba(30, 144, 255, .14);
@@ -108,19 +110,21 @@
       box-shadow: 0 0 14px var(--primary);
     }
     .nav-sub {
-      margin: 0 0 4px 22px;
-      padding: 4px 8px;
+      margin: 0 0 2px 26px;
+      padding: 3px 8px;
       border-radius: 4px;
       color: var(--text-dim);
-      font-size: 13px;
+      font-size: 12px;
+      font-weight: 400;
       cursor: pointer;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       user-select: none;
+      opacity: .85;
     }
-    .nav-sub:hover { color: #fff; background: rgba(30, 144, 255, .10); }
-    .nav-sub.active-sub { color: var(--accent); font-weight: 600; }
+    .nav-sub:hover { color: #fff; background: rgba(30, 144, 255, .10); opacity: 1; }
+    .nav-sub.active-sub { color: var(--accent); font-weight: 600; font-size: 12px; opacity: 1; }
     .folder-section.nav-highlight { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
     .nav-collapse-btn {
       margin-left: auto;
@@ -141,6 +145,10 @@
       min-width: 0;
       overflow: auto;
       padding: 20px 24px 34px;
+    }
+    .main.editor-active {
+      padding: 0;
+      overflow: hidden;
     }
     .main::-webkit-scrollbar { width: 6px; height: 6px; }
     .main::-webkit-scrollbar-track { background: var(--bg-nav); }
@@ -247,8 +255,8 @@
       font: 13px/1.5 Consolas, "Courier New", monospace;
     }
     .workspace-monaco-host {
-      min-height: 420px;
-      height: min(58vh, 620px);
+      min-height: 300px;
+      height: 100%;
       border: 1px solid var(--line);
       border-radius: 6px;
       overflow: hidden;
@@ -413,7 +421,8 @@
     .card-ns {
       color: var(--accent);
       font: 12px/1.4 Consolas, "Courier New", monospace;
-      word-break: break-all;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .desc {
       min-height: 42px;
@@ -453,39 +462,80 @@
     }
 
     .editor-view {
-      height: calc(100vh - 82px);
-      min-height: 560px;
+      height: 100%;
+      min-height: 0;
       display: grid;
-      grid-template-rows: auto 1fr auto auto;
+      grid-template-rows: auto 40px 1fr var(--vbar-h, 2px) minmax(0, var(--test-height, 0px));
       background: #040e1f;
-      border: 1px solid var(--line);
-      border-radius: 6px;
+      border: none;
+      border-radius: 0;
       overflow: hidden;
     }
-    .editor-top {
+    /* ===== 编辑器顶部两行 ===== */
+    .editor-top-info {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
       gap: 10px;
-      padding: 10px;
-      background: var(--bg-card);
+      padding: 8px 14px;
+      min-height: 44px;
+      background: #07111f;
       border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+      overflow: hidden;
     }
+    .editor-top-info .breadcrumb { flex-shrink: 0; color: var(--text-dim); font-size: 13px; white-space: nowrap; line-height: 1; }
+    .editor-top-info .ns-prefix { font: 13px/1 Consolas, "Courier New", monospace; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
+    .editor-top-info .namespace-edit { flex-shrink: 0; position: relative; min-width: 0; }
+    .editor-top-info .namespace-edit input { height: 28px; padding: 3px 10px; font: 13px/1.2 Consolas, "Courier New", monospace; min-width: 140px; max-width: 260px; width: auto; border-radius: 4px; }
+    .editor-top-info .namespace-edit #nsErr { position: absolute; top: calc(100% + 2px); left: 0; white-space: nowrap; z-index: 5; background: #07111f; padding: 2px 4px; border-radius: 3px; }
     .editor-notice {
-      flex: 0 0 100%;
-      margin: 0 -10px -10px;
-      padding: 5px 16px;
+      margin-left: auto;
+      flex-shrink: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
       font-size: 12px;
-      color: var(--text-dim);
-      background: rgba(88,166,255,0.08);
-      border-top: 1px solid var(--border);
+      color: var(--warning);
+      white-space: nowrap;
     }
-    .breadcrumb { color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .namespace-edit { width: min(420px, 36vw); }
+    .editor-toolbar {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 5px;
+      padding: 0 10px;
+      height: 40px;
+      min-height: 40px;
+      max-height: 40px;
+      background: var(--bg-card);
+      border-bottom: 2px solid var(--line);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .toolbar-divider { width: 1px; height: 20px; background: rgba(106,138,176,.3); margin: 0 4px; flex-shrink: 0; }
+    /* Block 操作按钮 */
+    .editor-toolbar .block-action {
+      border-color: rgba(0,240,200,.25) !important;
+      background: rgba(0,240,200,.06) !important;
+      color: var(--accent) !important;
+      font-size: 12px;
+      padding: 4px 9px;
+    }
+    .editor-toolbar .block-action:hover {
+      border-color: var(--accent) !important;
+      background: rgba(0,240,200,.12) !important;
+    }
+    .editor-toolbar .block-action.active {
+      background: rgba(0,240,200,.18) !important;
+      border-color: var(--accent) !important;
+    }
+    /* 算法操作按钮 */
+    .editor-toolbar button { font-size: 12px; padding: 4px 9px; }
     .namespace-edit.invalid input { border-color: var(--danger); }
-    .field-error { min-height: 16px; color: var(--danger); font-size: 12px; }
+    .field-error { min-height: 12px; color: var(--danger); font-size: 11px; }
     .editor-main {
       min-height: 0;
+      height: 100%;
       display: grid;
       grid-template-columns: var(--tree-width, 232px) 5px 1fr;
     }
@@ -521,9 +571,13 @@
       grid-template-rows: auto auto 1fr;
       background: #07111f;
     }
-    .snippet-editor .editor-top {
+    .snippet-editor .editor-top-info {
+      height: auto;
+      min-height: 40px;
+      max-height: none;
+      padding: 6px 12px;
+      background: #07111f;
       flex-wrap: nowrap;
-      min-height: 54px;
     }
     .snippet-meta {
       display: grid;
@@ -562,17 +616,19 @@
       font-size: 12px;
     }
     .v-resize-bar {
-      height: 8px;
+      height: var(--vbar-h, 2px);
       background: #0b1d38;
       border-top: 1px solid var(--line);
-      border-bottom: 1px solid var(--line);
       cursor: row-resize;
+      flex-shrink: 0;
+      transition: background .15s;
     }
+    .v-resize-bar:hover { background: rgba(88,166,255,.18); }
     .test-panel {
-      height: 0;
+      min-height: 0;
       overflow: auto;
       background: var(--bg-card);
-      padding: 0 12px;
+      padding: 0;
     }
     .test-panel.open { padding: 12px; }
     .param-grid {
@@ -591,8 +647,8 @@
     }
     .tabs button.active { border-color: var(--accent); color: var(--accent); }
     .output {
-      min-height: 120px;
-      max-height: 260px;
+      min-height: 80px;
+      max-height: none;
       overflow: auto;
       background: #07162b;
       border: 1px solid var(--line);
@@ -713,32 +769,56 @@
 
     /* ====== 模板分块编辑器 ====== */
     .block-editor-container { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-    .block-editor-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-card); border-bottom: 1px solid var(--line); flex-shrink: 0; }
-    .block-editor-toolbar .spacer { flex: 1; }
-    .block-editor-toolbar .view-tabs { display: flex; gap: 4px; }
-    .block-editor-toolbar .view-tabs button { font-size: 12px; padding: 4px 10px; border-radius: 4px; }
-    .block-editor-toolbar .view-tabs button.active { background: rgba(30,144,255,.18); border-color: var(--primary); color: #fff; }
-    .block-editor-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
-    .template-block { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg-card); }
-    .template-block.is-locked { border-left: 4px solid var(--text-dim); }
-    .template-block.is-editable { border-left: 4px solid var(--accent); }
-    .template-block.is-editable:focus-within { box-shadow: 0 0 0 2px rgba(0, 240, 200, .2); }
-    .block-header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-card2); border-bottom: 1px solid var(--line); min-height: 40px; }
-    .block-header .block-step-num { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; flex-shrink: 0; }
-    .template-block.is-locked .block-step-num { background: var(--text-dim); }
-    .block-header .block-title-text { font-weight: 600; color: #fff; font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .block-header .block-title-text[contenteditable="true"] { outline: none; border-bottom: 1px dashed var(--accent); white-space: pre; }
-    .block-header .block-lock-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(106,138,176,.15); color: var(--text-dim); flex-shrink: 0; }
+    .block-editor-body { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+    .template-block { border: 1px solid var(--line); border-radius: 6px; overflow: visible; background: var(--bg-card); }
+    .template-block.is-locked { border-left: 3px solid var(--warning); background: rgba(8, 18, 34, 0.92); }
+    .template-block.is-locked .block-header { background: rgba(245, 166, 35, 0.08); border-bottom-color: rgba(245, 166, 35, 0.2); }
+    .template-block.is-editable { border-left: 3px solid var(--accent); }
+    .template-block.is-editable .block-header { background: rgba(0, 240, 200, 0.04); border-bottom-color: rgba(0, 240, 200, 0.10); }
+    .template-block.is-editable:focus-within { box-shadow: 0 0 0 2px rgba(0, 240, 200, .15); }
+    /* 紧凑单行 block 标题 */
+    .block-header { display: flex; align-items: center; gap: 7px; padding: 3px 10px; background: var(--bg-card2); border-bottom: 1px solid var(--line); min-height: 30px; cursor: default; }
+    .block-header .block-step-num { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--primary); color: #fff; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+    .template-block.is-locked .block-step-num { background: var(--warning); color: #111; }
+    .block-header .block-title-text { font-weight: 600; color: #fff; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 160px; }
+    .template-block.is-editable .block-title-text { color: var(--accent); }
+    .block-header .block-title-text[contenteditable="true"] { outline: none; border-bottom: 1px dashed var(--accent); white-space: pre; max-width: 240px; color: #fff; }
+    .block-header .block-lock-badge { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: rgba(106,138,176,.15); color: var(--text-dim); flex-shrink: 0; }
+    .template-block.is-locked .block-lock-badge { background: rgba(245,166,35,.15); color: var(--warning); }
     .template-block.is-editable .block-lock-badge { background: rgba(0,240,200,.1); color: var(--accent); }
-    .block-header .block-design-actions { display: flex; gap: 4px; }
-    .block-header .block-design-actions button { font-size: 11px; padding: 2px 6px; border-radius: 3px; min-width: 0; }
-    .block-description { padding: 6px 12px; font-size: 12px; color: var(--text-dim); background: rgba(106,138,176,.04); border-bottom: 1px solid rgba(106,138,176,.08); }
+    /* 内联描述预览（折叠状态） */
+    .block-desc-preview { font-size: 11px; color: var(--text-dim); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .7; }
+    /* 展开/折叠按钮 */
+    .block-expand-btn { font-size: 11px; padding: 0 4px; color: var(--text-dim); background: none; border: 1px solid rgba(106,138,176,.2); border-radius: 3px; cursor: pointer; flex-shrink: 0; line-height: 18px; transition: transform .15s; }
+    .block-expand-btn.expanded { transform: rotate(180deg); }
+    .block-header .block-design-actions { display: flex; gap: 2px; margin-left: auto; flex-shrink: 0; }
+    .block-header .block-design-actions button { font-size: 10px; padding: 1px 5px; border-radius: 3px; min-width: 0; position: relative; z-index: 2; }
+    /* 折叠区 (desc + hint)，use mode 默认隐藏 */
+    .block-meta { border-bottom: 1px solid rgba(106,138,176,.1); }
+    .block-meta.collapsed { display: none; }
+    .block-description { padding: 5px 12px; font-size: 12px; color: var(--text-dim); background: rgba(106,138,176,.04); border-bottom: 1px solid rgba(106,138,176,.06); }
     .block-description[contenteditable="true"] { outline: none; cursor: text; }
-    .block-hint { padding: 5px 12px; font-size: 12px; color: #a78bfa; background: rgba(167,139,250,.06); border-bottom: 1px solid rgba(167,139,250,.1); }
+    .block-hint { padding: 4px 12px; font-size: 12px; color: #a78bfa; background: rgba(167,139,250,.06); }
     .block-hint[contenteditable="true"] { outline: none; cursor: text; }
-    .block-code-area { min-height: 80px; }
-    .block-insert-btn { display: flex; align-items: center; justify-content: center; padding: 6px; cursor: pointer; color: var(--text-dim); font-size: 12px; border-radius: 4px; border: 1px dashed transparent; transition: all .15s; }
+    .block-code-area { min-height: 80px; overflow: hidden; }
+    /* 插入区：默认 4px 间隙，hover 展开显示按钮 */
+    .block-insert-zone { height: 4px; position: relative; transition: height .12s; }
+    .block-insert-zone:hover { height: 28px; }
+    .block-insert-zone .block-insert-btn { opacity: 0; height: 100%; transition: opacity .12s; }
+    .block-insert-zone:hover .block-insert-btn { opacity: 1; }
+    /* 底部悬浮添加按钮 */
+    .block-add-row { padding: 6px 0 2px; text-align: right; }
+    .block-editor-body::-webkit-scrollbar { width: 5px; }
+    .block-editor-body::-webkit-scrollbar-track { background: transparent; }
+    .block-editor-body::-webkit-scrollbar-thumb { background: rgba(106,138,176,.3); border-radius: 3px; }
+    .block-editor-body::-webkit-scrollbar-thumb:hover { background: rgba(106,138,176,.5); }
+    .block-insert-btn { display: flex; align-items: center; justify-content: center; padding: 4px; cursor: pointer; color: var(--text-dim); font-size: 12px; border-radius: 4px; border: 1px dashed transparent; transition: all .15s; }
     .block-insert-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,240,200,.04); }
+    .block-flash { animation: blockFlash 1.2s ease; }
+    @keyframes blockFlash {
+      0%, 100% { box-shadow: none; }
+      20%, 60% { box-shadow: inset 0 0 0 2px var(--accent), 0 0 12px rgba(0, 240, 200, 0.2); }
+    }
     .locked-line-decoration { background: rgba(106,138,176,.08) !important; }
     .locked-glyph { background: var(--text-dim); width: 3px !important; margin-left: 3px; border-radius: 2px; }
   </style>
@@ -800,7 +880,9 @@
       logsPage: 1,
       snippetResults: [],
       snippetCursor: 0,
-      navCollapsed: {},
+      algoCallResults: [],
+      algoCallCursor: 0,
+      navCollapsed: { "components-group": true, "templates-group": true, "snippets-group": true },
       selectedNavNs: "",
       sse: null,
       currentUser: null,
@@ -911,6 +993,23 @@
       el.classList.remove("hidden");
       window.clearTimeout(showToast._timer);
       showToast._timer = window.setTimeout(() => el.classList.add("hidden"), 2600);
+    }
+
+    function showConfirm(message, onOk) {
+      const modal = qs("#modalRoot");
+      modal.classList.remove("hidden");
+      modal.innerHTML = `
+        <div class="modal" style="max-width:420px">
+          <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:var(--text)">${esc(message)}</p>
+          <div class="modal-actions">
+            <button id="_confirmCancelBtn">取消</button>
+            <button class="danger" id="_confirmOkBtn">确定</button>
+          </div>
+        </div>
+      `;
+      const close = () => { modal.innerHTML = ""; modal.classList.add("hidden"); };
+      qs("#_confirmCancelBtn").addEventListener("click", close);
+      qs("#_confirmOkBtn").addEventListener("click", () => { close(); onOk(); });
     }
     async function api(path, options = {}) {
       const headers = { ...(options.headers || {}) };
@@ -1092,7 +1191,7 @@
           const lines = [
             `<div class="nav-item ${isSnippetActive ? "active" : ""}" data-page="snippets" style="display:flex;align-items:center;gap:10px">
               <span class="nav-dot"></span>代码片段
-              ${snippetCats.length > 0 ? `<button class="nav-collapse-btn ${snippetCollapsed ? "collapsed" : ""}" data-toggle="snippets-group" style="margin-left:auto" title="${snippetCollapsed ? "展开" : "收起"}">▾</button>` : ""}
+              <button class="nav-collapse-btn ${snippetCollapsed ? "collapsed" : ""}" data-toggle="snippets-group" style="margin-left:auto" title="${snippetCollapsed ? "展开" : "收起"}">▾</button>
             </div>`
           ];
           if (snippetCats.length > 0 && !snippetCollapsed) {
@@ -2581,46 +2680,60 @@
       const nsFunc = namespaceFunction(e.algo);
       const isOwner = canManageAlgorithm(e.algo);
       const isComponentEditor = e.page === "components" || e.page === "templates" || e.page === "my-algos";
+      qs("#main").classList.add("editor-active");
       qs("#main").innerHTML = `
         <div class="editor-view" id="editorView">
-          <div class="editor-top">
-            <button onclick="window.closeEditor()">返回</button>
+          <div class="editor-top-info">
             <span class="breadcrumb">${esc(pageTitle(e.page))} / ${esc(getName(e.algo))}</span>
+            <span class="ns-prefix">${esc(nsPrefix)}</span>
+            <div class="namespace-edit" id="nsBox">
+              <input id="nsInput" value="${esc(nsFunc)}" onblur="window.validateNamespace()" />
+              <div class="field-error" id="nsErr"></div>
+            </div>
+            ${!isOwner && state.currentUser ? `<span class="editor-notice">💡 此算法不属于您，点击「保存」将另存为您的私有草稿</span>` : ""}
+          </div>
+          <div class="editor-toolbar" id="editorToolbar">
+            <button onclick="window.closeEditor()">返回</button>
             <button onclick="window.openComponentTestModal()">测试</button>
-            <button onclick="window.checkCurrentEditorSyntax()">检查代码</button>
             <button onclick="window.editCurrentAlgorithmInfo()">基本信息</button>
-            ${e.page === "templates" ? `<button onclick="window.showTemplateUsage('${esc(e.id)}')">使用说明</button>` : ""}
             ${e.page === "templates" ? `<button onclick="window.editTemplateDescription('${esc(e.id)}')">编辑说明</button>` : ""}
             ${isComponentEditor && state.currentUser?.role === "admin" && !isPublicItem(e.algo) ? `<button data-status-btn="1" class="success" onclick="window.openAdminPublishModal('${esc(e.id)}')">正式发布</button>` : ""}
-            ${isComponentEditor && state.currentUser?.role !== "admin" && (canSubmitAlgorithm(e.algo)) ? `<button data-status-btn="1" onclick="window.openSubmitModal('${esc(e.id)}')">${getStatus(e.algo) === "rejected" ? "重新提交" : "提交审核"}</button>` : ""}
-            ${isComponentEditor && state.currentUser?.role !== "admin" && ownsAlgorithm(e.algo) && getStatus(e.algo) === "reviewing" ? `<button data-status-btn="1" onclick="window.withdrawReview('${esc(e.id)}')">撤回审核</button>` : ""}
+            ${isComponentEditor && state.currentUser?.role !== "admin" && canSubmitAlgorithm(e.algo) ? `<button data-status-btn="1" onclick="window.openSubmitModal('${esc(e.id)}')">${getStatus(e.algo) === "rejected" ? "重新提交" : "提交审核"}</button>` : ""}
             <div class="more-menu-wrap" style="position:relative">
-              <button onclick="this.nextElementSibling.classList.toggle('hidden')">更多 ▾</button>
-              <div class="more-menu hidden" style="position:absolute;top:100%;right:0;z-index:200;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;min-width:120px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,.4)">
+              <button onclick="window._toggleMoreMenu(this)">更多 ▾</button>
+              <div class="more-menu hidden" style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;min-width:130px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,.55)">
+                <div class="more-menu-item" onclick="window.checkCurrentEditorSyntax();this.closest('.more-menu').classList.add('hidden')">检查代码</div>
+                ${e.page === "templates" ? `<div class="more-menu-item" onclick="window.showTemplateUsage('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">使用说明</div>` : ""}
                 <div class="more-menu-item" onclick="window.openSnippetOverlay();this.closest('.more-menu').classList.add('hidden')">插入片段</div>
                 <div class="more-menu-item" onclick="window.showVersions('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">版本历史</div>
+                ${isComponentEditor && state.currentUser?.role !== "admin" && ownsAlgorithm(e.algo) && getStatus(e.algo) === "reviewing" ? `<div class="more-menu-item" onclick="window.withdrawReview('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">撤回审核</div>` : ""}
                 ${isComponentEditor && getStatus(e.algo) === "rejected" ? `<div class="more-menu-item" onclick="window.viewRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">查看驳回内容</div><div class="more-menu-item danger" onclick="window.discardRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">放弃修改</div>` : ""}
               </div>
             </div>
+            <div class="toolbar-divider"></div>
+            <div id="blockEditorControls" style="display:contents"></div>
             <span class="spacer"></span>
-            <div class="namespace-edit" id="nsBox">
-              <div style="display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:center">
-                <span class="card-ns">${esc(nsPrefix)}</span>
-                <input id="nsInput" value="${esc(nsFunc)}" onblur="window.validateNamespace()" />
-              </div>
-              <div class="field-error" id="nsErr"></div>
-            </div>
             <button onclick="window.saveAndCloseEditor()">保存并退出</button>
             <button class="primary" onclick="window.saveEditorAll()">保存</button>
-            ${!isOwner && state.currentUser ? `<div class="editor-notice">💡 此算法不属于您，点击「保存」将另存为您的私有草稿</div>` : ""}
           </div>
           <div class="editor-main" id="editorMain">
             <aside class="file-tree" id="fileTree"></aside>
             <div class="tree-resize" onmousedown="window.startTreeResize(event)"></div>
             <div class="monaco-host" id="monacoHost"></div>
           </div>
+          <div class="v-resize-bar" id="vResizeBar" onmousedown="window.startTestResize(event)" ondblclick="window.toggleTestPanel()"></div>
+          <div class="test-panel" id="testPanel"></div>
         </div>
       `;
+      // 初始化 editorMain 的 --tree-width 变量
+      const editorMain = qs("#editorMain");
+      if (editorMain) editorMain.style.setProperty("--tree-width", "232px");
+      // 初始 test panel 高度为 0
+      const editorView = qs("#editorView");
+      if (editorView) {
+        editorView.style.setProperty("--test-height", "0px");
+        editorView.style.setProperty("--vbar-h", "2px");
+      }
     }
 
     async function loadMonaco() {
@@ -2638,7 +2751,19 @@
               { token: "number", foreground: "b5cea8" },
               { token: "identifier", foreground: "dcdcaa" }
             ],
-            colors: { "editor.background": "#040e1f" }
+            colors: {
+              "editor.background": "#040e1f",
+              "editorSuggestWidget.background": "#0d1e35",
+              "editorSuggestWidget.border": "#1e3a5f",
+              "editorSuggestWidget.foreground": "#d4e6f1",
+              "editorSuggestWidget.selectedBackground": "#1a3a60",
+              "editorSuggestWidget.selectedForeground": "#ffffff",
+              "editorSuggestWidget.highlightForeground": "#7dd3fc",
+              "editorSuggestWidget.selectedHighlightForeground": "#bae6fd",
+              "editorHoverWidget.background": "#0d1e35",
+              "editorHoverWidget.border": "#1e3a5f",
+              "editorHoverWidget.foreground": "#d4e6f1"
+            }
           });
           state.monaco = monaco;
           resolve(monaco);
@@ -3082,7 +3207,11 @@
     }
 
     async function saveEditorAll() {
-      await saveCurrentFile();
+      if (state.blockEditor) {
+        await saveBlockEditor();
+      } else {
+        await saveCurrentFile();
+      }
       const input = qs("#nsInput");
       if (state.editing?.algo && input && input.value.trim()) {
         const desired = `${namespacePrefix(state.editing.algo)}${input.value.trim()}`;
@@ -3145,29 +3274,63 @@
       state.completionDisposable = m.languages.registerCompletionItemProvider("python", {
         triggerCharacters: ["."],
         provideCompletionItems(model, position) {
-          const before = model.getValueInRange({
-            startLineNumber: position.lineNumber,
-            startColumn: Math.max(1, position.column - 12),
-            endLineNumber: position.lineNumber,
-            endColumn: position.column
-          });
-          if (!before.includes("alg.")) return { suggestions: [] };
-          return {
-            suggestions: state.completionItems.map(item => {
-              const call = item.callPrefix || item.call_prefix || item.label || "";
-              const params = item.params || [];
-              const insertText = item.insertText || item.callSnippet || `${call}(${params.map((param, index) => `\${${index + 1}:${param.name || "arg"}}`).join(", ")})`;
-              return {
-                label: call,
-                kind: m.languages.CompletionItemKind.Function,
-                insertText,
-                insertTextRules: m.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                documentation: item.zhDescription || item.zh_description || item.documentation || "",
-                detail: `${completionPrivacy(item)} · ${item.detail || call}`,
-                range: null
-              };
-            })
+          const lineText = model.getLineContent(position.lineNumber);
+          const textBefore = lineText.substring(0, position.column - 1);
+          // Match: alg.{ns}.{partial}  OR  alg.{partial}
+          const m2 = textBefore.match(/alg((?:\.\w+)*)\.(\w*)$/);
+          if (!m2) return { suggestions: [] };
+          const prefixParts = m2[1]; // "" | ".custom" | ".custom.sub"
+          const typed = m2[2];       // partial word after last dot
+          const depth = prefixParts.split(".").filter(Boolean).length;
+          const range = {
+            startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+            startColumn: position.column - typed.length, endColumn: position.column
           };
+          if (depth === 0) {
+            // alg.<typed> → suggest unique namespaces
+            const nsSet = new Set();
+            state.completionItems.forEach(item => {
+              const call = item.callPrefix || item.call_prefix || "";
+              const seg = call.split(".")[1]; // alg.{ns}.func → ns
+              if (seg) nsSet.add(seg);
+            });
+            return {
+              suggestions: [...nsSet].map(ns => ({
+                label: ns, filterText: ns, sortText: ns,
+                kind: m.languages.CompletionItemKind.Module,
+                insertText: ns + ".",
+                command: { id: "editor.action.triggerSuggest", title: "" },
+                detail: "命名空间", range
+              }))
+            };
+          } else {
+            // alg.ns.<typed>  (depth >= 1) → suggest functions under that namespace
+            const ns = prefixParts.substring(1); // ".custom" → "custom"
+            const prefix = `alg.${ns}.`;
+            const filtered = state.completionItems.filter(item => {
+              const call = item.callPrefix || item.call_prefix || "";
+              return call.startsWith(prefix);
+            });
+            return {
+              suggestions: filtered.map(item => {
+                const call = item.callPrefix || item.call_prefix || "";
+                const funcName = call.substring(prefix.length);
+                const params = item.params || [];
+                const insertText = item.callSnippet
+                  ? item.callSnippet.substring(prefix.length)
+                  : `${funcName}(${params.map((p, i) => `\${${i + 1}:${p.name || "arg"}}`).join(", ")})`;
+                return {
+                  label: funcName, filterText: funcName, sortText: funcName,
+                  kind: m.languages.CompletionItemKind.Function,
+                  insertText,
+                  insertTextRules: m.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                  documentation: (item.zhDescription || item.zh_description || "") + (item.zhName ? `\n\n**${item.zhName}**` : ""),
+                  detail: `${completionPrivacy(item)} · ${call}`,
+                  range
+                };
+              })
+            };
+          }
         }
       });
     }
@@ -3218,34 +3381,61 @@
       window._activeMonaco = null;
       // 清理分块编辑器（如有）
       if (state.blockEditor) cleanupBlockEditor();
+      // 恢复 main 的 padding
+      const main = qs("#main");
+      if (main) main.classList.remove("editor-active");
       switchPage(page);
     }
 
     async function saveAndCloseEditor() {
-      await saveCurrentFile();
+      if (state.blockEditor) {
+        await saveBlockEditor();
+      } else {
+        await saveCurrentFile();
+      }
       closeEditor();
     }
 
     function setTestHeight(height) {
       state.testHeight = Math.max(0, Math.min(500, Number(height) || 0));
+      const view = qs("#editorView");
+      if (view) {
+        view.style.setProperty("--test-height", `${state.testHeight}px`);
+        view.style.setProperty("--vbar-h", state.testHeight > 0 ? "8px" : "2px");
+      }
       const panel = qs("#testPanel");
       if (!panel) return;
-      panel.style.height = `${state.testHeight}px`;
       panel.classList.toggle("open", state.testHeight > 0);
-      state.editor?.layout();
+      // Layout all active editors
+      _layoutAllEditors();
+    }
+
+    function toggleTestPanel() {
+      const next = (state.testHeight || 0) > 0 ? 0 : 220;
+      setTestHeight(next);
     }
 
     function startTestResize(event) {
       event.preventDefault();
-      const startY = event.clientY;
-      const startHeight = state.testHeight || 0;
-      function move(moveEvent) {
-        const next = Math.max(120, Math.min(500, startHeight - (moveEvent.clientY - startY)));
-        setTestHeight(next);
+      const view = qs("#editorView");
+      if (!view) return;
+      const viewRect = view.getBoundingClientRect();
+      document.body.style.userSelect = "none";
+      function move(e) {
+        requestAnimationFrame(() => {
+          // Distance from bottom of editorView to mouse = test panel height
+          const next = Math.max(0, Math.min(500, viewRect.bottom - e.clientY));
+          state.testHeight = next;
+          view.style.setProperty("--test-height", `${next}px`);
+          const panel = qs("#testPanel");
+          if (panel) panel.classList.toggle("open", next > 0);
+        });
       }
       function up() {
+        document.body.style.userSelect = "";
         document.removeEventListener("mousemove", move);
         document.removeEventListener("mouseup", up);
+        _layoutAllEditors();
       }
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", up);
@@ -3253,20 +3443,35 @@
 
     function startTreeResize(event) {
       event.preventDefault();
-      const root = qs("#editorView");
+      const main = qs("#editorMain");
+      if (!main) return;
+      const mainRect = main.getBoundingClientRect();
       const startX = event.clientX;
-      const initial = parseInt(getComputedStyle(root).getPropertyValue("--tree-width")) || 232;
-      function move(moveEvent) {
-        const width = Math.max(120, Math.min(320, initial + moveEvent.clientX - startX));
-        root.style.setProperty("--tree-width", `${width}px`);
-        state.editor?.layout();
+      const initial = parseInt(getComputedStyle(main).getPropertyValue("--tree-width")) || 232;
+      document.body.style.userSelect = "none";
+      function move(e) {
+        requestAnimationFrame(() => {
+          const width = Math.max(120, Math.min(320, initial + e.clientX - startX));
+          main.style.setProperty("--tree-width", `${width}px`);
+        });
       }
       function up() {
+        document.body.style.userSelect = "";
         document.removeEventListener("mousemove", move);
         document.removeEventListener("mouseup", up);
+        _layoutAllEditors();
       }
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", up);
+    }
+
+    function _layoutAllEditors() {
+      state.editor?.layout();
+      state.tplEditor?.layout();
+      if (state.blockEditor) {
+        state.blockEditor.editors.forEach(ed => { try { ed.layout(); } catch (_) {} });
+        try { state.blockEditor.sourceEditor?.layout(); } catch (_) {}
+      }
     }
 
     function currentFunctions() {
@@ -4919,7 +5124,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       state.snippetEditing = { id: saveId, snippet };
       qs("#main").innerHTML = `
         <div class="editor-view snippet-editor" id="snippetEditorView">
-          <div class="editor-top">
+          <div class="editor-top-info">
             <button onclick="window.closeSnippetEditor()">返回</button>
             <span class="breadcrumb">代码片段 / ${esc(snippet.zh_name || snippet.name || "新建片段")}</span>
             ${saveId ? `<span class="tag ${statusClass(getStatus(snippet))}">${esc(statusLabel(getStatus(snippet)))}</span>` : `<span class="tag warning">私有草稿</span>`}
@@ -5183,6 +5388,83 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       qs("#snippetOverlay").innerHTML = "";
     }
 
+    function openAlgoCallOverlay() {
+      const overlay = qs("#snippetOverlay");
+      overlay.classList.remove("hidden");
+      overlay.innerHTML = `
+        <div class="overlay-card">
+          <div style="color:#94a3b8;font-size:11px;margin-bottom:8px">Ctrl+Alt+I &nbsp;|&nbsp; 搜索算法，回车插入调用代码</div>
+          <input id="algoCallSearchInput" placeholder="搜索算法名称 / 调用前缀…" autocomplete="off" style="width:100%;box-sizing:border-box" />
+          <div id="algoCallResults" style="max-height:320px;overflow-y:auto;margin-top:6px"></div>
+        </div>
+      `;
+      const input = qs("#algoCallSearchInput");
+      input.focus();
+      const closeOverlay = () => { overlay.classList.add("hidden"); overlay.innerHTML = ""; };
+      input.addEventListener("input", () => _renderAlgoCallResults(input.value));
+      input.addEventListener("keydown", event => {
+        if (event.key === "Escape") { closeOverlay(); }
+        if (event.key === "ArrowDown") { state.algoCallCursor = Math.min(state.algoCallCursor + 1, state.algoCallResults.length - 1); _renderAlgoCallResults(); event.preventDefault(); }
+        if (event.key === "ArrowUp") { state.algoCallCursor = Math.max(state.algoCallCursor - 1, 0); _renderAlgoCallResults(); event.preventDefault(); }
+        if (event.key === "Enter") {
+          const item = state.algoCallResults[state.algoCallCursor];
+          if (item) { _insertAlgoCall(item); closeOverlay(); }
+        }
+      });
+      // 如果补全数据还没加载则先拉取，完成后再渲染结果
+      if (!state.completionItems || state.completionItems.length === 0) {
+        qs("#algoCallResults").innerHTML = '<div class="empty" style="color:#94a3b8;padding:12px">数据加载中…</div>';
+        registerCompletionProvider().then(() => _renderAlgoCallResults(input.value || ""));
+      } else {
+        _renderAlgoCallResults("");
+      }
+    }
+
+    function _renderAlgoCallResults(keyword) {
+      const root = qs("#algoCallResults");
+      if (!root) return;
+      const q = (keyword || "").toLowerCase();
+      const items = state.completionItems || [];
+      const filtered = q
+        ? items.filter(item => {
+            const call = (item.callPrefix || item.call_prefix || "").toLowerCase();
+            const desc = (item.zhDescription || item.zh_description || "").toLowerCase();
+            return call.includes(q) || desc.includes(q);
+          })
+        : items;
+      state.algoCallResults = filtered.slice(0, 30);
+      if (state.algoCallCursor >= state.algoCallResults.length) state.algoCallCursor = 0;
+      root.innerHTML = state.algoCallResults.map((item, index) => {
+        const call = item.callPrefix || item.call_prefix || "";
+        const desc = item.zhDescription || item.zh_description || "";
+        const params = (item.params || []).map(p => p.name || "arg").join(", ");
+        return `
+          <div class="snippet-result ${index === state.algoCallCursor ? "active" : ""}" onclick="window._pickAlgoCall(${index})" style="display:flex;flex-direction:column;gap:3px">
+            <div style="display:flex;align-items:baseline;gap:10px">
+              <code style="color:#7dd3fc;font:13px/1.4 Consolas,'Courier New',monospace;flex-shrink:0">${esc(call)}</code>
+              <span style="color:#94a3b8;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(desc.slice(0, 50))}</span>
+            </div>
+            ${params ? `<span style="color:#6ee7b7;font:11px/1.3 Consolas,'Courier New',monospace">(${esc(params)})</span>` : ""}
+          </div>
+        `;
+      }).join("") || '<div class="empty" style="color:#94a3b8;padding:12px">暂无算法（请稍候数据加载）</div>';
+    }
+
+    function _insertAlgoCall(item) {
+      const call = item.callPrefix || item.call_prefix || "";
+      const params = (item.params || []).map(p => p.name || "arg").join(", ");
+      insertSnippet(`${call}(${params})`);
+    }
+
+    window._pickAlgoCall = function(index) {
+      const item = state.algoCallResults[index];
+      if (!item) return;
+      _insertAlgoCall(item);
+      const overlay = qs("#snippetOverlay");
+      overlay.classList.add("hidden");
+      overlay.innerHTML = "";
+    };
+
     async function searchSnippetOverlay(keyword) {
       try {
         const data = await api(`/api/v1/snippets?q=${encodeURIComponent(keyword || "")}`);
@@ -5376,6 +5658,10 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           event.preventDefault();
           openSnippetOverlay();
         }
+        if (event.ctrlKey && event.altKey && !event.metaKey && event.key.toLowerCase() === "i") {
+          event.preventDefault();
+          openAlgoCallOverlay();
+        }
         if (event.key === "Escape" && !qs("#snippetOverlay").classList.contains("hidden")) {
           closeSnippetOverlay();
         }
@@ -5388,6 +5674,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           qsa(".more-menu").forEach(m => m.classList.add("hidden"));
         }
       });
+      window.addEventListener("resize", () => _layoutAllEditors());
     }
 
     function showLoginPage() {
@@ -5724,22 +6011,24 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     }
 
     async function withdrawMyAlgoReview(algoId) {
-      if (!confirm("确定撤回审核提交？算法将返回草稿状态。")) return;
-      try {
-        await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}/withdraw`, { method: "POST" });
-        showToast("已撤回提交");
-        if (qs("#my-algo-list")) refreshMyAlgoList();
-        else switchPage("my-algos");
-      } catch (err) { showToast(err.message); }
+      showConfirm("确定撤回审核提交？算法将返回草稿状态。", async () => {
+        try {
+          await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}/withdraw`, { method: "POST" });
+          showToast("已撤回提交");
+          if (qs("#my-algo-list")) refreshMyAlgoList();
+          else switchPage("my-algos");
+        } catch (err) { showToast(err.message); }
+      });
     }
 
     async function deleteMyAlgo(algoId) {
-      if (!confirm("确定删除该算法？此操作不可恢复。")) return;
-      try {
-        await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}`, { method: "DELETE" });
-        showToast("算法已删除");
-        refreshMyAlgoList();
-      } catch (err) { showToast(err.message); }
+      showConfirm("确定删除该算法？此操作不可恢复。", async () => {
+        try {
+          await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}`, { method: "DELETE" });
+          showToast("算法已删除");
+          refreshMyAlgoList();
+        } catch (err) { showToast(err.message); }
+      });
     }
 
     async function renderUsersPage() {
@@ -5856,12 +6145,13 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     }
 
     async function deleteUser(userId) {
-      if (!confirm("确定删除该用户？此操作不可恢复。")) return;
-      try {
-        await api(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
-        showToast("用户已删除");
-        renderUsersPage();
-      } catch (err) { showToast(err.message); }
+      showConfirm("确定删除该用户？此操作不可恢复。", async () => {
+        try {
+          await api(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
+          showToast("用户已删除");
+          renderUsersPage();
+        } catch (err) { showToast(err.message); }
+      });
     }
 
     // ── Component test modal (Req 5 / Req 3) ──────────────────────────
@@ -6202,6 +6492,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.validateNamespace = validateNamespace;
     window.saveNamespace = saveNamespace;
     window.setTestHeight = setTestHeight;
+    window.toggleTestPanel = toggleTestPanel;
     window.startTestResize = startTestResize;
     window.startTreeResize = startTreeResize;
     window.renderParams = renderParams;
@@ -6358,6 +6649,10 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       }).catch(err => {
         container.innerHTML = `<div class="empty" style="padding:24px">加载模板分块失败：${esc(err.message)}</div>`;
       });
+      // 确保算法补全数据已加载（供 Ctrl+Alt+I 面板使用）
+      if (!state.completionItems || state.completionItems.length === 0) {
+        registerCompletionProvider();
+      }
       return true;
     }
 
@@ -6374,29 +6669,25 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const { blocks, viewMode, designMode, canDesign } = state.blockEditor;
       const sorted = [...blocks].sort((a, b) => a.order - b.order);
 
-      // 工具栏 HTML
-      const addBtnHtml = designMode
-        ? `<button onclick="window.addNewBlock()">＋ 添加步骤</button>`
-        : "";
-      const designToggle = canDesign
-        ? `<button class="${designMode ? "primary" : ""}" onclick="window.toggleDesignMode()">${designMode ? "退出设计模式" : "进入设计模式"}</button>`
-        : "";
-      const toolbarHtml = `
-        <div class="block-editor-toolbar">
-          ${addBtnHtml}
+      // 将 Block 操作控件注入主工具栏的 #blockEditorControls 占位符
+      const ctrl = qs("#blockEditorControls");
+      if (ctrl) {
+        const addBtnHtml = designMode
+          ? `<button class="block-action" onclick="window.addNewBlock()">＋ 添加步骤</button>`
+          : "";
+        const designToggle = canDesign
+          ? `<button class="block-action ${designMode ? "active" : ""}" onclick="window.toggleDesignMode()">${designMode ? "退出设计" : "进入设计模式"}</button>`
+          : "";
+        ctrl.innerHTML = `
           ${designToggle}
-          <span class="spacer"></span>
-          <div class="view-tabs">
-            <button class="${viewMode === "blocks" ? "active" : ""}" onclick="window.setBlockViewMode('blocks')">分块视图</button>
-            <button class="${viewMode === "source" ? "active" : ""}" onclick="window.setBlockViewMode('source')">源码视图</button>
-          </div>
-          <button onclick="window.previewFullBlockCode()">预览完整代码</button>
-          <button class="primary" onclick="window.saveBlockEditor()">保存</button>
-        </div>
-      `;
+          ${addBtnHtml}
+          <button class="block-action ${viewMode === "blocks" ? "active" : ""}" onclick="window.setBlockViewMode('blocks')">分块</button>
+          <button class="block-action ${viewMode === "source" ? "active" : ""}" onclick="window.setBlockViewMode('source')">源码</button>
+        `;
+      }
 
       if (viewMode === "source") {
-        container.innerHTML = toolbarHtml + `<div id="blockSourceView" style="flex:1;min-height:0;"></div>`;
+        container.innerHTML = `<div id="blockSourceView" style="flex:1;min-height:0;height:100%;"></div>`;
         const syncCodeToSourceView = () => {
           syncEditorsToBlocks();
           const full = [...state.blockEditor.blocks]
@@ -6420,6 +6711,9 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           state.blockEditor.sourceEditor = ed;
           // 装饰锁定行
           _decorateLockedLines(m, ed, state.blockEditor.blocks);
+          ed.onDidFocusEditorWidget(() => { window._activeMonaco = ed; });
+          ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyI, () => openAlgoCallOverlay());
+          ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
         });
         return;
       }
@@ -6428,7 +6722,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const blocksHtml = sorted.map((block, idx) => {
         const isLocked = block.locked;
         const blockClass = isLocked ? "is-locked" : "is-editable";
-        const lockBadge = isLocked ? "🔒 不可修改" : "✏️ 可编辑";
+        const lockBadge = isLocked ? "🔒" : "✏️";
         const designActions = designMode ? `
           <span class="block-design-actions">
             <button onclick="window.toggleBlockLock('${esc(block.id)}')" title="${isLocked ? '解锁' : '锁定'}">${isLocked ? "🔓" : "🔒"}</button>
@@ -6440,32 +6734,53 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         const titleEditable = designMode ? `contenteditable="true" onblur="window.updateBlockTitle('${esc(block.id)}', this.textContent)"` : "";
         const descEditable = designMode ? `contenteditable="true" onblur="window.updateBlockDesc('${esc(block.id)}', this.textContent)"` : "";
         const hintEditable = designMode ? `contenteditable="true" onblur="window.updateBlockHint('${esc(block.id)}', this.textContent)"` : "";
+
+        // 内联描述预览（最多40字符，折叠时显示在标题行）
+        const descPreview = block.description ? block.description.slice(0, 40) + (block.description.length > 40 ? "…" : "") : "";
+        const descPreviewHtml = descPreview && !designMode
+          ? `<span class="block-desc-preview" title="${esc(block.description)}">${esc(descPreview)}</span>`
+          : "";
+        // 展开/折叠按钮（desc/hint 存在时或设计模式下显示）
+        const hasExpandable = !!(block.description || block.hint || designMode);
+        const expandBtn = hasExpandable
+          ? `<button class="block-expand-btn" id="block-expand-${esc(block.id)}" onclick="window.toggleBlockMeta('${esc(block.id)}')" title="展开/折叠描述">▾</button>`
+          : "";
+
+        // meta 区：desc + hint；use mode 默认折叠
+        const metaCollapsed = designMode ? "" : "collapsed";
         const hintHtml = (block.hint || designMode)
           ? `<div class="block-hint" ${hintEditable} data-block-id="${esc(block.id)}" data-field="hint">💡 ${esc(block.hint || (designMode ? "（点击编辑提示信息）" : ""))}</div>`
           : "";
         const descHtml = (block.description || designMode)
           ? `<div class="block-description" ${descEditable} data-block-id="${esc(block.id)}" data-field="desc">${esc(block.description || (designMode ? "（点击编辑步骤描述）" : ""))}</div>`
           : "";
-        const insertBtnHtml = designMode
-          ? `<div class="block-insert-btn" onclick="window.insertBlockAt(${block.order + 1})">＋ 在此处插入新步骤</div>`
+        const metaHtml = (descHtml || hintHtml)
+          ? `<div class="block-meta ${metaCollapsed}" id="block-meta-${esc(block.id)}">${descHtml}${hintHtml}</div>`
           : "";
+
+        // 插入区：hover 展开
+        const insertZoneHtml = designMode
+          ? `<div class="block-insert-zone"><div class="block-insert-btn" onclick="window.insertBlockAt(${block.order + 1})">＋ 在此处插入新步骤</div></div>`
+          : "";
+
         return `
           <div class="template-block ${blockClass}" id="block-wrap-${esc(block.id)}">
             <div class="block-header">
               <span class="block-step-num">${idx + 1}</span>
               <span class="block-title-text" ${titleEditable} data-block-id="${esc(block.id)}">${esc(block.title || `步骤 ${idx + 1}`)}</span>
               <span class="block-lock-badge">${lockBadge}</span>
+              ${descPreviewHtml}
+              ${expandBtn}
               ${designActions}
             </div>
-            ${descHtml}
-            ${hintHtml}
-            <div class="block-code-area" id="block-editor-${esc(block.id)}" style="height:${Math.max(80, (block.code.split('\n').length + 1) * 19)}px"></div>
+            ${metaHtml}
+            <div class="block-code-area" id="block-editor-${esc(block.id)}" style="height:${Math.max(120, (block.code.split('\n').length + 2) * 19)}px"></div>
           </div>
-          ${insertBtnHtml}
+          ${insertZoneHtml}
         `;
       }).join("");
 
-      container.innerHTML = toolbarHtml + `<div class="block-editor-body">${blocksHtml}${designMode ? '<div class="block-insert-btn" onclick="window.addNewBlock()" style="margin-top:8px">＋ 添加新步骤</div>' : ""}</div>`;
+      container.innerHTML = `<div class="block-editor-body">${blocksHtml}${designMode ? '<div class="block-add-row"><button onclick="window.addNewBlock()">＋ 添加新步骤</button></div>' : ""}</div>`;
 
       // 创建各 block 的 Monaco 实例
       loadMonaco().then(m => {
@@ -6484,11 +6799,15 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
             scrollBeyondLastLine: false,
             wordWrap: "on",
             quickSuggestions: { other: true, comments: false, strings: false },
+            scrollbar: { alwaysConsumeMouseWheel: false, vertical: "auto", verticalScrollbarSize: 5 },
           });
           if (block.locked && !designMode) {
             host.style.background = "rgba(106,138,176,.04)";
             host.style.pointerEvents = "none";
           }
+          ed.onDidFocusEditorWidget(() => { window._activeMonaco = ed; });
+          ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyI, () => openAlgoCallOverlay());
+          ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
           state.blockEditor.editors.set(block.id, ed);
         });
       });
@@ -6573,8 +6892,9 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       syncEditorsToBlocks();
       const blocks = state.blockEditor.blocks;
       const maxOrder = blocks.reduce((m, b) => Math.max(m, b.order), 0);
+      const newId = "blk_" + Math.random().toString(36).slice(2, 8);
       blocks.push({
-        id: "blk_" + Math.random().toString(36).slice(2, 8),
+        id: newId,
         order: maxOrder + 1,
         title: "新步骤",
         description: "",
@@ -6584,6 +6904,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       });
       disposeBlockEditors();
       renderBlockEditorUI(state.blockEditor.container);
+      scrollToBlock(newId);
     }
 
     function insertBlockAt(beforeOrder) {
@@ -6591,8 +6912,9 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       syncEditorsToBlocks();
       const blocks = state.blockEditor.blocks;
       blocks.forEach(b => { if (b.order >= beforeOrder) b.order += 1; });
+      const newId = "blk_" + Math.random().toString(36).slice(2, 8);
       blocks.push({
-        id: "blk_" + Math.random().toString(36).slice(2, 8),
+        id: newId,
         order: beforeOrder,
         title: "新步骤",
         description: "",
@@ -6602,18 +6924,33 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       });
       disposeBlockEditors();
       renderBlockEditorUI(state.blockEditor.container);
+      scrollToBlock(newId);
     }
 
     function removeBlock(blockId) {
       if (!state.blockEditor) return;
-      if (!confirm("确定删除该步骤？")) return;
       syncEditorsToBlocks();
-      state.blockEditor.blocks = state.blockEditor.blocks.filter(b => b.id !== blockId);
-      state.blockEditor.blocks
-        .sort((a, b) => a.order - b.order)
-        .forEach((b, i) => { b.order = i + 1; });
-      disposeBlockEditors();
-      renderBlockEditorUI(state.blockEditor.container);
+      const block = state.blockEditor.blocks.find(b => b.id === blockId);
+      if (!block) { showToast('未找到该代码块'); return; }
+      if (block.locked) { showToast('锁定的代码块不能删除，请先解锁'); return; }
+      showConfirm('确定删除该步骤？此操作不可撤销。', () => {
+        // 先从 DOM 移除，避免全量重渲染导致滚动跳转
+        const blockEl = qs(`#block-wrap-${blockId}`);
+        if (blockEl) {
+          const next = blockEl.nextElementSibling;
+          if (next && next.classList.contains('block-insert-zone')) next.remove();
+          blockEl.remove();
+          // 同时删除 Monaco 实例
+          const ed = state.blockEditor.editors.get(blockId);
+          if (ed) { try { ed.dispose(); } catch (_) {} state.blockEditor.editors.delete(blockId); }
+        }
+        state.blockEditor.blocks = state.blockEditor.blocks.filter(b => b.id !== blockId);
+        state.blockEditor.blocks
+          .sort((a, b) => a.order - b.order)
+          .forEach((b, i) => { b.order = i + 1; });
+        // 重渲染以更新步骤序号，保持滚动位置
+        _renderBlocksPreserveScroll(null);
+      });
     }
 
     function toggleBlockLock(blockId) {
@@ -6621,8 +6958,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       syncEditorsToBlocks();
       const block = state.blockEditor.blocks.find(b => b.id === blockId);
       if (block) block.locked = !block.locked;
-      disposeBlockEditors();
-      renderBlockEditorUI(state.blockEditor.container);
+      _renderBlocksPreserveScroll(blockId);
     }
 
     function moveBlockUp(blockId) {
@@ -6632,8 +6968,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const idx = blocks.findIndex(b => b.id === blockId);
       if (idx <= 0) return;
       [blocks[idx].order, blocks[idx - 1].order] = [blocks[idx - 1].order, blocks[idx].order];
-      disposeBlockEditors();
-      renderBlockEditorUI(state.blockEditor.container);
+      _renderBlocksPreserveScroll(blockId);
     }
 
     function moveBlockDown(blockId) {
@@ -6643,14 +6978,56 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const idx = blocks.findIndex(b => b.id === blockId);
       if (idx < 0 || idx >= blocks.length - 1) return;
       [blocks[idx].order, blocks[idx + 1].order] = [blocks[idx + 1].order, blocks[idx].order];
+      _renderBlocksPreserveScroll(blockId);
+    }
+
+    function _renderBlocksPreserveScroll(blockId) {
+      if (!state.blockEditor) return;
+      const body = state.blockEditor.container.querySelector('.block-editor-body');
+      const savedTop = body ? body.scrollTop : 0;
       disposeBlockEditors();
       renderBlockEditorUI(state.blockEditor.container);
+      const newBody = state.blockEditor.container.querySelector('.block-editor-body');
+      if (newBody && savedTop > 0) newBody.scrollTop = savedTop;
+      if (blockId) {
+        requestAnimationFrame(() => {
+          const el = qs(`#block-wrap-${blockId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            el.classList.add('block-flash');
+            setTimeout(() => el.classList.remove('block-flash'), 1200);
+          }
+        });
+      }
+    }
+
+    function scrollToBlock(blockId) {
+      requestAnimationFrame(() => {
+        const el = qs(`#block-wrap-${blockId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          el.classList.add('block-flash');
+          setTimeout(() => el.classList.remove('block-flash'), 1200);
+        }
+      });
     }
 
     function updateBlockTitle(blockId, newTitle) {
       if (!state.blockEditor) return;
       const block = state.blockEditor.blocks.find(b => b.id === blockId);
       if (block) block.title = newTitle.trim();
+    }
+
+    function toggleBlockMeta(blockId) {
+      const meta = qs(`#block-meta-${blockId}`);
+      const btn = qs(`#block-expand-${blockId}`);
+      if (!meta) return;
+      const collapsed = meta.classList.toggle("collapsed");
+      if (btn) btn.classList.toggle("expanded", !collapsed);
+      // 描述展开/折叠时隐藏/显示内联描述预览
+      const wrap = qs(`#block-wrap-${blockId}`);
+      const preview = wrap?.querySelector(".block-desc-preview");
+      if (preview) preview.style.display = collapsed ? "" : "none";
     }
 
     function updateBlockDesc(blockId, newDesc) {
@@ -6663,34 +7040,6 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       if (!state.blockEditor) return;
       const block = state.blockEditor.blocks.find(b => b.id === blockId);
       if (block) block.hint = newHint.replace(/^💡\s*/, "").trim();
-    }
-
-    function previewFullBlockCode() {
-      if (!state.blockEditor) return;
-      syncEditorsToBlocks();
-      const sorted = [...state.blockEditor.blocks].sort((a, b) => a.order - b.order);
-      const fullCode = sorted.map(b => b.code).join("");
-      const modal = qs("#modalRoot");
-      modal.classList.remove("hidden");
-      modal.innerHTML = `
-        <div class="modal" style="width:min(900px,90vw);height:70vh;display:grid;grid-template-rows:auto 1fr auto">
-          <h3>完整源码预览</h3>
-          <div id="previewMonacoHost" style="min-height:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;"></div>
-          <div class="modal-actions"><button onclick="window.closePreviewModal()">关闭</button></div>
-        </div>
-      `;
-      loadMonaco().then(m => {
-        const host = qs("#previewMonacoHost");
-        if (!host) return;
-        m.editor.create(host, {
-          value: fullCode,
-          language: "python",
-          theme: "algolib-dark",
-          readOnly: true,
-          automaticLayout: true,
-          minimap: { enabled: false },
-        });
-      });
     }
 
     function closePreviewModal() {
@@ -6718,10 +7067,33 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.toggleBlockLock = toggleBlockLock;
     window.moveBlockUp = moveBlockUp;
     window.moveBlockDown = moveBlockDown;
+    window.scrollToBlock = scrollToBlock;
     window.updateBlockTitle = updateBlockTitle;
+    window.toggleBlockMeta = toggleBlockMeta;
+    window._toggleMoreMenu = function(btn) {
+      const menu = btn.nextElementSibling;
+      const willShow = menu.classList.contains('hidden');
+      document.querySelectorAll('.more-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+      if (willShow) {
+        const rect = btn.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.top = (rect.bottom + 4) + 'px';
+        menu.style.left = rect.left + 'px';
+        menu.style.zIndex = '9999';
+        menu.classList.remove('hidden');
+        setTimeout(() => {
+          const close = (ev) => {
+            if (!menu.contains(ev.target) && ev.target !== btn) {
+              menu.classList.add('hidden');
+              document.removeEventListener('click', close);
+            }
+          };
+          document.addEventListener('click', close);
+        }, 0);
+      }
+    };
     window.updateBlockDesc = updateBlockDesc;
     window.updateBlockHint = updateBlockHint;
-    window.previewFullBlockCode = previewFullBlockCode;
     window.closePreviewModal = closePreviewModal;
     window.cleanupBlockEditor = cleanupBlockEditor;
 
