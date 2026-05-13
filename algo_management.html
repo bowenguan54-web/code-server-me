@@ -603,7 +603,7 @@
     .tabs button.active { border-color: var(--accent); color: var(--accent); }
     .output {
       min-height: 120px;
-      max-height: 260px;
+      max-height: none;
       overflow: auto;
       background: #07162b;
       border: 1px solid var(--line);
@@ -611,6 +611,25 @@
       padding: 10px;
     }
     .output pre { margin: 0; white-space: pre-wrap; }
+    /* ===== 多类型输出渲染 ===== */
+    .output .output-panel { margin-bottom: 12px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--bg-card); }
+    .output .output-panel:last-child { margin-bottom: 0; }
+    .output .output-panel-title { padding: 7px 12px; font-size: 12px; font-weight: 600; color: var(--accent); background: rgba(0,240,200,.05); border-bottom: 1px solid var(--line); }
+    .output .output-panel-body { padding: 10px; }
+    .output .echart-host { width: 100%; min-height: 280px; height: 320px; }
+    .output .output-image { max-width: 100%; border-radius: 6px; display: block; margin: 0 auto; }
+    .output .output-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .output .output-table th { background: rgba(30,144,255,.08); color: var(--accent); font-weight: 600; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+    .output .output-table td { padding: 5px 8px; border-bottom: 1px solid rgba(106,138,176,.14); color: var(--text); }
+    .output .output-table tr:hover td { background: rgba(30,144,255,.04); }
+    .output .output-text-block { white-space: pre-wrap; word-break: break-word; font: 12px/1.6 Consolas,"Courier New",monospace; color: var(--text); margin: 0; }
+    .output .output-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+    .output .output-tab-btn { padding: 6px 14px; font-size: 12px; cursor: pointer; color: var(--text-dim); border: none; border-bottom: 2px solid transparent; background: none; border-radius: 0; min-width: auto; }
+    .output .output-tab-btn:hover { color: #fff; }
+    .output .output-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .output .output-tab-pane { animation: fadeInPane .15s ease; }
+    @keyframes fadeInPane { from { opacity:0; } to { opacity:1; } }
+    .output .output-row-count { padding: 3px 8px; font-size: 11px; color: var(--text-dim); }
     .heatmap { display: grid; gap: 2px; align-items: stretch; }
     .heatcell { min-height: 22px; min-width: 28px; border-radius: 2px; }
     .linechart { width: 100%; height: 180px; }
@@ -752,6 +771,7 @@
   <div id="toast" class="toast hidden"></div>
   <div id="snippetOverlay" class="overlay snippet-search-overlay hidden"></div>
   <div id="modalRoot" class="modal-backdrop hidden"></div>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
   <script>
     const BASE = window._ALGO_BASE || "http://127.0.0.1:8000";
@@ -2100,7 +2120,7 @@
           body: JSON.stringify({ content: getWorkspaceCode(), function: qs("#wsName").value.trim(), kwargs })
         });
         output.classList.remove("hidden");
-        output.innerHTML = `<pre>${esc(JSON.stringify(result, null, 2))}</pre>`;
+        showResultWithRenderBtn(output, result.result ?? result);
       } catch (error) {
         output.classList.remove("hidden");
         output.innerHTML = `<pre>${esc(error.message)}</pre>`;
@@ -3141,6 +3161,7 @@
       panel.style.height = `${state.testHeight}px`;
       panel.classList.toggle("open", state.testHeight > 0);
       state.editor?.layout();
+      (window._echartInstances || []).forEach(c => { try{c.resize();}catch(e){} });
     }
 
     function startTestResize(event) {
@@ -3154,6 +3175,7 @@
       function up() {
         document.removeEventListener("mousemove", move);
         document.removeEventListener("mouseup", up);
+        (window._echartInstances || []).forEach(c => { try{c.resize();}catch(e){} });
       }
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", up);
@@ -3364,6 +3386,11 @@
       const value = state.lastRunResult;
       const out = qs("#output");
       if (!out) return;
+      // If result has __output_type__, delegate to renderSmartOutput
+      if (value && typeof value === "object" && value.__output_type__) {
+        renderSmartOutput(out, value);
+        return;
+      }
       if (mode === "json") {
         out.innerHTML = `<pre>${esc(JSON.stringify(value, null, 2))}</pre>`;
         return;
@@ -3397,6 +3424,341 @@
       }
       out.innerHTML = `<pre>${esc(value)}</pre>`;
     }
+
+    /* ===== 多类型输出渲染器 ===== */
+    window._echartInstances = [];
+
+    function _destroyCharts() {
+      (window._echartInstances || []).forEach(c => { try { c.dispose(); } catch(e){} });
+      window._echartInstances = [];
+    }
+
+    function renderSmartOutput(container, result) {
+      try {
+        _destroyCharts();
+        if (result === null || result === undefined) {
+          container.innerHTML = '<pre class="output-text-block">null</pre>'; return;
+        }
+        if (typeof result !== 'object' || Array.isArray(result)) {
+          container.innerHTML = `<pre class="output-text-block">${esc(typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result))}</pre>`; return;
+        }
+        const type = result.__output_type__;
+        if (!type) {
+          container.innerHTML = `<pre class="output-text-block">${esc(JSON.stringify(result, null, 2))}</pre>`; return;
+        }
+        switch (type) {
+          case 'chart': _renderChart(container, result); break;
+          case 'table': _renderTable(container, result); break;
+          case 'image': _renderImage(container, result); break;
+          case 'text':  _renderText(container, result);  break;
+          case 'html':  _renderHtml(container, result);  break;
+          case 'multi': _renderMulti(container, result); break;
+          default: container.innerHTML = `<pre class="output-text-block">${esc(JSON.stringify(result, null, 2))}</pre>`;
+        }
+      } catch (renderErr) {
+        try {
+          container.innerHTML = `<div style="color:var(--warning,#e3b341);padding:6px 0;font-size:12px">⚠️ 渲染错误: ${esc(String(renderErr.message))}</div><pre class="output-text-block">${esc(JSON.stringify(result, null, 2))}</pre>`;
+        } catch(e) { container.textContent = String(renderErr); }
+      }
+    }
+    window.renderSmartOutput = renderSmartOutput;
+
+    /* ===== 智能 JSON → 表格 转换 ===== */
+    function _jsonToTableData(result) {
+      // 已有标准格式
+      if (result && result.__output_type__ === 'table') return result;
+
+      // 数组类型
+      if (Array.isArray(result)) {
+        if (result.length === 0) return { columns: [], rows: [] };
+        const first = result[0];
+        // 对象数组 → 每项为一行
+        if (typeof first === 'object' && first !== null && !Array.isArray(first)) {
+          const columns = [...new Set(result.flatMap(r => Object.keys(r)))];
+          const rows = result.map(r => columns.map(c => r[c] ?? ''));
+          return { columns, rows };
+        }
+        // 数组的数组
+        if (Array.isArray(first)) {
+          const columns = first.map((_, i) => `列${i + 1}`);
+          return { columns, rows: result };
+        }
+        // 基本类型数组 → 单列
+        return { columns: ['值'], rows: result.map(v => [v]) };
+      }
+
+      // 普通对象
+      if (result && typeof result === 'object') {
+        const entries = Object.entries(result);
+        // 检测是否为 {key: array, key: array} 形式（多列等长数组）
+        const arrVals = entries.filter(([, v]) => Array.isArray(v));
+        if (arrVals.length >= 2 && arrVals.every(([, v]) => v.length === arrVals[0][1].length)) {
+          const columns = arrVals.map(([k]) => k);
+          const len = arrVals[0][1].length;
+          const rows = Array.from({ length: len }, (_, i) => arrVals.map(([, v]) => v[i]));
+          return { columns, rows };
+        }
+        // 通用键值对表
+        return { columns: ['键', '值'], rows: entries.map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : v]) };
+      }
+
+      return { columns: ['结果'], rows: [[result]] };
+    }
+
+    /* ===== 智能 JSON → 图表 转换 ===== */
+    function _jsonToChartOption(result) {
+      // 已有标准 ECharts option
+      if (result && result.__output_type__ === 'chart' && result.option) return result.option;
+      if (result && result.xAxis && result.series) return result;
+
+      const COLORS = ['#1e90ff','#00f0c8','#f5a623','#ff4d6a','#a855f7','#00c48c'];
+      const axisStyle = { axisLabel: { color: '#6a8ab0' }, axisLine: { lineStyle: { color: '#1e3a5f' } } };
+      const splitLine = { splitLine: { lineStyle: { color: '#0d2340' } } };
+
+      // 数字数组 → 折线图
+      if (Array.isArray(result) && result.every(v => typeof v === 'number')) {
+        return {
+          tooltip: { trigger: 'axis' },
+          xAxis: { type: 'category', data: result.map((_, i) => i), ...axisStyle },
+          yAxis: { type: 'value', ...axisStyle, ...splitLine },
+          series: [{ type: 'line', data: result, smooth: true, itemStyle: { color: COLORS[0] } }],
+        };
+      }
+
+      // 对象数组
+      if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'object') {
+        const keys = [...new Set(result.flatMap(r => Object.keys(r)))];
+        const strKey = keys.find(k => typeof result[0][k] === 'string');
+        const numKeys = keys.filter(k => result.every(r => typeof r[k] === 'number' || r[k] == null));
+        if (numKeys.length >= 1) {
+          const xData = strKey ? result.map(r => r[strKey]) : result.map((_, i) => i);
+          return {
+            tooltip: { trigger: 'axis' },
+            legend: { textStyle: { color: '#c8d8f0' } },
+            xAxis: { type: 'category', data: xData, ...axisStyle },
+            yAxis: { type: 'value', ...axisStyle, ...splitLine },
+            series: numKeys.map((k, i) => ({
+              name: k, type: 'line', smooth: true,
+              data: result.map(r => r[k] ?? null),
+              itemStyle: { color: COLORS[i % COLORS.length] },
+              lineStyle: { color: COLORS[i % COLORS.length], width: 2 },
+            })),
+          };
+        }
+      }
+
+      // {key: number} 对象 → 柱状图
+      if (result && typeof result === 'object' && !Array.isArray(result)) {
+        const entries = Object.entries(result).filter(([, v]) => typeof v === 'number');
+        if (entries.length >= 2) {
+          return {
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: 'category', data: entries.map(([k]) => k), ...axisStyle },
+            yAxis: { type: 'value', ...axisStyle, ...splitLine },
+            series: [{ type: 'bar', data: entries.map(([, v]) => v), itemStyle: { color: COLORS[0] } }],
+          };
+        }
+        // {key: number[]} → 多系列折线图
+        const arrEntries = Object.entries(result).filter(([, v]) => Array.isArray(v) && v.every(x => typeof x === 'number'));
+        if (arrEntries.length >= 1) {
+          const maxLen = Math.max(...arrEntries.map(([, v]) => v.length));
+          return {
+            tooltip: { trigger: 'axis' },
+            legend: { textStyle: { color: '#c8d8f0' } },
+            xAxis: { type: 'category', data: Array.from({ length: maxLen }, (_, i) => i), ...axisStyle },
+            yAxis: { type: 'value', ...axisStyle, ...splitLine },
+            series: arrEntries.map(([k, v], i) => ({
+              name: k, type: 'line', smooth: true, data: v,
+              itemStyle: { color: COLORS[i % COLORS.length] },
+              lineStyle: { color: COLORS[i % COLORS.length], width: 2 },
+            })),
+          };
+        }
+      }
+
+      return null; // 无法转换
+    }
+
+    /* ===== 带渲染按钮的输出展示（不依赖 __output_type__）===== */
+    function showResultWithRenderBtn(container, result) {
+      const jsonStr = (result === null || result === undefined) ? 'null'
+        : typeof result !== 'object' ? String(result)
+        : JSON.stringify(result, null, 2);
+
+      // 清空容器，构建结构
+      container.innerHTML = '';
+
+      // 按钮条 —— 始终显示
+      const bar = document.createElement('div');
+      bar.style.cssText = 'margin-bottom:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap';
+      bar.innerHTML = `
+        <button data-rmode="json"  class="render-mode-btn primary" style="font-size:12px;padding:3px 12px;min-width:auto">{ } JSON</button>
+        <button data-rmode="table" class="render-mode-btn ghost"   style="font-size:12px;padding:3px 12px;min-width:auto">📋 渲染为表格</button>
+        <button data-rmode="chart" class="render-mode-btn ghost"   style="font-size:12px;padding:3px 12px;min-width:auto">📊 渲染为图表</button>`;
+      container.appendChild(bar);
+
+      const body = document.createElement('div');
+      container.appendChild(body);
+
+      function setActive(mode) {
+        bar.querySelectorAll('.render-mode-btn').forEach(b => {
+          const isActive = b.dataset.rmode === mode;
+          b.classList.toggle('primary', isActive);
+          b.classList.toggle('ghost', !isActive);
+        });
+      }
+
+      function showJson() {
+        _destroyCharts();
+        body.innerHTML = `<pre class="output-text-block">${esc(jsonStr)}</pre>`;
+        setActive('json');
+      }
+
+      function showTable() {
+        _destroyCharts();
+        try {
+          const td = _jsonToTableData(result);
+          if (!td.columns.length && !td.rows.length) { body.innerHTML = `<div style="color:var(--text-dim);font-size:12px;padding:8px">无法转换为表格（数据为空）</div>`; return; }
+          const hdr = td.columns.map(c => `<th>${esc(String(c))}</th>`).join('');
+          const bdy = (td.rows || []).map(row => {
+            const cells = (Array.isArray(row) ? row : td.columns.map(c => row[c] ?? ''))
+              .map(cell => `<td>${esc(String(cell ?? ''))}</td>`).join('');
+            return `<tr>${cells}</tr>`;
+          }).join('');
+          body.innerHTML = `<div style="overflow-x:auto"><table class="output-table"><thead><tr>${hdr}</tr></thead><tbody>${bdy}</tbody></table></div><div class="output-row-count">共 ${(td.rows||[]).length} 行</div>`;
+        } catch(e) {
+          body.innerHTML = `<div style="color:var(--warning,#e3b341);font-size:12px;padding:8px">⚠️ 表格转换失败: ${esc(e.message)}</div>`;
+        }
+        setActive('table');
+      }
+
+      function showChart() {
+        _destroyCharts();
+        try {
+          const opt = _jsonToChartOption(result);
+          if (!opt) { body.innerHTML = `<div style="color:var(--text-dim);font-size:12px;padding:8px">⚠️ 无法自动识别图表数据结构（需含数字数组或对象数组）</div>`; return; }
+          body.innerHTML = `<div class="echart-host"></div>`;
+          const host = body.querySelector('.echart-host');
+          if (!window.echarts) { body.innerHTML = `<div style="color:var(--warning);font-size:12px;padding:8px">ECharts 未加载</div>`; return; }
+          const chart = echarts.init(host, 'dark', { renderer: 'canvas' });
+          chart.setOption({ ...opt, backgroundColor: 'transparent' });
+          window._echartInstances.push(chart);
+          const ro = new ResizeObserver(() => chart.resize());
+          ro.observe(host);
+        } catch(e) {
+          body.innerHTML = `<div style="color:var(--warning,#e3b341);font-size:12px;padding:8px">⚠️ 图表渲染失败: ${esc(e.message)}</div>`;
+        }
+        setActive('chart');
+      }
+
+      bar.querySelector('[data-rmode="json"]').addEventListener('click', showJson);
+      bar.querySelector('[data-rmode="table"]').addEventListener('click', showTable);
+      bar.querySelector('[data-rmode="chart"]').addEventListener('click', showChart);
+
+      // 有 __output_type__ 时自动渲染对应类型，否则默认显示 JSON
+      if (result && typeof result === 'object' && result.__output_type__) {
+        if (result.__output_type__ === 'table') { showTable(); setActive('table'); }
+        else if (result.__output_type__ === 'chart') {
+          // 直接用 renderSmartOutput 走原有完整路径
+          _destroyCharts();
+          renderSmartOutput(body, result);
+          setActive('chart');
+        }
+        else { showJson(); }
+      } else {
+        showJson();
+      }
+    }
+    window.showResultWithRenderBtn = showResultWithRenderBtn;
+
+    function _renderChart(container, data) {
+      const title = data.title || '';
+      container.innerHTML = `${title ? `<div class="output-panel-title">${esc(title)}</div>` : ''}<div class="echart-host"></div>`;
+      const host = container.querySelector('.echart-host');
+      if (!host || !window.echarts) { container.innerHTML += '<div style="color:var(--warning);padding:8px;font-size:12px">ECharts 未加载，无法渲染图表</div>'; return; }
+      const chart = echarts.init(host, 'dark', { renderer: 'canvas' });
+      chart.setOption({ ...(data.option || {}), backgroundColor: 'transparent' });
+      window._echartInstances.push(chart);
+      const ro = new ResizeObserver(() => chart.resize());
+      ro.observe(host);
+    }
+
+    function _renderTable(container, data) {
+      const title = data.title || '';
+      const columns = data.columns || [];
+      const rows = data.rows || [];
+      const hdr = columns.map(c => `<th>${esc(String(c))}</th>`).join('');
+      const body = rows.map(row => {
+        const cells = (Array.isArray(row) ? row : columns.map(c => row[c] ?? ''))
+          .map(cell => `<td>${esc(String(cell ?? ''))}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+      container.innerHTML = `
+        ${title ? `<div class="output-panel-title">${esc(title)}</div>` : ''}
+        <div style="overflow-x:auto"><table class="output-table"><thead><tr>${hdr}</tr></thead><tbody>${body}</tbody></table></div>
+        <div class="output-row-count">共 ${rows.length} 行</div>`;
+    }
+
+    function _renderImage(container, data) {
+      const title = data.title || '';
+      const w = data.width ? `max-width:${data.width}px` : 'max-width:100%';
+      container.innerHTML = `
+        ${title ? `<div class="output-panel-title">${esc(title)}</div>` : ''}
+        <div style="padding:10px;text-align:center"><img class="output-image" src="${esc(data.src || '')}" alt="${esc(data.alt || '')}" style="${w}" /></div>`;
+    }
+
+    function _renderText(container, data) {
+      const title = data.title || '';
+      container.innerHTML = `
+        ${title ? `<div class="output-panel-title">${esc(title)}</div>` : ''}
+        <div class="output-panel-body"><pre class="output-text-block">${esc(data.content || '')}</pre></div>`;
+    }
+
+    function _renderHtml(container, data) {
+      const title = data.title || '';
+      container.innerHTML = `
+        ${title ? `<div class="output-panel-title">${esc(title)}</div>` : ''}
+        <div class="output-panel-body">${data.content || ''}</div>`;
+    }
+
+    function _renderMulti(container, data) {
+      const panels = data.panels || [];
+      if (!panels.length) { container.innerHTML = '<pre class="output-text-block">无输出</pre>'; return; }
+      if (panels.length <= 5) {
+        const tabs = panels.map((p, i) =>
+          `<button class="output-tab-btn${i === 0 ? ' active' : ''}" data-tidx="${i}">${esc(p.title || '面板' + (i + 1))}</button>`).join('');
+        const panes = panels.map((p, i) =>
+          `<div class="output-tab-pane" data-pidx="${i}"${i !== 0 ? ' style="display:none"' : ''}></div>`).join('');
+        container.innerHTML = `<div class="output-tabs">${tabs}</div><div>${panes}</div>`;
+        panels.forEach((panel, i) => {
+          const el = container.querySelector(`[data-pidx="${i}"]`);
+          if (el) renderSmartOutput(el, panel);
+        });
+        container.querySelectorAll('.output-tab-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const idx = btn.dataset.tidx;
+            container.querySelectorAll('.output-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            container.querySelectorAll('.output-tab-pane').forEach(p => p.style.display = 'none');
+            const t = container.querySelector(`[data-pidx="${idx}"]`);
+            if (t) t.style.display = '';
+            window._echartInstances.forEach(c => { try{c.resize();}catch(e){} });
+          });
+        });
+      } else {
+        container.innerHTML = panels.map((p, i) =>
+          `<div class="output-panel"><div class="output-panel-title">${esc(p.title || '面板' + (i + 1))}</div><div class="output-panel-body" data-sidx="${i}"></div></div>`).join('');
+        panels.forEach((panel, i) => {
+          const el = container.querySelector(`[data-sidx="${i}"]`);
+          if (el) renderSmartOutput(el, panel);
+        });
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      (window._echartInstances || []).forEach(c => { try{c.resize();}catch(e){} });
+    });
+    /* ===== End 多类型输出渲染器 ===== */
 
     function testCaseKey() {
       return `algolib_tc_${state.editing?.id || "source"}_${currentFunction().func_name || currentFunction().name}`;
@@ -4189,7 +4551,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         });
         const elapsed = result.elapsed_ms ?? Math.round(performance.now() - started);
         status.textContent = `✅ ${elapsed} ms`;
-        output.innerHTML = `<pre>${esc(JSON.stringify(result.result ?? result, null, 2))}</pre>`;
+        showResultWithRenderBtn(output, result.result ?? result);
       } catch (error) {
         status.textContent = `❌ ${Math.round(performance.now() - started)} ms`;
         output.innerHTML = `<pre>${esc(error.message)}</pre>`;
@@ -5551,7 +5913,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           method: "POST",
           body: JSON.stringify({ content: codeEl.value, kwargs: params }),
         });
-        outputEl.textContent = JSON.stringify(data.result ?? data, null, 2);
+        showResultWithRenderBtn(outputEl, data.result ?? data);
       } catch (err) {
         outputEl.textContent = "错误：" + err.message;
       }
@@ -5786,7 +6148,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
             <select id="ctTimeout" style="padding:4px 8px"><option value="5">5s</option><option value="30">30s</option><option value="60">60s</option></select>
           </div>
           <div id="ctStatus" style="margin-top:4px;font-size:12px;color:var(--text-dim)"></div>
-          <div id="ctOutput" style="margin-top:8px;background:var(--bg-deep);border-radius:6px;padding:10px;min-height:60px;max-height:240px;overflow:auto;font-size:13px"><pre style="margin:0;color:var(--text-dim)">等待运行</pre></div>
+          <div id="ctOutput" class="output" style="margin-top:8px;min-height:60px;max-height:420px;overflow:auto;font-size:13px"><pre style="margin:0;color:var(--text-dim)">等待运行</pre></div>
         </div>
       `;
       renderCompTestParams();
@@ -5926,7 +6288,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         const result = await api(url, { method: "POST", body: JSON.stringify(body) });
         const elapsed = result.elapsed_ms ?? Math.round(performance.now() - started);
         if (status) status.textContent = `✅ ${elapsed} ms`;
-        if (output) output.innerHTML = `<pre style="margin:0">${esc(JSON.stringify(result.result ?? result, null, 2))}</pre>`;
+        if (output) showResultWithRenderBtn(output, result.result ?? result);
       } catch (err) {
         if (status) status.textContent = `❌ ${Math.round(performance.now() - started)} ms`;
         if (output) output.innerHTML = `<pre style="margin:0;color:var(--danger,#f85149)">${esc(err.message)}</pre>`;

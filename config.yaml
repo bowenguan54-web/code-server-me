@@ -6,6 +6,7 @@ server:
 # Paths are relative to the project root (where config.yaml lives).
 watch_directories:
   - "./algorithms_root"
+  - "./algorithms_root/demo"
   - "./algorithms_root/library"
   - "./algorithms_root/users"
 

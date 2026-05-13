@@ -658,6 +658,14 @@
       padding: 10px;
     }
     .output pre { margin: 0; white-space: pre-wrap; }
+    .render-mode-bar { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+    .render-mode-btn { font-size: 11px; padding: 2px 10px; border-radius: 4px; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--text-dim); transition: all .15s; }
+    .render-mode-btn.active, .render-mode-btn:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .output-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .output-table th { background: rgba(0,240,200,.07); color: var(--accent); font-weight: 600; padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+    .output-table td { padding: 4px 8px; border-bottom: 1px solid rgba(106,138,176,.15); color: var(--text); }
+    .output-table tr:hover td { background: rgba(0,240,200,.03); }
+    .echart-host { width: 100%; min-height: 280px; height: 320px; }
     .heatmap { display: grid; gap: 2px; align-items: stretch; }
     .heatcell { min-height: 22px; min-width: 28px; border-radius: 2px; }
     .linechart { width: 100%; height: 180px; }
@@ -854,6 +862,7 @@
   <div id="toast" class="toast hidden"></div>
   <div id="snippetOverlay" class="overlay snippet-search-overlay hidden"></div>
   <div id="modalRoot" class="modal-backdrop hidden"></div>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
   <script>
     const BASE = window._ALGO_BASE || "http://127.0.0.1:8000";
@@ -2284,7 +2293,7 @@
           body: JSON.stringify({ content: getWorkspaceCode(), function: qs("#wsName").value.trim(), kwargs })
         });
         output.classList.remove("hidden");
-        output.innerHTML = `<pre>${esc(JSON.stringify(result, null, 2))}</pre>`;
+        showResultWithRenderBtn(output, result);
       } catch (error) {
         output.classList.remove("hidden");
         output.innerHTML = `<pre>${esc(error.message)}</pre>`;
@@ -2493,7 +2502,7 @@
           body: JSON.stringify({ content: qs("#algCode").value, function: name, kwargs })
         });
         out.classList.remove("hidden");
-        out.innerHTML = `<pre>${esc(JSON.stringify(result, null, 2))}</pre>`;
+        showResultWithRenderBtn(out, result);
         showToast("源码测试通过");
       } catch (error) {
         out.classList.remove("hidden");
@@ -3674,6 +3683,178 @@
       out.innerHTML = `<pre>${esc(value)}</pre>`;
     }
 
+    // ── Smart render helpers ────────────────────────────────────────────────
+    function _jsonToTableData(result) {
+      if (!result || typeof result !== "object") return null;
+      // explicit table output
+      if (result.__output_type__ === "table" && Array.isArray(result.columns) && Array.isArray(result.rows))
+        return { columns: result.columns, rows: result.rows };
+      const data = result.result !== undefined ? result.result : result;
+      if (Array.isArray(data) && data.length && typeof data[0] === "object" && !Array.isArray(data[0])) {
+        const columns = Object.keys(data[0]);
+        const rows = data.map(row => columns.map(c => row[c]));
+        return { columns, rows };
+      }
+      if (Array.isArray(data) && data.length && Array.isArray(data[0])) {
+        const columns = data[0].map((_, i) => `col${i}`);
+        const rows = data;
+        return { columns, rows };
+      }
+      if (!Array.isArray(data) && typeof data === "object") {
+        const values = Object.values(data);
+        if (values.every(v => typeof v !== "object")) {
+          return { columns: ["键", "值"], rows: Object.entries(data) };
+        }
+        if (values.every(v => Array.isArray(v))) {
+          const keys = Object.keys(data);
+          const len = Math.max(...values.map(v => v.length));
+          const columns = ["index", ...keys];
+          const rows = Array.from({ length: len }, (_, i) => [i, ...keys.map(k => data[k][i] ?? "")]);
+          return { columns, rows };
+        }
+      }
+      return null;
+    }
+
+    function _jsonToChartOption(result) {
+      if (!result || typeof result !== "object") return null;
+      if (result.__output_type__ === "chart" && result.option) return result.option;
+      const data = result.result !== undefined ? result.result : result;
+      if (Array.isArray(data) && data.every(v => typeof v === "number")) {
+        return { xAxis: { type: "category", data: data.map((_, i) => i) }, yAxis: { type: "value" }, series: [{ type: "line", data, smooth: true }], tooltip: { trigger: "axis" } };
+      }
+      if (!Array.isArray(data) && typeof data === "object") {
+        const entries = Object.entries(data);
+        if (entries.every(([, v]) => typeof v === "number")) {
+          return { xAxis: { type: "category", data: entries.map(([k]) => k) }, yAxis: { type: "value" }, series: [{ type: "bar", data: entries.map(([, v]) => v) }], tooltip: { trigger: "axis" } };
+        }
+        if (entries.every(([, v]) => Array.isArray(v) && v.every(x => typeof x === "number"))) {
+          const len = Math.max(...entries.map(([, v]) => v.length));
+          return {
+            xAxis: { type: "category", data: Array.from({ length: len }, (_, i) => i) },
+            yAxis: { type: "value" },
+            legend: {},
+            series: entries.map(([name, vals]) => ({ name, type: "line", data: vals, smooth: true })),
+            tooltip: { trigger: "axis" }
+          };
+        }
+      }
+      if (Array.isArray(data) && data.length && typeof data[0] === "object") {
+        const keys = Object.keys(data[0]);
+        const xKey = keys[0];
+        const yKeys = keys.slice(1).filter(k => typeof data[0][k] === "number");
+        if (yKeys.length) {
+          return {
+            xAxis: { type: "category", data: data.map(r => r[xKey]) },
+            yAxis: { type: "value" },
+            legend: yKeys.length > 1 ? {} : undefined,
+            series: yKeys.map(k => ({ name: k, type: "line", data: data.map(r => r[k]), smooth: true })),
+            tooltip: { trigger: "axis" }
+          };
+        }
+      }
+      return null;
+    }
+
+    function showResultWithRenderBtn(container, result) {
+      let jsonStr;
+      try { jsonStr = JSON.stringify(result, null, 2); } catch { jsonStr = String(result); }
+      container.innerHTML = "";
+
+      const ot = result?.__output_type__;
+
+      // ── Image mode: auto-render, provide JSON toggle ──
+      if (ot === "image" && result?.src) {
+        const bar = document.createElement("div");
+        bar.className = "render-mode-bar";
+        bar.innerHTML = `
+          <button class="render-mode-btn active" data-rmode="image">🖼️ 图片</button>
+          <button class="render-mode-btn" data-rmode="json">{ } JSON</button>`;
+        container.appendChild(bar);
+        const content = document.createElement("div");
+        container.appendChild(content);
+        function showImageView() {
+          bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "image"));
+          content.innerHTML = "";
+          if (result.title) {
+            const p = document.createElement("p");
+            p.style.cssText = "color:var(--accent);margin:4px 0 8px;font-size:13px";
+            p.textContent = result.title;
+            content.appendChild(p);
+          }
+          const img = document.createElement("img");
+          img.src = result.src;
+          img.alt = result.alt || "";
+          img.style.cssText = `max-width:${Number(result.width) || 600}px;border-radius:6px;display:block`;
+          content.appendChild(img);
+        }
+        function showJsonView() {
+          bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "json"));
+          content.innerHTML = `<pre>${esc(jsonStr)}</pre>`;
+        }
+        bar.addEventListener("click", e => {
+          const btn = e.target.closest(".render-mode-btn");
+          if (!btn) return;
+          if (btn.dataset.rmode === "image") showImageView(); else showJsonView();
+        });
+        showImageView();
+        return;
+      }
+
+      // render-mode bar
+      const bar = document.createElement("div");
+      bar.className = "render-mode-bar";
+      bar.innerHTML = `
+        <button class="render-mode-btn active" data-rmode="json">{ } JSON</button>
+        <button class="render-mode-btn" data-rmode="table">📋 渲染为表格</button>
+        <button class="render-mode-btn" data-rmode="chart">📊 渲染为图表</button>`;
+      container.appendChild(bar);
+
+      const content = document.createElement("div");
+      container.appendChild(content);
+
+      function showJson() {
+        bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "json"));
+        content.innerHTML = `<pre>${esc(jsonStr)}</pre>`;
+      }
+      function showTable() {
+        bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "table"));
+        const td = _jsonToTableData(result);
+        if (!td) { content.innerHTML = `<pre style="color:var(--warning)">无法转换为表格</pre>`; return; }
+        const thead = `<thead><tr>${td.columns.map(c => `<th>${esc(String(c))}</th>`).join("")}</tr></thead>`;
+        const tbody = `<tbody>${td.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell == null ? "" : String(cell))}</td>`).join("")}</tr>`).join("")}</tbody>`;
+        content.innerHTML = `<div style="overflow:auto"><table class="output-table">${thead}${tbody}</table></div>`;
+      }
+      function showChart() {
+        bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "chart"));
+        const option = _jsonToChartOption(result);
+        if (!option) { content.innerHTML = `<pre style="color:var(--warning)">无法转换为图表</pre>`; return; }
+        const host = document.createElement("div");
+        host.className = "echart-host";
+        content.innerHTML = "";
+        content.appendChild(host);
+        try {
+          const chart = echarts.init(host, "dark");
+          chart.setOption(option);
+          const ro = new ResizeObserver(() => chart.resize());
+          ro.observe(host);
+        } catch (e) { content.innerHTML = `<pre style="color:var(--danger)">${esc(e.message)}</pre>`; }
+      }
+
+      bar.addEventListener("click", e => {
+        const btn = e.target.closest(".render-mode-btn");
+        if (!btn) return;
+        if (btn.dataset.rmode === "json") showJson();
+        else if (btn.dataset.rmode === "table") showTable();
+        else if (btn.dataset.rmode === "chart") showChart();
+      });
+
+      // auto-select mode based on __output_type__
+      if (ot === "table") showTable();
+      else if (ot === "chart") showChart();
+      else showJson();
+    }
+
     function testCaseKey() {
       return `algolib_tc_${state.editing?.id || "source"}_${currentFunction().func_name || currentFunction().name}`;
     }
@@ -4246,30 +4427,34 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const entries = normalizedMeta.length
         ? normalizedMeta.map(param => [param.name, values?.[param.name], param.type || inferTplParamType(values?.[param.name])])
         : Object.entries(values || {}).map(([name, rawValue]) => [name, rawValue, inferTplParamType(rawValue)]);
-      if (state.tplTestMode === "files") {
-        wrap.innerHTML = entries.map(([name, _rv, type]) => {
-          const typeText = String(type || "str");
-          const upload = state.tplFileUploads[name];
-          const btnLabel = upload ? `✓ ${esc(upload.filename)}` : "选择文件";
-          const btnStyle = upload ? "color:#16a34a" : "";
-          const pathInfo = upload
-            ? `<div style="font-size:11px;color:#888;margin-top:2px">路径: ${esc(upload.path)}</div>`
-            : `<div style="font-size:11px;color:#aaa;margin-top:2px">支持图片、音频、npy 等任意格式，文件路径自动注入参数</div>`;
-          return `<div class="param-field"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px"><label style="margin:0">${esc(name)} · ${esc(typeText)}</label><button type="button" class="ghost" style="padding:2px 10px;font-size:12px;${btnStyle}" onclick="window.openTplBinaryUpload('${esc(name)}')">${btnLabel}</button></div>${pathInfo}</div>`;
-        }).join("") || '<div class="empty">未解析到函数参数，请检查函数名或源码。</div>';
-        return;
-      }
+      if (!entries.length) { wrap.innerHTML = '<div class="empty">未解析到函数参数，请检查函数名或源码。</div>'; return; }
       wrap.innerHTML = entries.map(([name, rawValue, type]) => {
         const typeText = String(type || "str");
-        const importButton = /list|dict|DataFrame|dataframe/i.test(typeText)
-          ? `<button type="button" class="ghost" style="padding:2px 10px;font-size:12px" onclick="window.openTplParamImport('${esc(name)}')">导入文件</button>`
-          : "";
-        const head = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><label style="margin:0">${esc(name)} · ${esc(typeText)}</label>${importButton}</div>`;
+        const upload = (state.tplFileUploads || {})[name];
+        const uploadLabel = upload
+          ? (upload.multi ? `✅ ${upload.paths.length} 个文件` : `✅ ${esc(upload.filename)}`)
+          : null;
+        const uploadRow = upload
+          ? `<span style="font-size:11px;color:#16a34a">${uploadLabel}</span>
+             <button type="button" class="ghost" style="padding:1px 7px;font-size:11px;color:var(--text-dim)" onclick="window.clearTplFileUpload('${esc(name)}')" title="移除">✕</button>`
+          : `<label title="单文件" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📄<input type="file" style="display:none" onchange="window.onTplUnifiedFileUpload(event,'${esc(name)}','single')"/></label>
+             <label title="多张图片" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📚<input type="file" multiple style="display:none" onchange="window.onTplUnifiedFileUpload(event,'${esc(name)}','multi')"/></label>
+             <label title="整个文件夹" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📁<input type="file" webkitdirectory style="display:none" onchange="window.onTplUnifiedFileUpload(event,'${esc(name)}','folder')"/></label>`;
+        const head = `<div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;flex-wrap:wrap">
+          <label style="margin:0;flex:1;min-width:80px">${esc(name)} · ${esc(typeText)}</label>
+          <div style="display:flex;gap:3px;align-items:center">${uploadRow}</div>
+        </div>`;
+        if (upload) {
+          const pathInfo = upload.multi
+            ? upload.paths.map(p => `<div style="font-size:11px;color:#888">${esc(p)}</div>`).join("")
+            : `<div style="font-size:11px;color:#888">路径: ${esc(upload.path)}</div>`;
+          return `<div class="param-field">${head}${pathInfo}</div>`;
+        }
         if (/bool/i.test(typeText)) {
-          return `<div class="param-field"><label>${esc(name)} · bool</label><select data-param="${esc(name)}" data-type="bool"><option value="false"${rawValue === false ? " selected" : ""}>false</option><option value="true"${rawValue === true ? " selected" : ""}>true</option></select></div>`;
+          return `<div class="param-field">${head}<select data-param="${esc(name)}" data-type="bool"><option value="false"${rawValue === false ? " selected" : ""}>false</option><option value="true"${rawValue === true ? " selected" : ""}>true</option></select></div>`;
         }
         if (/list|dict|DataFrame|dataframe/i.test(typeText)) {
-          const textValue = rawValue === "" ? "" : JSON.stringify(rawValue, null, 2);
+          const textValue = rawValue === "" ? "" : (typeof rawValue === "string" ? rawValue : JSON.stringify(rawValue, null, 2));
           const placeholder = /DataFrame|dataframe/i.test(typeText)
             ? "支持 CSV / JSON 数组"
             : (/list/i.test(typeText) ? "支持 JSON 数组，或逗号/换行分隔，如 0.1,0.6,0.9" : "支持 JSON 对象，或 key=value / key:value 多行输入");
@@ -4279,7 +4464,58 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           return `<div class="param-field">${head}<input type="number" data-param="${esc(name)}" data-type="${esc(typeText)}" value="${esc(String(rawValue ?? ""))}" /></div>`;
         }
         return `<div class="param-field">${head}<input data-param="${esc(name)}" data-type="${esc(typeText)}" value="${esc(String(rawValue ?? ""))}" /></div>`;
-      }).join("") || '<div class="empty">未解析到函数参数，请检查函数名或源码。</div>';
+      }).join("");
+    }
+
+    async function _uploadFilesHelper(files) {
+      const IMAGE_EXTS = /\.(png|jpe?g|gif|bmp|webp|tiff?|svg)$/i;
+      const fileList = Array.from(files).filter(f => {
+        // For folder uploads only keep image files; for explicit multi keep all
+        return true;
+      });
+      const results = [];
+      for (const file of fileList) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch(BASE + "/api/v1/test/upload-temp", {
+          method: "POST",
+          headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+          body: fd
+        });
+        if (!r.ok) { const txt = await r.text(); throw new Error(txt); }
+        const data = await r.json();
+        results.push({ path: data.path, filename: data.filename || file.name });
+      }
+      return results;
+    }
+
+    async function onTplUnifiedFileUpload(event, paramName, mode) {
+      const files = event.target?.files;
+      if (!files || !files.length) return;
+      const isMulti = mode === "multi" || mode === "folder" || files.length > 1;
+      showToast(`正在上传 ${files.length} 个文件...`);
+      try {
+        const results = await _uploadFilesHelper(files);
+        if (!state.tplFileUploads) state.tplFileUploads = {};
+        const savedValues = {};
+        qsa("#tplTestParams [data-param]").forEach(el => { savedValues[el.dataset.param] = el.value; });
+        if (isMulti) {
+          state.tplFileUploads[paramName] = { multi: true, paths: results.map(r => r.path), filenames: results.map(r => r.filename) };
+        } else {
+          state.tplFileUploads[paramName] = { multi: false, path: results[0].path, filename: results[0].filename };
+        }
+        const paramsMeta = getTplFunctionParams(currentFunction()?.func_name || currentFunction()?.name || "");
+        renderTplTestParams(savedValues, paramsMeta);
+        showToast(`已上传 ${results.length} 个文件`);
+      } catch (e) { showToast("上传出错: " + e.message); }
+    }
+
+    function clearTplFileUpload(paramName) {
+      if (state.tplFileUploads) delete state.tplFileUploads[paramName];
+      const savedValues = {};
+      qsa("#tplTestParams [data-param]").forEach(el => { savedValues[el.dataset.param] = el.value; });
+      const paramsMeta = getTplFunctionParams(currentFunction()?.func_name || currentFunction()?.name || "");
+      renderTplTestParams(savedValues, paramsMeta);
     }
 
     function collectTplTestParams() {
@@ -4327,23 +4563,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       showToast(`已导入 ${file.name} 到参数 ${paramName}`);
     }
 
-    function setTplTestMode(mode) {
-      state.tplTestMode = mode;
-      if (mode === "params") state.tplFileUploads = {};
-      const paramsBtn = qs("#tplModeParamsBtn");
-      const filesBtn = qs("#tplModeFilesBtn");
-      const hint = qs("#tplModeHint");
-      const loadExBtn = qs("#tplLoadExBtn");
-      if (paramsBtn) paramsBtn.classList.toggle("primary", mode === "params");
-      if (filesBtn) filesBtn.classList.toggle("primary", mode === "files");
-      if (hint) hint.textContent = mode === "files"
-        ? "上传文件，文件路径自动注入参数（适合图片 / 音频 / npy）"
-        : "直接在表单中输入参数值";
-      if (loadExBtn) loadExBtn.style.display = mode === "files" ? "none" : "";
-      const fnName = qs("#tplTestFunction")?.value.trim() || qs("#tplName")?.value.trim() || "my_algorithm";
-      const paramsMeta = getTplFunctionParams(fnName);
-      renderTplTestParams({}, paramsMeta);
-    }
+    function setTplTestMode(_mode) { /* unified mode — no-op */ }
 
     function openTplBinaryUpload(paramName) {
       state.tplImportTarget = paramName;
@@ -4362,14 +4582,14 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       try {
         const formData = new FormData();
         formData.append("file", file);
-        const resp = await fetch("/api/v1/test/upload-temp", {
+        const resp = await fetch(BASE + "/api/v1/test/upload-temp", {
           method: "POST",
           headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
           body: formData,
         });
         if (!resp.ok) throw new Error(await resp.text());
         const result = await resp.json();
-        state.tplFileUploads[paramName] = { path: result.path, filename: result.filename || file.name };
+        state.tplFileUploads[paramName] = { multi: false, path: result.path, filename: result.filename || file.name };
         if (statusEl) statusEl.textContent = "";
         showToast(`已上传 ${file.name}`);
         const fnName = qs("#tplTestFunction")?.value.trim() || qs("#tplName")?.value.trim() || "my_algorithm";
@@ -4403,9 +4623,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         <div class="modal" style="max-width:920px;width:min(92vw,920px)">
           <h3>测试代码</h3>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-            <button id="tplModeParamsBtn" class="primary" onclick="window.setTplTestMode('params')">普通参数模式</button>
-            <button id="tplModeFilesBtn" onclick="window.setTplTestMode('files')">外部文件模式</button>
-            <span id="tplModeHint" style="font-size:12px;color:#888">直接在表单中输入参数值</span>
+            <span style="font-size:12px;color:#888">可直接输入参数值，或点击参数右侧「📎 上传」按鈕上传文件（图片、音频、npy 等）</span>
           </div>
           <div class="form-grid" style="margin-bottom:8px">
             <div class="form-row"><label>函数名</label><input id="tplTestFunction" value="${esc(name)}" onblur="window.refreshTplTestParamsFromFunction()" /></div>
@@ -4464,19 +4682,10 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         let kwargs;
         const fnName = qs("#tplTestFunction")?.value.trim() || qs("#tplName")?.value.trim() || "my_algorithm";
         const timeout = Number(qs("#tplTestTimeout")?.value || "5");
-        if (state.tplTestMode === "files") {
-          kwargs = {};
-          const paramsMeta = getTplFunctionParams(fnName);
-          const missing = paramsMeta.filter(p => !state.tplFileUploads[p.name]).map(p => p.name);
-          if (missing.length > 0) {
-            showToast(`请先为以下参数选择文件: ${missing.join(", ")}`);
-            return;
-          }
-          paramsMeta.forEach(p => { kwargs[p.name] = state.tplFileUploads[p.name].path; });
-        } else {
-          kwargs = collectTplTestParams();
-          if (qs("#tplInputExample")) qs("#tplInputExample").value = JSON.stringify(kwargs, null, 2);
-        }
+        kwargs = collectTplTestParams();
+        // Override with uploaded file paths where applicable
+        Object.entries(state.tplFileUploads || {}).forEach(([name, info]) => { kwargs[name] = info.multi ? info.paths : info.path; });
+        if (qs("#tplInputExample")) qs("#tplInputExample").value = JSON.stringify(kwargs, null, 2);
         const result = await api("/api/v1/run-source", {
           method: "POST",
           body: JSON.stringify({
@@ -4488,7 +4697,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         });
         const elapsed = result.elapsed_ms ?? Math.round(performance.now() - started);
         status.textContent = `✅ ${elapsed} ms`;
-        output.innerHTML = `<pre>${esc(JSON.stringify(result.result ?? result, null, 2))}</pre>`;
+        showResultWithRenderBtn(output, result.result ?? result);
       } catch (error) {
         status.textContent = `❌ ${Math.round(performance.now() - started)} ms`;
         output.innerHTML = `<pre>${esc(error.message)}</pre>`;
@@ -5846,7 +6055,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           <div style="display:flex;gap:8px;margin-top:6px">
             <button onclick="window.runMyAlgoTest('${esc(algoId)}')">▶ 运行</button>
           </div>
-          <pre id="mytest-output" style="margin-top:8px;background:var(--surface-2,#1e1e1e);border:1px solid var(--line);border-radius:6px;padding:10px;font-size:12px;min-height:60px;white-space:pre-wrap;overflow:auto;max-height:300px"></pre>
+          <div id="mytest-output" class="output" style="margin-top:8px;min-height:60px"></div>
         </div>
       </div>`;
 
@@ -5934,7 +6143,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           method: "POST",
           body: JSON.stringify({ content: codeEl.value, kwargs: params }),
         });
-        outputEl.textContent = JSON.stringify(data.result ?? data, null, 2);
+        showResultWithRenderBtn(outputEl, data.result ?? data);
       } catch (err) {
         outputEl.textContent = "错误：" + err.message;
       }
@@ -6161,9 +6370,8 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
             <button onclick="window.closeModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-dim)">✕</button>
           </div>
           <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
-            <button id="ctParamsBtn" class="primary" onclick="window.setCompTestMode('params')" style="font-size:12px;padding:4px 12px">普通参数模式</button>
-            <button id="ctFilesBtn" class="ghost" onclick="window.setCompTestMode('files')" style="font-size:12px;padding:4px 12px">外部文件模式</button>
             ${hasExample ? `<button class="ghost" onclick="window.loadCompTestExample()" style="font-size:12px;padding:4px 12px">📋 填入示例</button>` : ""}
+            <span style="font-size:11px;color:var(--text-dim)">可直接输入值，或点参数右侧 📎 上传文件</span>
           </div>
           ${hasExample ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;padding:6px 8px;background:var(--bg-deep);border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">示例数据: ${esc((algo.inputExample || "").slice(0, 120))}</div>` : ""}
           <div id="ctParams" class="param-grid" style="max-height:320px;overflow-y:auto"></div>
@@ -6172,7 +6380,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
             <select id="ctTimeout" style="padding:4px 8px"><option value="5">5s</option><option value="30">30s</option><option value="60">60s</option></select>
           </div>
           <div id="ctStatus" style="margin-top:4px;font-size:12px;color:var(--text-dim)"></div>
-          <div id="ctOutput" style="margin-top:8px;background:var(--bg-deep);border-radius:6px;padding:10px;min-height:60px;max-height:240px;overflow:auto;font-size:13px"><pre style="margin:0;color:var(--text-dim)">等待运行</pre></div>
+          <div id="ctOutput" class="output" style="margin-top:8px;min-height:60px"><pre style="margin:0;color:var(--text-dim)">等待运行</pre></div>
         </div>
       `;
       renderCompTestParams();
@@ -6194,71 +6402,83 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       } catch { /* ignore invalid json */ }
     }
 
-    function setCompTestMode(mode) {
-      state.compTestMode = mode;
-      qs("#ctParamsBtn")?.classList.toggle("primary", mode === "params");
-      qs("#ctParamsBtn")?.classList.toggle("ghost", mode !== "params");
-      qs("#ctFilesBtn")?.classList.toggle("primary", mode === "files");
-      qs("#ctFilesBtn")?.classList.toggle("ghost", mode !== "files");
-      renderCompTestParams();
-    }
+    function setCompTestMode(_mode) { /* unified mode — no-op */ }
 
     function renderCompTestParams(values = {}) {
       const container = qs("#ctParams");
       if (!container) return;
       const params = state._compTestAlgo?.params || [];
       if (!params.length) { container.innerHTML = '<div class="empty">该函数无参数</div>'; return; }
-      if (state.compTestMode === "files") {
-        container.innerHTML = params.map(p => {
-          const uploaded = state.compTestFileUploads?.[p.name];
-          return `<div class="param-field">
-            <label>${esc(p.name)} · ${esc(String(p.type || p.annotation || "Any"))}</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <label class="ghost" style="cursor:pointer;padding:4px 12px;border:1px solid var(--border);border-radius:4px;font-size:12px">选择文件
-                <input type="file" style="display:none" onchange="window.onCompTestBinaryFileSelected(event,'${esc(p.name)}')" />
-              </label>
-              ${uploaded ? `<span style="color:var(--success,#3fb950);font-size:12px">✅ ${esc(uploaded.filename)}</span>` : `<span style="color:var(--text-dim);font-size:12px">未选择</span>`}
-            </div>
-          </div>`;
-        }).join("");
-      } else {
-        container.innerHTML = params.map(p => {
-          const type = String(p.type || p.annotation || "str");
-          const name = p.name;
-          const rawVal = values[name];
-          const valStr = rawVal !== undefined && rawVal !== null
-            ? (typeof rawVal === "object" ? JSON.stringify(rawVal) : String(rawVal))
-            : "";
-          if (/bool/i.test(type)) {
-            const isTrueSelected = rawVal === true || rawVal === "true" || rawVal === 1;
-            return `<div class="param-field"><label>${esc(name)} · ${esc(type)}</label><select data-ct-param="${esc(name)}" data-ct-type="${esc(type)}"><option value="false"${!isTrueSelected ? " selected" : ""}>false</option><option value="true"${isTrueSelected ? " selected" : ""}>true</option></select></div>`;
-          }
-          if (/list|dict|DataFrame|dataframe/i.test(type)) {
-            return `<div class="param-field"><label>${esc(name)} · ${esc(type)}</label><textarea rows="3" data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" placeholder="${/DataFrame|dataframe/.test(type) ? "粘贴 CSV" : "JSON"}">${esc(valStr)}</textarea></div>`;
-          }
-          if (/int|float|number/i.test(type)) {
-            return `<div class="param-field"><label>${esc(name)} · ${esc(type)}</label><input type="number" data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" value="${esc(valStr)}" /></div>`;
-          }
-          return `<div class="param-field"><label>${esc(name)} · ${esc(type)}</label><input data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" value="${esc(valStr)}" /></div>`;
-        }).join("");
+      container.innerHTML = params.map(p => {
+        const type = String(p.type || p.annotation || "str");
+        const name = p.name;
+        const rawVal = values[name];
+        const upload = state.compTestFileUploads?.[name];
+        const valStr = rawVal !== undefined && rawVal !== null
+          ? (typeof rawVal === "object" ? JSON.stringify(rawVal) : String(rawVal))
+          : "";
+        const uploadLabel = upload
+          ? (upload.multi ? `✅ ${upload.paths.length} 个文件` : `✅ ${esc(upload.filename)}`)
+          : null;
+        const uploadRow = upload
+          ? `<span style="font-size:11px;color:var(--success,#3fb950)">${uploadLabel}</span>
+             <button type="button" onclick="window.clearCtFileUpload('${esc(name)}')" style="background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:11px;padding:0 2px" title="移除">✕</button>`
+          : `<label title="单文件" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📄<input type="file" style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','single')"/></label>
+             <label title="多张图片" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📚<input type="file" multiple style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','multi')"/></label>
+             <label title="整个文件夹" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📁<input type="file" webkitdirectory style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','folder')"/></label>`;
+        const head = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><label style="margin:0">${esc(name)} · <span style="color:var(--text-dim);font-weight:normal">${esc(type)}</span></label><div style="display:flex;gap:3px;align-items:center">${uploadRow}</div></div>`;
+        if (upload) {
+          const pathInfo = upload.multi
+            ? upload.paths.map(p => `<div style="font-size:11px;color:var(--text-dim)">${esc(p)}</div>`).join("")
+            : `<div style="padding:4px 8px;background:var(--bg-deep);border-radius:4px;font-size:12px;color:var(--text-dim)">${esc(upload.path)}</div>`;
+          return `<div class="param-field">${head}${pathInfo}</div>`;
+        }
+        if (/bool/i.test(type)) {
+          const isTrueSelected = rawVal === true || rawVal === "true" || rawVal === 1;
+          return `<div class="param-field">${head}<select data-ct-param="${esc(name)}" data-ct-type="${esc(type)}"><option value="false"${!isTrueSelected ? " selected" : ""}>false</option><option value="true"${isTrueSelected ? " selected" : ""}>true</option></select></div>`;
+        }
+        if (/list|dict|DataFrame|dataframe/i.test(type)) {
+          return `<div class="param-field">${head}<textarea rows="3" data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" placeholder="${/DataFrame|dataframe/.test(type) ? "粘贴 CSV" : "JSON"}">${esc(valStr)}</textarea></div>`;
+        }
+        if (/int|float|number/i.test(type)) {
+          return `<div class="param-field">${head}<input type="number" data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" value="${esc(valStr)}" /></div>`;
+        }
+        return `<div class="param-field">${head}<input data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" value="${esc(valStr)}" /></div>`;
+      }).join("");
+    }
+
+    async function onCtFileUpload(event, paramName, mode) {
+      const files = event.target?.files;
+      if (!files || !files.length) return;
+      const isMulti = mode === "multi" || mode === "folder" || files.length > 1;
+      const statusEl = qs("#ctStatus");
+      if (statusEl) statusEl.textContent = `正在上传 ${files.length} 个文件...`;
+      try {
+        const results = await _uploadFilesHelper(files);
+        if (!state.compTestFileUploads) state.compTestFileUploads = {};
+        if (isMulti) {
+          state.compTestFileUploads[paramName] = { multi: true, paths: results.map(r => r.path), filenames: results.map(r => r.filename) };
+        } else {
+          state.compTestFileUploads[paramName] = { multi: false, path: results[0].path, filename: results[0].filename };
+        }
+        if (statusEl) statusEl.textContent = "";
+        showToast(`已上传 ${results.length} 个文件`);
+        const cur = collectCompTestParams();
+        renderCompTestParams(cur);
+      } catch (err) {
+        showToast("文件上传失败: " + err.message);
+        if (statusEl) statusEl.textContent = "";
       }
     }
 
+    function clearCtFileUpload(paramName) {
+      if (state.compTestFileUploads) delete state.compTestFileUploads[paramName];
+      const cur = collectCompTestParams();
+      renderCompTestParams(cur);
+    }
+
     async function onCompTestBinaryFileSelected(event, paramName) {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append("file", file);
-      try {
-        const result = await fetch("/api/v1/test/upload-temp", {
-          method: "POST",
-          headers: { Authorization: state.token ? `Bearer ${state.token}` : "" },
-          body: formData
-        }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(new Error(e.detail || "上传失败"))));
-        if (!state.compTestFileUploads) state.compTestFileUploads = {};
-        state.compTestFileUploads[paramName] = { path: result.path, filename: result.filename };
-        renderCompTestParams();
-      } catch (err) { showToast("文件上传失败: " + err.message); }
+      return onCtFileUpload(event, paramName);
     }
 
     function collectCompTestParams() {
@@ -6285,16 +6505,9 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         const sourceContent = state._compTestSource;
         const fnName = algo?.funcName || algo?.name || "main";
         const timeout = Number(qs("#ctTimeout")?.value || "5");
-        let kwargs;
-        if (state.compTestMode === "files") {
-          kwargs = {};
-          const params = algo?.params || [];
-          const missing = params.filter(p => !state.compTestFileUploads?.[p.name]).map(p => p.name);
-          if (missing.length > 0) { showToast(`请先为以下参数选择文件: ${missing.join(", ")}`); return; }
-          params.forEach(p => { kwargs[p.name] = state.compTestFileUploads[p.name].path; });
-        } else {
-          kwargs = collectCompTestParams();
-        }
+        let kwargs = collectCompTestParams();
+        // Override with uploaded file paths where applicable
+        Object.entries(state.compTestFileUploads || {}).forEach(([n, info]) => { kwargs[n] = info.multi ? info.paths : info.path; });
         const algoStatus = algo?.publishStatus || algo?.status || "";
         const isPublished = algoStatus === "published";
         let body, url;
@@ -6312,7 +6525,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         const result = await api(url, { method: "POST", body: JSON.stringify(body) });
         const elapsed = result.elapsed_ms ?? Math.round(performance.now() - started);
         if (status) status.textContent = `✅ ${elapsed} ms`;
-        if (output) output.innerHTML = `<pre style="margin:0">${esc(JSON.stringify(result.result ?? result, null, 2))}</pre>`;
+        if (output) showResultWithRenderBtn(output, result.result ?? result);
       } catch (err) {
         if (status) status.textContent = `❌ ${Math.round(performance.now() - started)} ms`;
         if (output) output.innerHTML = `<pre style="margin:0;color:var(--danger,#f85149)">${esc(err.message)}</pre>`;
@@ -6507,6 +6720,8 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.openTplParamImport = openTplParamImport;
     window.onTplParamFileSelected = onTplParamFileSelected;
     window.setTplTestMode = setTplTestMode;
+    window.onTplUnifiedFileUpload = onTplUnifiedFileUpload;
+    window.clearTplFileUpload = clearTplFileUpload;
     window.openTplBinaryUpload = openTplBinaryUpload;
     window.onTplBinaryFileSelected = onTplBinaryFileSelected;
     window.runTplSourceTest = runTplSourceTest;
@@ -6516,6 +6731,8 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.renderCompTestParams = renderCompTestParams;
     window.loadCompTestExample = loadCompTestExample;
     window.onCompTestBinaryFileSelected = onCompTestBinaryFileSelected;
+    window.onCtFileUpload = onCtFileUpload;
+    window.clearCtFileUpload = clearCtFileUpload;
     window.runCompTest = runCompTest;
     window.openForkTemplateView = openForkTemplateView;
     window.openForkComponentView = openForkComponentView;

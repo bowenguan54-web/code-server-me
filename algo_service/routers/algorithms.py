@@ -3202,21 +3202,6 @@ async def run_registered_algorithm(request: Request, registry: AlgorithmRegistry
     return _execute_entry(entry, args if isinstance(args, list) else [], kwargs if isinstance(kwargs, dict) else {})
 
 
-@router.post("/{namespace}/{func_name}")
-async def execute_algorithm(
-    namespace: str,
-    func_name: str,
-    request: ExecuteRequest,
-    http_request: Request,
-    registry: AlgorithmRegistry = Depends(get_registry),
-) -> dict[str, Any]:
-    entry = registry.get_by_id(f"{namespace}.{func_name}")
-    if entry is None:
-        raise HTTPException(status_code=404, detail=f"算法不存在：{namespace}.{func_name}")
-    _ensure_user_callable_status(entry, http_request)
-    return _execute_entry(entry, request.args, request.kwargs)
-
-
 @router.post("/invoke/{call_namespace:path}")
 async def invoke_algorithm_by_namespace(
     call_namespace: str,
@@ -3228,6 +3213,21 @@ async def invoke_algorithm_by_namespace(
     entry = registry.get_by_id(normalized)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{call_namespace}")
+    _ensure_user_callable_status(entry, http_request)
+    return _execute_entry(entry, request.args, request.kwargs)
+
+
+@router.post("/{namespace}/{func_name}")
+async def execute_algorithm(
+    namespace: str,
+    func_name: str,
+    request: ExecuteRequest,
+    http_request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    entry = registry.get_by_id(f"{namespace}.{func_name}")
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"算法不存在：{namespace}.{func_name}")
     _ensure_user_callable_status(entry, http_request)
     return _execute_entry(entry, request.args, request.kwargs)
 
