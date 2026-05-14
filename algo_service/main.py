@@ -25,6 +25,8 @@ from .routers.snippets import router as snippets_router
 from .routers.stubs import router as stubs_router
 from .routers.submissions import router as submissions_router
 from .routers.users import router as users_router
+from .routers.ws_terminal import router as ws_router
+from .routers.execute_raw import router as execute_raw_router
 from .setup_env import ensure_algolib_installed
 from .sdk.file_watcher import FileWatcher
 from .sdk.registry import AlgorithmRegistry
@@ -136,6 +138,8 @@ app.include_router(snippets_router)
 app.include_router(algorithms_router)
 app.include_router(publish_router)
 app.include_router(external_router)
+app.include_router(ws_router)
+app.include_router(execute_raw_router)
 
 
 @app.get("/health")

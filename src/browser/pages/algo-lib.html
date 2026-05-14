@@ -626,6 +626,71 @@
       transition: background .15s;
     }
     .v-resize-bar:hover { background: rgba(88,166,255,.18); }
+    /* ── IDE 底部面板 ── */
+    .panel-resize-bar {
+      height: 0;
+      background: transparent;
+      cursor: row-resize;
+      flex-shrink: 0;
+      transition: background .15s, height .1s;
+    }
+    .panel-resize-bar.visible {
+      height: 4px;
+    }
+    .panel-resize-bar.visible:hover { background: rgba(88,166,255,.2); }
+    .bottom-panel {
+      height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      background: #07162b;
+      border-top: 1px solid var(--line);
+    }
+    .bottom-panel.open { height: var(--panel-h, 220px); }
+    .panel-tabs {
+      display: flex;
+      align-items: center;
+      background: #040e1f;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+      padding: 0 4px;
+    }
+    .panel-tab {
+      padding: 4px 14px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 12px;
+      border-bottom: 2px solid transparent;
+      transition: color .15s;
+    }
+    .panel-tab:hover { color: var(--text); }
+    .panel-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .panel-close-btn {
+      margin-left: auto;
+      padding: 2px 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .panel-close-btn:hover { color: var(--text); }
+    .panel-content { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+    .panel-pane { position: absolute; inset: 0; overflow: auto; padding: 6px 10px; }
+    .panel-pane.hidden { display: none; }
+    .exec-output { font-family: monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+    .exec-output .so { color: #d4e6f1; }
+    .exec-output .se { color: #f87171; }
+    .exec-output .ok { color: #4ade80; }
+    .exec-output .err { color: #f87171; }
+    .exec-output .info { color: #94a3b8; }
+    .panel-empty { color: var(--text-dim); font-size: 12px; }
+    #xtermHost { width: 100%; height: 100%; }
+    .problem-row { padding: 2px 0; font-size: 12px; color: #f87171; }
+    .problem-row span { color: var(--text-dim); margin-right: 6px; }
     .test-panel {
       min-height: 0;
       overflow: auto;
@@ -862,6 +927,10 @@
   <div id="toast" class="toast hidden"></div>
   <div id="snippetOverlay" class="overlay snippet-search-overlay hidden"></div>
   <div id="modalRoot" class="modal-backdrop hidden"></div>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
   <script>
@@ -906,7 +975,15 @@
       _compTestSource: null,
       tplEditor: null,
       tplModel: null,
-      blockEditor: null
+      blockEditor: null,
+      // ── IDE 底部面板 ──
+      bottomTab: "output",
+      bottomPanelOpen: false,
+      terminalWs: null,
+      executeWs: null,
+      xterm: null,
+      xtermFitAddon: null,
+      terminalInited: false
     };
 
     function qs(selector, root = document) { return root.querySelector(selector); }
@@ -2721,6 +2798,8 @@
             </div>
             <div class="toolbar-divider"></div>
             <div id="blockEditorControls" style="display:contents"></div>
+            <button title="运行当前文件 (Ctrl+F5)" onclick="window.executeCurrentFile()">▶ 运行</button>
+            <button title="打开终端 (Ctrl+\`)" onclick="window.openTerminalPanel()">⌗ 终端</button>
             <span class="spacer"></span>
             <button onclick="window.saveAndCloseEditor()">保存并退出</button>
             <button class="primary" onclick="window.saveEditorAll()">保存</button>
@@ -2732,6 +2811,20 @@
           </div>
           <div class="v-resize-bar" id="vResizeBar" onmousedown="window.startTestResize(event)" ondblclick="window.toggleTestPanel()"></div>
           <div class="test-panel" id="testPanel"></div>
+          <div class="panel-resize-bar" id="panelResizeBar" onmousedown="window.startPanelResize(event)"></div>
+          <div class="bottom-panel" id="bottomPanel">
+            <div class="panel-tabs">
+              <button class="panel-tab active" id="tab-output" onclick="window.switchBottomTab('output')">输出</button>
+              <button class="panel-tab" id="tab-terminal" onclick="window.switchBottomTab('terminal')">终端</button>
+              <button class="panel-tab" id="tab-problems" onclick="window.switchBottomTab('problems')">问题</button>
+              <button class="panel-close-btn" onclick="window.toggleBottomPanel(false)">✕</button>
+            </div>
+            <div class="panel-content">
+              <div class="panel-pane" id="outputPane"><div id="execOutput" class="exec-output"><span class="panel-empty">运行后输出将显示在这里</span></div></div>
+              <div class="panel-pane hidden" id="terminalPane"><div id="xtermHost"></div></div>
+              <div class="panel-pane hidden" id="problemsPane"><div id="problemsList"></div></div>
+            </div>
+          </div>
         </div>
       `;
       // 初始化 editorMain 的 --tree-width 变量
@@ -2886,6 +2979,9 @@
       await registerCompletionProvider();
       runEditorLocalDiagnostics();
       renderTestPanel();
+      if (state.bottomPanelOpen) {
+        window.setTimeout(() => toggleBottomPanel(true), 100);
+      }
     }
 
     function runEditorLocalDiagnostics(showResult = false) {
@@ -3369,6 +3465,13 @@
       window._activeMonaco = null;
       // 清理分块编辑器（如有）
       if (state.blockEditor) cleanupBlockEditor();
+      // 清理 IDE 底部面板
+      if (state.terminalWs) { state.terminalWs.close(); state.terminalWs = null; }
+      if (state.executeWs) { state.executeWs.close(); state.executeWs = null; }
+      if (state.xterm) { state.xterm.dispose(); state.xterm = null; }
+      state.xtermFitAddon = null;
+      state.terminalInited = false;
+      state.bottomPanelOpen = false;
       // 恢复 main 的 padding
       const main = qs("#main");
       if (main) main.classList.remove("editor-active");
@@ -5840,6 +5943,165 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       qs("#clock").textContent = new Date().toLocaleString();
     }
 
+    // ── IDE 底部面板函数 ──────────────────────────────────────────────────────
+
+    function switchBottomTab(tab) {
+      state.bottomTab = tab;
+      ["output", "terminal", "problems"].forEach(t => {
+        const btn = qs(`#tab-${t}`);
+        if (btn) btn.classList.toggle("active", t === tab);
+        const pane = qs(`#${t}Pane`);
+        if (pane) pane.classList.toggle("hidden", t !== tab);
+      });
+      if (tab === "terminal" && !state.terminalInited) initTerminal();
+      if (tab === "problems") refreshProblemsPane();
+    }
+
+    function toggleBottomPanel(open) {
+      state.bottomPanelOpen = (open !== undefined) ? open : !state.bottomPanelOpen;
+      const panel = qs("#bottomPanel");
+      if (panel) panel.classList.toggle("open", state.bottomPanelOpen);
+      const resizeBar = qs("#panelResizeBar");
+      if (resizeBar) resizeBar.classList.toggle("visible", state.bottomPanelOpen);
+    }
+
+    function startPanelResize(event) {
+      event.preventDefault();
+      const view = qs("#editorView");
+      if (!view) return;
+      document.body.style.userSelect = "none";
+      function move(e) {
+        requestAnimationFrame(() => {
+          const newH = Math.max(80, Math.min(600, view.getBoundingClientRect().bottom - e.clientY));
+          qs("#bottomPanel")?.style.setProperty("--panel-h", `${newH}px`);
+        });
+      }
+      function up() {
+        document.body.style.userSelect = "";
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+      }
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    }
+
+    function initTerminal() {
+      if (state.terminalInited) return;
+      if (!window.Terminal) { showToast("xterm.js 未加载，终端不可用"); return; }
+      const host = qs("#xtermHost");
+      if (!host) return;
+      state.xterm = new window.Terminal({
+        theme: { background: "#040e1f", foreground: "#d4e6f1", cursor: "#58a6ff" },
+        fontSize: 13,
+        fontFamily: "monospace",
+        cursorBlink: true,
+        scrollback: 3000
+      });
+      if (window.FitAddon?.FitAddon) {
+        state.xtermFitAddon = new window.FitAddon.FitAddon();
+        state.xterm.loadAddon(state.xtermFitAddon);
+      }
+      if (window.WebLinksAddon?.WebLinksAddon) {
+        state.xterm.loadAddon(new window.WebLinksAddon.WebLinksAddon());
+      }
+      state.xterm.open(host);
+      if (state.xtermFitAddon) state.xtermFitAddon.fit();
+      state.terminalInited = true;
+      connectWsTerminal();
+      const ro = new ResizeObserver(() => { if (state.xtermFitAddon) state.xtermFitAddon.fit(); });
+      ro.observe(host);
+      state.xterm.onData(data => {
+        if (state.terminalWs && state.terminalWs.readyState === WebSocket.OPEN) {
+          state.terminalWs.send(JSON.stringify({ type: "input", data }));
+        }
+      });
+      state.xterm.onResize(({ cols, rows }) => {
+        if (state.terminalWs && state.terminalWs.readyState === WebSocket.OPEN) {
+          state.terminalWs.send(JSON.stringify({ type: "resize", rows, cols }));
+        }
+      });
+    }
+
+    function connectWsTerminal() {
+      if (state.terminalWs && state.terminalWs.readyState === WebSocket.OPEN) return;
+      const token = state.token || localStorage.getItem("algolib_token") || "";
+      const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+      const host = new URL(BASE).host;
+      const ws = new WebSocket(`${wsProto}//${host}/ws/terminal?token=${encodeURIComponent(token)}`);
+      ws.onopen = () => { if (state.xterm) state.xterm.writeln("\x1b[32m[终端已连接]\x1b[0m"); };
+      ws.onmessage = ev => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === "output" && state.xterm) state.xterm.write(msg.data);
+        } catch { if (state.xterm) state.xterm.write(ev.data); }
+      };
+      ws.onclose = () => { if (state.xterm) state.xterm.writeln("\r\n\x1b[33m[连接已断开]\x1b[0m"); };
+      ws.onerror = () => { if (state.xterm) state.xterm.writeln("\r\n\x1b[31m[连接错误]\x1b[0m"); };
+      state.terminalWs = ws;
+    }
+
+    function openTerminalPanel() {
+      toggleBottomPanel(true);
+      switchBottomTab("terminal");
+      if (!state.terminalInited) initTerminal();
+      else if (!state.terminalWs || state.terminalWs.readyState !== WebSocket.OPEN) connectWsTerminal();
+    }
+
+    function executeCurrentFile() {
+      const model = state.editor?.getModel();
+      if (!model) { showToast("编辑器未就绪"); return; }
+      const code = model.getValue();
+      toggleBottomPanel(true);
+      switchBottomTab("output");
+      runCodeViaWs(code);
+    }
+
+    function runCodeViaWs(code) {
+      const out = qs("#execOutput");
+      if (out) out.innerHTML = '<span class="info">正在运行…</span>';
+      if (state.executeWs && state.executeWs.readyState === WebSocket.OPEN) {
+        state.executeWs.send(JSON.stringify({ action: "run", code }));
+        return;
+      }
+      const token = state.token || localStorage.getItem("algolib_token") || "";
+      const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+      const host = new URL(BASE).host;
+      const ws = new WebSocket(`${wsProto}//${host}/ws/execute?token=${encodeURIComponent(token)}`);
+      ws.onopen = () => ws.send(JSON.stringify({ action: "run", code }));
+      ws.onmessage = ev => {
+        try {
+          const msg = JSON.parse(ev.data);
+          const outEl = qs("#execOutput");
+          if (!outEl) return;
+          if (msg.type === "stdout") outEl.innerHTML += `<span class="so">${esc(msg.data)}</span>`;
+          else if (msg.type === "stderr") outEl.innerHTML += `<span class="se">${esc(msg.data)}</span>`;
+          else if (msg.type === "result") {
+            const cls = msg.success ? "ok" : "err";
+            outEl.innerHTML += `<span class="${cls}">── 退出码 ${msg.exit_code}，耗时 ${Math.round(msg.elapsed_ms)}ms ──</span>`;
+          }
+          outEl.scrollTop = outEl.scrollHeight;
+        } catch { /* ignore */ }
+      };
+      ws.onerror = () => {
+        const outEl = qs("#execOutput");
+        if (outEl) outEl.innerHTML += '<span class="err">WebSocket 连接失败</span>';
+      };
+      state.executeWs = ws;
+    }
+
+    function refreshProblemsPane() {
+      const list = qs("#problemsList");
+      if (!list) return;
+      if (!state.editor || !state.monaco) { list.innerHTML = '<span class="panel-empty">暂无问题</span>'; return; }
+      const model = state.editor.getModel();
+      if (!model) { list.innerHTML = '<span class="panel-empty">暂无问题</span>'; return; }
+      const markers = state.monaco.editor.getModelMarkers({ resource: model.uri });
+      if (!markers.length) { list.innerHTML = '<span class="panel-empty">✔ 没有检测到问题</span>'; return; }
+      list.innerHTML = markers.map(mk =>
+        `<div class="problem-row"><span>${esc((mk.resource?.path || "").split("/").pop())}:${mk.startLineNumber}</span>${esc(mk.message)}</div>`
+      ).join("");
+    }
+
     function bindGlobalKeys() {
       document.addEventListener("keydown", event => {
         if (event.ctrlKey && event.altKey && !event.metaKey && event.key.toLowerCase() === "s") {
@@ -5852,6 +6114,12 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         }
         if (event.key === "Escape" && !qs("#snippetOverlay").classList.contains("hidden")) {
           closeSnippetOverlay();
+        }
+        if (event.ctrlKey && !event.altKey && !event.metaKey && event.key === "F5") {
+          if (state.editor) { event.preventDefault(); executeCurrentFile(); }
+        }
+        if (event.ctrlKey && !event.altKey && !event.metaKey && event.key === "`") {
+          if (qs("#editorView")) { event.preventDefault(); openTerminalPanel(); }
         }
       });
       qs("#modalRoot").addEventListener("click", event => {
@@ -6674,6 +6942,13 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.closeEditor = closeEditor;
     window.saveAndCloseEditor = saveAndCloseEditor;
     window.initEditor = initEditor;
+    window.toggleBottomPanel = toggleBottomPanel;
+    window.switchBottomTab = switchBottomTab;
+    window.startPanelResize = startPanelResize;
+    window.openTerminalPanel = openTerminalPanel;
+    window.executeCurrentFile = executeCurrentFile;
+    window.runCodeViaWs = runCodeViaWs;
+    window.refreshProblemsPane = refreshProblemsPane;
     window.switchFile = switchFile;
     window.addSourceFile = addSourceFile;
     window.openSourceFileModal = openSourceFileModal;

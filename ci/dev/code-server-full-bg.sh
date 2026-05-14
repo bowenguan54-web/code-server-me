@@ -238,6 +238,19 @@ start_server() {
     echo "AlgoLib extension installed → $ext_dst"
   fi
 
+  # Install algolib-manager extension into extensions dir
+  local mgr_src="$ROOT/extensions/algolib-manager"
+  local mgr_dst="$EXTENSIONS_DIR/bowenguan54.algolib-manager-1.0.0"
+  if [[ -d "$mgr_src" && -f "$mgr_src/dist/extension.js" ]]; then
+    mkdir -p "$mgr_dst/dist" "$mgr_dst/media"
+    cp -f "$mgr_src/package.json" "$mgr_dst/"
+    cp -rf "$mgr_src/dist/." "$mgr_dst/dist/"
+    cp -rf "$mgr_src/media/." "$mgr_dst/media/"
+    echo "AlgoLib Manager extension installed → $mgr_dst"
+  else
+    echo "Warning: algolib-manager dist not found, run 'npm run build' in extensions/algolib-manager first"
+  fi
+
   (
     cd "$ROOT"
     export EXTENSIONS_GALLERY
