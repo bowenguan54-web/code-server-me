@@ -20,6 +20,9 @@
       --text-dim: #6a8ab0;
       --line: rgba(106, 138, 176, .28);
       --shadow: 0 18px 50px rgba(0, 0, 0, .32);
+      --bg: var(--bg-deep);
+      --border: var(--line);
+      --text-secondary: var(--text-dim);
     }
 
     * { box-sizing: border-box; }
@@ -147,6 +150,7 @@
       min-width: 0;
       overflow: auto;
       padding: 20px 24px 34px;
+      position: relative;
     }
     .main.editor-active {
       padding: 0;
@@ -1231,6 +1235,340 @@
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .invalid-field { border-color: var(--danger) !important; }
 
+    .test-fullpage {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; flex-direction: column;
+      background: var(--bg); z-index: 100;
+    }
+
+    .test-header {
+      height: 48px; display: flex; align-items: center;
+      justify-content: space-between; padding: 0 16px;
+      border-bottom: 1px solid var(--border); background: var(--bg-card);
+      flex-shrink: 0;
+    }
+
+    .test-header .test-close-btn {
+      background: none; border: none; color: var(--text);
+      font-size: 14px; cursor: pointer; padding: 4px 12px;
+      border-radius: 4px;
+    }
+    .test-header .test-close-btn:hover { background: var(--border); }
+
+    .test-body {
+      flex: 1; display: flex; overflow: hidden;
+    }
+
+    .test-input-panel {
+      width: 50%; min-width: 320px; overflow-y: auto;
+      padding: 16px; box-sizing: border-box;
+    }
+
+    .test-output-panel {
+      flex: 1; min-width: 320px; overflow-y: auto;
+      padding: 16px; box-sizing: border-box;
+    }
+
+    .test-divider {
+      width: 6px; cursor: col-resize; background: var(--border);
+      flex-shrink: 0; transition: background 0.2s;
+    }
+    .test-divider:hover { background: var(--primary); }
+
+    .test-section-title {
+      font-size: 15px; font-weight: 600; margin-bottom: 12px;
+      color: var(--text); padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .test-run-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; border-top: 1px solid var(--border);
+      background: var(--bg-card); flex-shrink: 0;
+    }
+
+    .test-run-btn {
+      padding: 8px 32px; background: var(--primary); color: #fff;
+      border: none; border-radius: 6px; font-size: 15px;
+      cursor: pointer; font-weight: 600;
+    }
+    .test-run-btn:hover { opacity: 0.9; }
+    .test-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .test-elapsed {
+      font-size: 13px; color: var(--text-secondary);
+    }
+
+    .param-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 16px; margin-bottom: 12px;
+    }
+
+    .param-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .param-name {
+      font-weight: 600; font-size: 14px; color: var(--text);
+    }
+
+    .param-type-badge {
+      display: inline-block; font-size: 11px; padding: 2px 8px;
+      border-radius: 4px; background: var(--primary); color: #fff;
+      margin-left: 8px;
+    }
+
+    .param-desc {
+      font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;
+    }
+
+    .param-skip-label {
+      font-size: 12px; color: var(--text-secondary); cursor: pointer;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .param-skip-label input[type="checkbox"] { margin: 0; }
+
+    .param-input-area { width: 100%; }
+
+    .input-number, .input-text, .input-url {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 14px; background: var(--bg);
+      color: var(--text); outline: none; box-sizing: border-box;
+    }
+    .input-number:focus, .input-text:focus, .input-url:focus {
+      border-color: var(--primary);
+    }
+
+    .input-textarea {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 14px; background: var(--bg);
+      color: var(--text); outline: none; box-sizing: border-box;
+      min-height: 100px; resize: vertical; font-family: inherit;
+    }
+    .input-textarea:focus { border-color: var(--primary); }
+
+    .input-bool-group { display: flex; gap: 12px; }
+
+    .input-bool-btn {
+      padding: 6px 20px; border: 1px solid var(--border);
+      border-radius: 6px; cursor: pointer; font-size: 14px;
+      background: var(--bg); color: var(--text);
+    }
+    .input-bool-btn.active {
+      background: var(--primary); color: #fff; border-color: var(--primary);
+    }
+
+    .input-select {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 14px; background: var(--bg);
+      color: var(--text); outline: none; box-sizing: border-box;
+    }
+    .input-select:focus { border-color: var(--primary); }
+
+    .input-json-box {
+      width: 100%; min-height: 120px; padding: 8px 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;
+      background: var(--bg); color: var(--text); resize: vertical;
+      box-sizing: border-box; outline: none;
+    }
+    .input-json-box:focus { border-color: var(--primary); }
+
+    .json-toolbar {
+      display: flex; gap: 8px; margin-top: 6px;
+    }
+    .json-toolbar-btn {
+      background: none; border: 1px solid var(--border); border-radius: 4px;
+      padding: 3px 10px; font-size: 12px; color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .json-toolbar-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    .image-dropzone {
+      min-height: 140px; border: 2px dashed var(--border);
+      border-radius: 8px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; cursor: pointer;
+      padding: 24px 16px; transition: all 0.2s; box-sizing: border-box;
+    }
+    .image-dropzone:hover, .image-dropzone.drag-over {
+      border-color: var(--primary); background: rgba(59,130,246,0.05);
+    }
+
+    .image-dropzone-text {
+      font-size: 14px; color: var(--text-secondary); margin-top: 8px;
+      text-align: center;
+    }
+    .image-dropzone-hint {
+      font-size: 12px; color: var(--text-secondary); margin-top: 4px;
+      opacity: 0.7;
+    }
+
+    .image-preview-container {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+    }
+
+    .image-preview-item {
+      position: relative; width: 100px; height: 100px;
+      border-radius: 6px; overflow: hidden; border: 1px solid var(--border);
+    }
+
+    .image-preview-item img {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+
+    .image-preview-remove {
+      position: absolute; top: 2px; right: 2px;
+      background: rgba(0,0,0,0.6); color: #fff;
+      border: none; border-radius: 50%; width: 20px; height: 20px;
+      font-size: 12px; cursor: pointer; line-height: 20px; text-align: center;
+    }
+
+    .image-file-info {
+      font-size: 12px; color: var(--text-secondary); margin-top: 6px;
+    }
+
+    .image-mode-selector { display: flex; gap: 4px; margin-top: 8px; }
+
+    .image-mode-btn {
+      padding: 4px 12px; font-size: 12px; border: 1px solid var(--border);
+      border-radius: 4px; cursor: pointer; background: var(--bg);
+      color: var(--text-secondary);
+    }
+    .image-mode-btn.active {
+      background: var(--primary); color: #fff; border-color: var(--primary);
+    }
+
+    .file-upload-area {
+      min-height: 100px; border: 2px dashed var(--border);
+      border-radius: 8px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; cursor: pointer;
+      padding: 20px 16px; transition: all 0.2s; box-sizing: border-box;
+    }
+    .file-upload-area:hover, .file-upload-area.drag-over {
+      border-color: var(--primary); background: rgba(59,130,246,0.05);
+    }
+
+    .file-info {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; background: var(--bg); border-radius: 6px;
+      margin-top: 8px; font-size: 13px; color: var(--text);
+    }
+
+    .file-info .file-remove-btn {
+      background: none; border: none; color: #dc2626;
+      cursor: pointer; font-size: 12px; margin-left: auto;
+    }
+
+    .file-preview-text {
+      margin-top: 6px; padding: 8px; background: var(--bg);
+      border-radius: 4px; font-family: monospace; font-size: 12px;
+      max-height: 120px; overflow-y: auto; color: var(--text-secondary);
+      white-space: pre-wrap; border: 1px solid var(--border);
+    }
+
+    .output-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+
+    .output-tab {
+      padding: 8px 16px; cursor: pointer; font-size: 14px;
+      border-bottom: 2px solid transparent; color: var(--text-secondary);
+      background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .output-tab.active {
+      color: var(--primary); border-bottom-color: var(--primary);
+    }
+
+    .output-content { min-height: 200px; }
+
+    .output-text {
+      font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;
+      white-space: pre-wrap; word-break: break-all;
+      padding: 12px; background: var(--bg); border-radius: 6px;
+      color: var(--text); border: 1px solid var(--border);
+    }
+
+    .output-error {
+      font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;
+      white-space: pre-wrap; word-break: break-all;
+      padding: 12px; background: #fef2f2; color: #dc2626;
+      border: 1px solid #fecaca; border-radius: 6px;
+    }
+
+    .output-image {
+      max-width: 100%; border-radius: 6px; cursor: pointer;
+    }
+    .output-image:hover { opacity: 0.9; }
+
+    .output-images-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 8px;
+    }
+
+    .output-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    .output-table th, .output-table td {
+      padding: 8px 12px; border: 1px solid var(--border); text-align: left;
+    }
+    .output-table th {
+      background: var(--bg-card); font-weight: 600; position: sticky; top: 0;
+    }
+
+    .output-json {
+      font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;
+      white-space: pre-wrap; word-break: break-all;
+      padding: 12px; background: var(--bg); border-radius: 6px;
+      color: var(--text); border: 1px solid var(--border);
+    }
+
+    .output-section-label {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      margin: 12px 0 6px 0;
+    }
+
+    .output-action-bar {
+      display: flex; gap: 8px; margin: 8px 0;
+    }
+    .output-action-btn {
+      background: none; border: 1px solid var(--border); border-radius: 4px;
+      padding: 4px 12px; font-size: 12px; color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .output-action-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    .output-download-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 8px 16px; background: var(--primary); color: #fff;
+      border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+    }
+    .output-download-btn:hover { opacity: 0.9; }
+
+    .json-tree { font-family: monospace; font-size: 13px; line-height: 1.6; }
+    .json-tree-key { color: #0451a5; cursor: pointer; }
+    .json-tree-str { color: #a31515; }
+    .json-tree-num { color: #098658; }
+    .json-tree-bool { color: #0000ff; }
+    .json-tree-null { color: #808080; }
+    .json-tree-toggle {
+      display: inline-block; width: 16px; text-align: center;
+      cursor: pointer; color: var(--text-secondary); user-select: none;
+    }
+    .json-tree-children { padding-left: 20px; }
+    .json-tree-children.collapsed { display: none; }
+
+    .image-fullscreen-mask {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85); z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .image-fullscreen-mask img {
+      max-width: 90vw; max-height: 90vh; border-radius: 8px;
+    }
+
     @media (max-width: 900px) {
       .app { grid-template-columns: 1fr; }
       .sidebar { display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; padding: 8px; }
@@ -1329,6 +1667,39 @@
       <button onclick="window.openSnippetOverlay()" title="插入代码片段 (Ctrl+Alt+S)" style="background:none;border:1px solid rgba(30,144,255,.3);color:var(--text-dim);cursor:pointer;padding:1px 8px;border-radius:4px;font-size:11px;">⎘ 片段</button>
     </div>
   </div>
+  <div id="testFullpage" class="test-fullpage" style="display:none">
+    <div class="test-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span id="testAlgoName" style="font-weight:600;font-size:16px"></span>
+        <span id="testAlgoNs" style="font-size:12px;color:var(--text-secondary)"></span>
+      </div>
+      <button class="test-close-btn" onclick="closeTestPage()">关闭测试</button>
+    </div>
+    <div class="test-body">
+      <div class="test-input-panel" id="testInputPanel">
+        <div class="test-section-title">参数输入</div>
+        <div id="testParamCards"></div>
+      </div>
+      <div class="test-divider" id="testDivider"></div>
+      <div class="test-output-panel" id="testOutputPanel">
+        <div class="test-section-title">运行结果</div>
+        <div class="output-tabs" id="outputTabs">
+          <div class="output-tab active" data-tab="output" onclick="switchOutputTab('output')">原始输出</div>
+          <div class="output-tab" data-tab="structured" onclick="switchOutputTab('structured')">结构化</div>
+          <div class="output-tab" data-tab="chart" onclick="switchOutputTab('chart')">图表</div>
+        </div>
+        <div class="output-content" id="outputContent">
+          <div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>
+        </div>
+      </div>
+    </div>
+    <div class="test-run-bar">
+      <div><span class="test-elapsed" id="testElapsed"></span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="test-run-btn" id="testRunBtn" onclick="runFullTest()">运行测试</button>
+      </div>
+    </div>
+  </div>
   <div id="toast" class="toast hidden"></div>
   <div id="snippetOverlay" class="overlay snippet-search-overlay hidden"></div>
   <div id="modalRoot" class="modal-backdrop hidden"></div>
@@ -1388,6 +1759,10 @@
       _tpLastResult: undefined,
       _tpResultTab: "output",
       _tpTableData: {},
+      _testAlgo: null,
+      _testParamValues: {},
+      _testResult: null,
+      _testOutputTab: "output",
       tplEditor: null,
       tplModel: null,
       blockEditor: null,
@@ -1402,6 +1777,15 @@
       // ── 调试 ──
       debugBreakpoints: new Map(),   // filename → Set<lineNumber>
       debugSession: null             // { ws, status, currentFile, currentLine, variables, stack, consoleLog, startMsg }
+    };
+
+    const WIDGET_ZH = {
+      int: "整数", float: "小数", str: "文本", text: "长文本",
+      bool: "布尔", list: "列表", dict: "字典", json: "JSON",
+      dataframe: "表格数据", image: "图片", images: "多张图片",
+      file: "文件", audio: "音频", video: "视频", url: "网址",
+      literal: "下拉选择", datetime: "日期时间", color: "颜色",
+      password: "密码"
     };
 
     function qs(selector, root = document) { return root.querySelector(selector); }
@@ -1871,6 +2255,7 @@
       loadModuleData(page).then(() => {
         renderNav();
         hydrateFilters(page);
+        restoreListViewState(page);
         renderCards(page);
       }).catch(error => {
         qs("#list").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
@@ -2006,7 +2391,7 @@
         if (status === "published" && !isAdmin) btns.push(`<button onclick="window.openEditorById('${esc(id)}','${esc(page)}')">编辑</button>`);
         else if (canManage) btns.push(`<button onclick="window.openEditorById('${esc(id)}','${esc(page)}')">编辑</button>`);
         else if (state.currentUser) btns.push(`<button onclick="window.openEditorById('${esc(id)}','components')">编辑</button>`);
-        if (state.currentUser) btns.push(`<button onclick="window.openComponentTestModalById('${esc(id)}')">测试</button>`);
+        if (state.currentUser) btns.push(`<button onclick="window.openComponentTestModalById('${esc(id)}','${esc(page)}')">测试</button>`);
         if (canManage) btns.push(`<button onclick="window.editAlgorithmInfo('${esc(id)}','${esc(page)}')">基本信息</button>`);
         btns.push(`<button onclick="window.showApiDoc('${esc(id)}')">查看 API 文档</button>`);
         if (canManage && status === "rejected") {
@@ -2067,8 +2452,47 @@
       `;
     }
 
-    function applyFilters() { state.selectedNavNs = ""; renderCards(state.page); }
+    function applyFilters() {
+      state.selectedNavNs = "";
+      rememberListViewState(state.page);
+      renderCards(state.page);
+    }
+    function rememberListViewState(page = state.page) {
+      if (!page) return;
+      const main = qs("#main");
+      state.filters[page] = {
+        search: qs("#filterSearch")?.value || "",
+        category: qs("#filterCategory")?.value || "",
+        language: qs("#filterLanguage")?.value || "",
+        status: qs("#filterStatus")?.value || "",
+        scope: qs("#filterScope")?.value || "",
+        scrollTop: main?.scrollTop || state.pageScroll?.[page] || 0,
+      };
+      if (main) state.pageScroll[page] = main.scrollTop || 0;
+    }
+    function restoreListViewState(page = state.page) {
+      const saved = state.filters?.[page];
+      if (!saved) return;
+      const setValue = (selector, value) => {
+        const el = qs(selector);
+        if (!el) return;
+        const hasOption = !("options" in el) || Array.from(el.options || []).some(opt => opt.value === value);
+        el.value = hasOption ? (value || "") : "";
+      };
+      const search = qs("#filterSearch");
+      if (search) search.value = saved.search || "";
+      setValue("#filterCategory", saved.category);
+      setValue("#filterLanguage", saved.language);
+      setValue("#filterStatus", saved.status);
+      setValue("#filterScope", saved.scope);
+      const qfContainer = qs("#quickFilters");
+      if (qfContainer) {
+        qfContainer.querySelectorAll("button").forEach(btn => btn.classList.toggle("active", btn.dataset.qf === (qs("#filterStatus")?.value || "")));
+      }
+      if (saved.scrollTop !== undefined) state.pageScroll[page] = saved.scrollTop || 0;
+    }
     function rememberMainScroll(page = state.page) {
+      rememberListViewState(page);
       const main = qs("#main");
       if (!main || !page) return;
       state.pageScroll[page] = main.scrollTop || 0;
@@ -2108,6 +2532,7 @@
         const active = qfContainer.querySelector(`[data-qf="${status}"]`);
         if (active) active.classList.add("active");
       }
+      rememberListViewState(page);
       renderCards(page);
     }
     function toggleFolder(button) { button.closest(".folder-section").classList.toggle("collapsed"); }
@@ -6413,6 +6838,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           await loadModuleData(state.page);
           renderNav();
           hydrateFilters(state.page);
+          restoreListViewState(state.page);
           renderCards(state.page);
         }
         await registerCompletionProvider();
@@ -7247,6 +7673,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         state.categories["my-algos"] = Object.keys(cats).map(ns => ({ namespace: ns, zh_name: ns }));
         renderNav();
         hydrateFilters("my-algos");
+        restoreListViewState("my-algos");
         renderCards("my-algos");
       } catch (err) {
         if (qs("#list")) qs("#list").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
@@ -7635,22 +8062,681 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       });
     }
 
+    function openTestPage(algo) {
+      if (!algo) { showToast("未找到可测试的算法"); return; }
+      const host = document.getElementById("testFullpage");
+      const main = document.getElementById("main");
+      if (!host || !main) return;
+      if (host.parentElement !== main) main.appendChild(host);
+      state._testAlgo = algo;
+      state._testParamValues = {};
+      state._testResult = null;
+      state._testOutputTab = "output";
+      state._compTestAlgo = algo;
+      state._compTestSource = null;
+      state.compTestFileUploads = {};
+      state._tpFileState = {};
+      state.testPanelOpen = true;
+      host.style.display = "flex";
+      document.getElementById("testAlgoName").textContent = algo.zhName || algo.funcName || algo.name || algo.id || "算法";
+      document.getElementById("testAlgoNs").textContent = algo.callPrefix || algo.displayNamespace || "";
+      renderTestParamCards(algo.params || []);
+      document.getElementById("outputContent").innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>';
+      document.getElementById("testElapsed").textContent = "";
+      switchOutputTab("output");
+      initTestDivider();
+    }
+
+    function closeTestPage() {
+      const host = document.getElementById("testFullpage");
+      if (host) host.style.display = "none";
+      state._testAlgo = null;
+      state._testParamValues = {};
+      state._testResult = null;
+      state.testPanelOpen = false;
+    }
+
+    function renderTestParamCards(params) {
+      const container = document.getElementById("testParamCards");
+      if (!container) return;
+      container.innerHTML = "";
+      if (!params || !params.length) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "color:var(--text-secondary);text-align:center;padding:32px";
+        empty.textContent = "该算法无需输入参数";
+        container.appendChild(empty);
+        return;
+      }
+      for (const param of params) {
+        container.appendChild(renderOneParamCard(param));
+      }
+    }
+
+    function renderOneParamCard(param) {
+      const card = document.createElement("div");
+      card.className = "param-card";
+      card.dataset.paramName = param.name || "";
+      const header = document.createElement("div");
+      header.className = "param-card-header";
+      const left = document.createElement("div");
+      const nameEl = document.createElement("span");
+      nameEl.className = "param-name";
+      nameEl.textContent = param.name || "";
+      const badge = document.createElement("span");
+      badge.className = "param-type-badge";
+      const widgetHint = param.widget_hint || inferParamWidget(param);
+      badge.textContent = WIDGET_ZH[widgetHint] || param.type || widgetHint;
+      left.appendChild(nameEl);
+      left.appendChild(badge);
+      header.appendChild(left);
+
+      const canSkip = param.nullable || param.default === "None" || param.default === null;
+      let skipInput = null;
+      if (canSkip) {
+        const skip = document.createElement("label");
+        skip.className = "param-skip-label";
+        skipInput = document.createElement("input");
+        skipInput.type = "checkbox";
+        skipInput.className = "param-skip-checkbox";
+        skipInput.dataset.testSkip = param.name || "";
+        const skipText = document.createElement("span");
+        skipText.textContent = "跳过此参数";
+        skip.appendChild(skipInput);
+        skip.appendChild(skipText);
+        header.appendChild(skip);
+      }
+      card.appendChild(header);
+
+      const desc = param.description || param.desc || param.zh_description || "";
+      if (desc) {
+        const descEl = document.createElement("div");
+        descEl.className = "param-desc";
+        descEl.textContent = desc;
+        card.appendChild(descEl);
+      }
+
+      const inputArea = document.createElement("div");
+      inputArea.className = "param-input-area";
+      switch (widgetHint) {
+        case "int": renderIntInput(param, inputArea); break;
+        case "float": renderFloatInput(param, inputArea); break;
+        case "str": renderStrInput(param, inputArea); break;
+        case "text": renderTextInput(param, inputArea); break;
+        case "bool": renderBoolInput(param, inputArea); break;
+        case "list":
+        case "dict":
+        case "json":
+        case "dataframe": renderJsonInput(param, inputArea); break;
+        case "image": renderImageInput(param, inputArea); break;
+        case "images": renderImagesInput(param, inputArea); break;
+        case "file":
+        case "audio":
+        case "video": renderFileInput(param, inputArea); break;
+        case "literal": renderLiteralInput(param, inputArea); break;
+        case "url": renderUrlInput(param, inputArea); break;
+        case "datetime": renderDatetimeInput(param, inputArea); break;
+        case "color": renderColorInput(param, inputArea); break;
+        case "password": renderPasswordInput(param, inputArea); break;
+        default: renderStrInput(param, inputArea); break;
+      }
+      if (skipInput) {
+        skipInput.addEventListener("change", () => {
+          inputArea.style.opacity = skipInput.checked ? "0.4" : "1";
+          inputArea.style.pointerEvents = skipInput.checked ? "none" : "";
+        });
+      }
+      card.appendChild(inputArea);
+      return card;
+    }
+
+    function _cleanDefaultValue(value) {
+      if (value === undefined || value === null || value === "None") return "";
+      let text = String(value);
+      if ((text.startsWith("'") && text.endsWith("'")) || (text.startsWith('"') && text.endsWith('"'))) text = text.slice(1, -1);
+      return text;
+    }
+
+    function renderIntInput(param, container) {
+      const input = document.createElement("input");
+      input.type = "number"; input.step = "1"; input.className = "input-number";
+      input.placeholder = "请输入整数";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value === "" ? null : parseInt(input.value, 10); });
+      if (input.value !== "") state._testParamValues[param.name] = parseInt(input.value, 10);
+      container.appendChild(input);
+    }
+
+    function renderFloatInput(param, container) {
+      const input = document.createElement("input");
+      input.type = "number"; input.step = "any"; input.className = "input-number";
+      input.placeholder = "请输入数字";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value === "" ? null : parseFloat(input.value); });
+      if (input.value !== "") state._testParamValues[param.name] = parseFloat(input.value);
+      container.appendChild(input);
+    }
+
+    function renderStrInput(param, container) {
+      const input = document.createElement("input");
+      input.type = "text"; input.className = "input-text"; input.placeholder = "请输入文本";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value; });
+      if (input.value) state._testParamValues[param.name] = input.value;
+      container.appendChild(input);
+    }
+
+    function renderTextInput(param, container) {
+      const ta = document.createElement("textarea");
+      ta.className = "input-textarea"; ta.rows = 4; ta.placeholder = "请输入长文本";
+      ta.value = _cleanDefaultValue(param.default);
+      ta.addEventListener("input", () => { state._testParamValues[param.name] = ta.value; });
+      if (ta.value) state._testParamValues[param.name] = ta.value;
+      container.appendChild(ta);
+    }
+
+    function renderBoolInput(param, container) {
+      const group = document.createElement("div"); group.className = "input-bool-group";
+      const btnTrue = document.createElement("button"); btnTrue.type = "button"; btnTrue.className = "input-bool-btn"; btnTrue.textContent = "是 (True)";
+      const btnFalse = document.createElement("button"); btnFalse.type = "button"; btnFalse.className = "input-bool-btn"; btnFalse.textContent = "否 (False)";
+      function setVal(val) {
+        state._testParamValues[param.name] = val;
+        btnTrue.classList.toggle("active", val === true);
+        btnFalse.classList.toggle("active", val === false);
+      }
+      btnTrue.onclick = () => setVal(true);
+      btnFalse.onclick = () => setVal(false);
+      if (param.default === "True" || param.default === true) setVal(true);
+      else if (param.default === "False" || param.default === false) setVal(false);
+      group.appendChild(btnTrue); group.appendChild(btnFalse);
+      container.appendChild(group);
+    }
+
+    function renderJsonInput(param, container) {
+      const ta = document.createElement("textarea");
+      ta.className = "input-json-box"; ta.rows = 6;
+      if (param.widget_hint === "dataframe") ta.placeholder = '请输入表格数据，支持 JSON 数组或 CSV 格式\n例如：[{"name":"张三","age":25},{"name":"李四","age":30}]';
+      else if (param.widget_hint === "list") ta.placeholder = "请输入列表，支持 JSON 格式\n例如：[1, 2, 3] 或每行一个值";
+      else if (param.widget_hint === "dict") ta.placeholder = '请输入字典，支持 JSON 格式\n例如：{"key": "value"}';
+      else ta.placeholder = "请输入 JSON 数据";
+      const def = _cleanDefaultValue(param.default);
+      if (def) ta.value = def;
+      ta.addEventListener("input", () => { state._testParamValues[param.name] = ta.value; });
+      if (ta.value) state._testParamValues[param.name] = ta.value;
+      container.appendChild(ta);
+
+      const toolbar = document.createElement("div"); toolbar.className = "json-toolbar";
+      const fmtBtn = document.createElement("button"); fmtBtn.type = "button"; fmtBtn.className = "json-toolbar-btn"; fmtBtn.textContent = "格式化";
+      fmtBtn.onclick = () => {
+        try {
+          ta.value = JSON.stringify(JSON.parse(ta.value), null, 2);
+          state._testParamValues[param.name] = ta.value;
+        } catch (e) { showToast("JSON 格式错误"); }
+      };
+      const importBtn = document.createElement("button"); importBtn.type = "button"; importBtn.className = "json-toolbar-btn"; importBtn.textContent = "从文件导入";
+      importBtn.onclick = () => {
+        const fi = document.createElement("input"); fi.type = "file"; fi.accept = ".json,.csv,.txt";
+        fi.onchange = () => {
+          const file = fi.files[0]; if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (e) => { ta.value = e.target.result; state._testParamValues[param.name] = ta.value; };
+          reader.readAsText(file);
+        };
+        fi.click();
+      };
+      toolbar.appendChild(fmtBtn); toolbar.appendChild(importBtn);
+      container.appendChild(toolbar);
+    }
+
+    function renderImageInput(param, container) {
+      let currentMode = "base64";
+      const dropzone = document.createElement("div"); dropzone.className = "image-dropzone";
+      const text = document.createElement("div"); text.className = "image-dropzone-text"; text.textContent = "点击选择或拖拽图片到此处";
+      const hint = document.createElement("div"); hint.className = "image-dropzone-hint"; hint.textContent = "支持 JPG、PNG、GIF、WebP 格式，也可 Ctrl+V 粘贴";
+      dropzone.appendChild(text); dropzone.appendChild(hint);
+      const fileInput = document.createElement("input"); fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.style.display = "none";
+      const previewContainer = document.createElement("div"); previewContainer.className = "image-preview-container"; previewContainer.style.display = "none";
+      const fileInfoEl = document.createElement("div"); fileInfoEl.className = "image-file-info";
+      let selectedFile = null;
+
+      function handleFile(file) {
+        if (!file || !file.type.startsWith("image/")) { showToast("请选择图片文件"); return; }
+        if (file.size > 50 * 1024 * 1024) { showToast("图片不能超过 50MB"); return; }
+        selectedFile = file;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const dataUrl = e.target.result;
+          previewContainer.innerHTML = "";
+          const item = document.createElement("div"); item.className = "image-preview-item";
+          const img = document.createElement("img"); img.src = dataUrl;
+          const removeBtn = document.createElement("button"); removeBtn.type = "button"; removeBtn.className = "image-preview-remove"; removeBtn.textContent = "×";
+          removeBtn.onclick = () => { selectedFile = null; previewContainer.style.display = "none"; dropzone.style.display = "flex"; fileInfoEl.textContent = ""; state._testParamValues[param.name] = undefined; };
+          item.appendChild(img); item.appendChild(removeBtn); previewContainer.appendChild(item);
+          previewContainer.style.display = "flex"; dropzone.style.display = "none";
+          fileInfoEl.textContent = file.name + " (" + (file.size / 1024).toFixed(1) + " KB)";
+          if (currentMode === "base64") {
+            state._testParamValues[param.name] = extractPureBase64(dataUrl);
+          } else if (currentMode === "path") {
+            state._testParamValues[param.name] = await uploadFullTestTempFile(file);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+
+      dropzone.onclick = () => fileInput.click();
+      fileInput.onchange = () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); };
+      dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add("drag-over"); };
+      dropzone.ondragleave = () => { dropzone.classList.remove("drag-over"); };
+      dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove("drag-over"); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); };
+      container.addEventListener("paste", (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) { if (item.type.startsWith("image/")) { handleFile(item.getAsFile()); break; } }
+      });
+      container.setAttribute("tabindex", "0");
+      container.appendChild(fileInput); container.appendChild(dropzone); container.appendChild(previewContainer); container.appendChild(fileInfoEl);
+
+      const modeSelector = document.createElement("div"); modeSelector.className = "image-mode-selector";
+      ["编码", "路径", "网址"].forEach((label, i) => {
+        const mode = ["base64", "path", "url"][i];
+        const btn = document.createElement("button"); btn.type = "button"; btn.className = "image-mode-btn" + (i === 0 ? " active" : "");
+        btn.textContent = label; btn.dataset.mode = mode;
+        btn.onclick = async () => {
+          modeSelector.querySelectorAll(".image-mode-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active"); currentMode = mode;
+          let urlInput = container.querySelector(".image-url-input");
+          if (mode === "url") {
+            dropzone.style.display = "none"; previewContainer.style.display = "none";
+            if (!urlInput) {
+              urlInput = document.createElement("input"); urlInput.type = "url"; urlInput.className = "input-url image-url-input";
+              urlInput.placeholder = "请输入图片网址 (https://...)";
+              urlInput.addEventListener("input", () => { state._testParamValues[param.name] = urlInput.value; });
+              container.insertBefore(urlInput, modeSelector);
+            }
+            urlInput.style.display = "block";
+          } else {
+            if (urlInput) urlInput.style.display = "none";
+            if (!previewContainer.querySelector("img")) dropzone.style.display = "flex";
+            if (selectedFile && mode === "path") state._testParamValues[param.name] = await uploadFullTestTempFile(selectedFile);
+          }
+        };
+        modeSelector.appendChild(btn);
+      });
+      container.appendChild(modeSelector);
+    }
+
+    function renderImagesInput(param, container) {
+      const files = [];
+      state._testParamValues[param.name] = [];
+      const fileInput = document.createElement("input"); fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.multiple = true; fileInput.style.display = "none";
+      const dropzone = document.createElement("div"); dropzone.className = "image-dropzone";
+      const text = document.createElement("div"); text.className = "image-dropzone-text"; text.textContent = "点击选择或拖拽多张图片到此处";
+      const hint = document.createElement("div"); hint.className = "image-dropzone-hint"; hint.textContent = "可多次添加，单张最大 50MB";
+      dropzone.appendChild(text); dropzone.appendChild(hint);
+      const previewContainer = document.createElement("div"); previewContainer.className = "image-preview-container";
+      const counter = document.createElement("div"); counter.className = "image-file-info"; counter.textContent = "已选 0 张";
+      function refreshValues() {
+        state._testParamValues[param.name] = [];
+        previewContainer.innerHTML = "";
+        files.forEach((file, index) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            state._testParamValues[param.name][index] = extractPureBase64(e.target.result);
+            const item = document.createElement("div"); item.className = "image-preview-item";
+            const img = document.createElement("img"); img.src = e.target.result;
+            const removeBtn = document.createElement("button"); removeBtn.type = "button"; removeBtn.className = "image-preview-remove"; removeBtn.textContent = "×";
+            removeBtn.onclick = () => { files.splice(index, 1); refreshValues(); };
+            item.appendChild(img); item.appendChild(removeBtn); previewContainer.appendChild(item);
+          };
+          reader.readAsDataURL(file);
+        });
+        counter.textContent = "已选 " + files.length + " 张";
+      }
+      function addFiles(list) {
+        Array.from(list || []).forEach(file => {
+          if (!file.type.startsWith("image/")) return;
+          if (file.size <= 50 * 1024 * 1024) files.push(file);
+        });
+        refreshValues();
+      }
+      dropzone.onclick = () => fileInput.click();
+      fileInput.onchange = () => addFiles(fileInput.files);
+      dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add("drag-over"); };
+      dropzone.ondragleave = () => dropzone.classList.remove("drag-over");
+      dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove("drag-over"); addFiles(e.dataTransfer.files); };
+      container.appendChild(fileInput); container.appendChild(dropzone); container.appendChild(previewContainer); container.appendChild(counter);
+    }
+
+    function renderFileInput(param, container) {
+      const uploadArea = document.createElement("div"); uploadArea.className = "file-upload-area";
+      const uploadText = document.createElement("div"); uploadText.className = "image-dropzone-text"; uploadText.textContent = "点击选择或拖拽文件到此处";
+      uploadArea.appendChild(uploadText);
+      const fi = document.createElement("input"); fi.type = "file"; fi.style.display = "none";
+      const widget = param.widget_hint || "";
+      if (widget === "audio") fi.accept = "audio/*";
+      if (widget === "video") fi.accept = "video/*";
+      const infoEl = document.createElement("div");
+      const previewEl = document.createElement("div");
+      function handleFileUpload(file) {
+        if (!file) return;
+        if (file.size > 50 * 1024 * 1024) { showToast("文件不能超过 50MB"); return; }
+        infoEl.innerHTML = "";
+        const info = document.createElement("div"); info.className = "file-info";
+        const nameSpan = document.createElement("span"); nameSpan.textContent = file.name;
+        const sizeSpan = document.createElement("span"); sizeSpan.style.color = "var(--text-secondary)"; sizeSpan.textContent = "(" + (file.size / 1024).toFixed(1) + " KB)";
+        const removeBtn = document.createElement("button"); removeBtn.type = "button"; removeBtn.className = "file-remove-btn"; removeBtn.textContent = "删除";
+        removeBtn.onclick = () => { infoEl.innerHTML = ""; previewEl.innerHTML = ""; uploadArea.style.display = "flex"; state._testParamValues[param.name] = undefined; };
+        info.appendChild(nameSpan); info.appendChild(sizeSpan); info.appendChild(removeBtn); infoEl.appendChild(info);
+        uploadArea.style.display = "none";
+        previewEl.innerHTML = "";
+        if (file.type.startsWith("image/")) {
+          const reader = new FileReader(); reader.onload = (e) => {
+            const img = document.createElement("img"); img.src = e.target.result; img.style.maxWidth = "100px"; img.style.maxHeight = "80px"; img.style.borderRadius = "4px"; img.style.marginTop = "6px";
+            previewEl.appendChild(img);
+          }; reader.readAsDataURL(file);
+        } else if (["text/csv", "application/json", "text/plain"].includes(file.type) || file.name.match(/\.(csv|json|txt)$/)) {
+          if (file.size < 10240) {
+            const reader = new FileReader(); reader.onload = (e) => {
+              const allText = String(e.target.result);
+              const lines = allText.split("\n").slice(0, 5).join("\n");
+              const pre = document.createElement("div"); pre.className = "file-preview-text"; pre.textContent = lines + (allText.split("\n").length > 5 ? "\n..." : "");
+              previewEl.appendChild(pre);
+            }; reader.readAsText(file);
+          }
+        }
+        uploadFullTestTempFile(file).then(path => { state._testParamValues[param.name] = path; }).catch(err => showToast("文件上传失败: " + err.message));
+      }
+      uploadArea.onclick = () => fi.click();
+      fi.onchange = () => { if (fi.files[0]) handleFileUpload(fi.files[0]); };
+      uploadArea.ondragover = (e) => { e.preventDefault(); uploadArea.classList.add("drag-over"); };
+      uploadArea.ondragleave = () => { uploadArea.classList.remove("drag-over"); };
+      uploadArea.ondrop = (e) => { e.preventDefault(); uploadArea.classList.remove("drag-over"); if (e.dataTransfer.files[0]) handleFileUpload(e.dataTransfer.files[0]); };
+      container.appendChild(fi); container.appendChild(uploadArea); container.appendChild(infoEl); container.appendChild(previewEl);
+    }
+
+    function renderLiteralInput(param, container) {
+      const select = document.createElement("select"); select.className = "input-select";
+      const defaultOpt = document.createElement("option"); defaultOpt.value = ""; defaultOpt.textContent = "请选择..."; defaultOpt.disabled = true; defaultOpt.selected = true;
+      select.appendChild(defaultOpt);
+      (param.widget_options || []).forEach(opt => {
+        const o = document.createElement("option"); o.value = opt; o.textContent = opt;
+        if (param.default && (_cleanDefaultValue(param.default) === opt)) { o.selected = true; state._testParamValues[param.name] = opt; }
+        select.appendChild(o);
+      });
+      select.addEventListener("change", () => { state._testParamValues[param.name] = select.value; });
+      container.appendChild(select);
+    }
+
+    function renderUrlInput(param, container) {
+      const input = document.createElement("input"); input.type = "url"; input.className = "input-url"; input.placeholder = "https://...";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value; });
+      if (input.value) state._testParamValues[param.name] = input.value;
+      container.appendChild(input);
+    }
+
+    function renderDatetimeInput(param, container) {
+      const input = document.createElement("input"); input.type = "datetime-local"; input.className = "input-text";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value ? new Date(input.value).toISOString() : ""; });
+      if (input.value) state._testParamValues[param.name] = new Date(input.value).toISOString();
+      container.appendChild(input);
+    }
+
+    function renderColorInput(param, container) {
+      const wrapper = document.createElement("div"); wrapper.style.display = "flex"; wrapper.style.alignItems = "center"; wrapper.style.gap = "8px";
+      const input = document.createElement("input"); input.type = "color"; input.value = _cleanDefaultValue(param.default) || "#000000";
+      const label = document.createElement("span"); label.style.fontSize = "13px"; label.style.color = "var(--text-secondary)"; label.textContent = input.value;
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value; label.textContent = input.value; });
+      state._testParamValues[param.name] = input.value;
+      wrapper.appendChild(input); wrapper.appendChild(label); container.appendChild(wrapper);
+    }
+
+    function renderPasswordInput(param, container) {
+      const wrapper = document.createElement("div"); wrapper.style.display = "flex"; wrapper.style.gap = "8px"; wrapper.style.alignItems = "center";
+      const input = document.createElement("input"); input.type = "password"; input.className = "input-text"; input.style.flex = "1"; input.placeholder = "请输入密码/密钥";
+      const toggleBtn = document.createElement("button"); toggleBtn.type = "button"; toggleBtn.className = "json-toolbar-btn"; toggleBtn.textContent = "显示";
+      toggleBtn.onclick = () => { input.type = input.type === "password" ? "text" : "password"; toggleBtn.textContent = input.type === "password" ? "显示" : "隐藏"; };
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value; });
+      if (input.value) state._testParamValues[param.name] = input.value;
+      wrapper.appendChild(input); wrapper.appendChild(toggleBtn); container.appendChild(wrapper);
+    }
+
+    function initTestDivider() {
+      const divider = document.getElementById("testDivider");
+      const inputPanel = document.getElementById("testInputPanel");
+      const body = document.querySelector(".test-body");
+      if (!divider || !inputPanel || !body || divider.dataset.bound === "1") return;
+      divider.dataset.bound = "1";
+      let isDragging = false;
+      divider.addEventListener("mousedown", (e) => { isDragging = true; e.preventDefault(); document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none"; });
+      document.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        const rect = body.getBoundingClientRect();
+        let newWidth = e.clientX - rect.left;
+        newWidth = Math.max(280, Math.min(newWidth, rect.width * 0.8));
+        inputPanel.style.width = newWidth + "px";
+      });
+      document.addEventListener("mouseup", () => { if (isDragging) { isDragging = false; document.body.style.cursor = ""; document.body.style.userSelect = ""; } });
+    }
+
+    async function uploadFullTestTempFile(file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const headers = {};
+      const token = localStorage.getItem("algolib_token");
+      if (token) headers.Authorization = "Bearer " + token;
+      const resp = await fetch(BASE + "/api/v1/upload-temp", { method: "POST", body: formData, headers });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.detail || data.error || "上传失败");
+      return data.path;
+    }
+
+    function _csvToRows(text) {
+      const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean);
+      if (!lines.length) return [];
+      const headers = lines[0].split(",").map(x => x.trim());
+      return lines.slice(1).map(line => {
+        const cells = line.split(",").map(x => x.trim());
+        const row = {};
+        headers.forEach((h, i) => { row[h || `列${i + 1}`] = parseScalarToken(cells[i] ?? ""); });
+        return row;
+      });
+    }
+
+    function normalizeFullTestValue(param, value) {
+      const widget = param.widget_hint || inferParamWidget(param);
+      const type = String(param.type || param.annotation || "str");
+      if (value === undefined || value === null || value === "") return value;
+      if (["int", "float", "bool", "image", "images", "file", "audio", "video", "url", "datetime", "color", "password"].includes(widget)) return value;
+      if (["list", "dict", "json", "dataframe"].includes(widget)) {
+        if (typeof value !== "string") return value;
+        try { return JSON.parse(value); } catch (e) {
+          if (widget === "dataframe" && value.includes("\n") && value.includes(",")) return _csvToRows(value);
+          if (widget === "list") return value.split(/\r?\n|,/).map(x => parseScalarToken(x)).filter(x => x !== "");
+          return value;
+        }
+      }
+      return parseParamValueByType(type, value);
+    }
+
+    function collectFullTestParams() {
+      const algo = state._testAlgo;
+      const payload = {};
+      for (const param of (algo?.params || [])) {
+        const name = param.name;
+        const skip = document.querySelector(`[data-test-skip="${CSS.escape(name)}"]`);
+        if (skip?.checked) continue;
+        payload[name] = normalizeFullTestValue(param, state._testParamValues[name]);
+      }
+      return payload;
+    }
+
+    async function runFullTest() {
+      const btn = document.getElementById("testRunBtn");
+      const elapsedEl = document.getElementById("testElapsed");
+      const started = performance.now();
+      if (btn) { btn.disabled = true; btn.textContent = "运行中..."; }
+      if (elapsedEl) elapsedEl.textContent = "";
+      try {
+        const algo = state._testAlgo;
+        if (!algo) throw new Error("未选择算法");
+        const kwargs = collectFullTestParams();
+        const status = algo.publishStatus || algo.status || "";
+        const body = {
+          namespace: algo.namespace,
+          function: algo.funcName || algo.name || "main",
+          params: kwargs
+        };
+        if (status !== "published") body.allow_unpublished = true;
+        const result = await api("/api/v1/run", { method: "POST", body: JSON.stringify(body) });
+        state._testResult = result;
+        const elapsed = result.elapsed_ms ?? Math.round(performance.now() - started);
+        if (elapsedEl) elapsedEl.textContent = "耗时：" + elapsed + " ms";
+        const hint = result.output_hint || inferOutputHintFromSample(result.result ?? result);
+        if (hint === "chart") switchOutputTab("chart");
+        else if (hint === "table") switchOutputTab("structured");
+        else switchOutputTab("output");
+      } catch (err) {
+        state._testResult = { success: false, error: err.message, output_hint: "error", result: null };
+        if (elapsedEl) elapsedEl.textContent = "运行失败：" + Math.round(performance.now() - started) + " ms";
+        switchOutputTab("output");
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "运行测试"; }
+      }
+    }
+
+    function switchOutputTab(tab) {
+      state._testOutputTab = tab;
+      document.querySelectorAll("#outputTabs .output-tab").forEach(el => el.classList.toggle("active", el.dataset.tab === tab));
+      renderFullTestOutput();
+    }
+
+    function renderFullTestOutput() {
+      const content = document.getElementById("outputContent");
+      if (!content) return;
+      const pack = state._testResult;
+      if (!pack) {
+        content.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>';
+        return;
+      }
+      const result = pack.result ?? pack;
+      const hint = pack.output_hint || inferOutputHintFromSample(result);
+      if (hint === "error" || pack.success === false) {
+        content.innerHTML = `<div class="output-error">${esc(pack.error || "执行失败")}</div>`;
+        return;
+      }
+      if (state._testOutputTab === "structured") {
+        if (hint === "table" || Array.isArray(result)) content.innerHTML = renderFullOutputTable(result);
+        else content.innerHTML = `<div class="output-json json-tree">${renderJsonTree(result)}</div>`;
+      } else if (state._testOutputTab === "chart") {
+        content.innerHTML = renderFullOutputChart(result, hint);
+      } else {
+        content.innerHTML = renderFullOutputRaw(result, hint);
+      }
+    }
+
+    function inferOutputHintFromSample(sample) {
+      if (sample === null || sample === undefined) return "error";
+      if (typeof sample === "string") {
+        if (_isBase64Image(sample)) return "image";
+        if (sample.trim().startsWith("<") && /<\/?[a-z][\s\S]*>/i.test(sample)) return "html";
+        return "text";
+      }
+      if (Array.isArray(sample)) {
+        if (sample.every(v => typeof v === "string" && _isBase64Image(v))) return "images";
+        if (sample.every(v => v && typeof v === "object" && !Array.isArray(v))) return "table";
+        if (sample.every(v => typeof v === "number")) return "chart";
+        return "json";
+      }
+      if (typeof sample === "object") {
+        if (sample.__output_type__ === "table") return "table";
+        if ("filename" in sample && ("content" in sample || "base64" in sample)) return "file";
+        if (["x", "y", "labels", "values"].some(k => k in sample)) return "chart";
+        return "json";
+      }
+      return "text";
+    }
+
+    function renderFullOutputRaw(result, hint) {
+      if (hint === "image") {
+        const src = String(result).startsWith("data:") ? result : "data:image/png;base64," + result;
+        return `<img class="output-image" src="${esc(src)}" alt="运行结果图片" onclick="window.showImageFullscreen('${esc(src)}')">`;
+      }
+      if (hint === "images" && Array.isArray(result)) {
+        return `<div class="output-images-grid">${result.map(src => {
+          const full = String(src).startsWith("data:") ? src : "data:image/png;base64," + src;
+          return `<img class="output-image" src="${esc(full)}" alt="运行结果图片" onclick="window.showImageFullscreen('${esc(full)}')">`;
+        }).join("")}</div>`;
+      }
+      if (hint === "html") return `<iframe style="width:100%;min-height:360px;border:1px solid var(--border);border-radius:6px;background:#fff" srcdoc="${esc(result)}"></iframe>`;
+      if (hint === "file" && result && typeof result === "object") return renderFullOutputFile(result);
+      if (typeof result === "string" || typeof result === "number" || typeof result === "boolean") return `<div class="output-text">${esc(String(result))}</div>`;
+      return `<pre class="output-json">${esc(JSON.stringify(result, null, 2))}</pre>`;
+    }
+
+    function renderFullOutputTable(result) {
+      const spec = _tableSpecFromResult(result);
+      if (!spec.columns.length) return '<div class="output-text">无法转换为表格</div>';
+      const thead = `<thead><tr>${spec.columns.map(col => `<th>${esc(col)}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${spec.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell === undefined || cell === null ? "" : String(cell))}</td>`).join("")}</tr>`).join("")}</tbody>`;
+      return `<div style="overflow:auto;max-height:70vh"><table class="output-table">${thead}${tbody}</table></div>`;
+    }
+
+    function renderFullOutputChart(result, hint) {
+      if (hint !== "chart") return '<div class="output-text">当前结果不适合转换为图表</div>';
+      if (Array.isArray(result)) {
+        const max = Math.max(...result.map(Number), 1);
+        return `<div>${result.map((v, i) => `<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="width:40px;color:var(--text-secondary)">${i + 1}</span><div style="height:18px;background:var(--primary);width:${Math.max(4, Number(v) / max * 80)}%;border-radius:3px"></div><span>${esc(v)}</span></div>`).join("")}</div>`;
+      }
+      const labels = result.labels || result.x || [];
+      const values = result.values || result.y || [];
+      const max = Math.max(...values.map(Number), 1);
+      return `<div>${values.map((v, i) => `<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="width:80px;color:var(--text-secondary)">${esc(labels[i] ?? i + 1)}</span><div style="height:18px;background:var(--accent);width:${Math.max(4, Number(v) / max * 80)}%;border-radius:3px"></div><span>${esc(v)}</span></div>`).join("")}</div>`;
+    }
+
+    function renderFullOutputFile(result) {
+      const filename = result.filename || "result.txt";
+      const content = result.content || result.base64 || "";
+      const href = result.base64 ? `data:application/octet-stream;base64,${result.base64}` : `data:text/plain;charset=utf-8,${encodeURIComponent(content)}`;
+      return `<div class="output-action-bar"><a class="output-download-btn" download="${esc(filename)}" href="${esc(href)}">下载文件</a></div><div class="output-text">${esc(filename)}</div>`;
+    }
+
+    function renderJsonTree(value) {
+      if (value === null) return '<span class="json-tree-null">null</span>';
+      if (typeof value === "string") return `<span class="json-tree-str">"${esc(value)}"</span>`;
+      if (typeof value === "number") return `<span class="json-tree-num">${esc(value)}</span>`;
+      if (typeof value === "boolean") return `<span class="json-tree-bool">${esc(value)}</span>`;
+      if (Array.isArray(value)) {
+        return `[<div class="json-tree-children">${value.map((item, i) => `<div><span class="json-tree-key">${i}</span>: ${renderJsonTree(item)}</div>`).join("")}</div>]`;
+      }
+      if (typeof value === "object") {
+        return `{<div class="json-tree-children">${Object.entries(value).map(([k, v]) => `<div><span class="json-tree-key">${esc(k)}</span>: ${renderJsonTree(v)}</div>`).join("")}</div>}`;
+      }
+      return esc(String(value));
+    }
+
+    function showImageFullscreen(src) {
+      const mask = document.createElement("div");
+      mask.className = "image-fullscreen-mask";
+      const img = document.createElement("img");
+      img.src = src;
+      mask.appendChild(img);
+      mask.onclick = () => mask.remove();
+      document.body.appendChild(mask);
+    }
+
     // ── Right Test Panel (replaces modal, Req 5 / Req 3) ────────────────
     function openComponentTestModal() {
       if (!state.editing) return;
-      const content = state.models?.get(state.currentFile)?.getValue() || null;
-      openTestPanel(state.editing.algo, content);
+      openTestPage(state.editing.algo);
     }
 
-    async function openComponentTestModalById(id) {
+    async function openComponentTestModalById(id, page) {
       const allItems = [...(state.data.components || []), ...(state.data.templates || [])];
       let algo = allItems.find(a => a.id === id);
       if (!algo) { showToast("找不到该算法信息"); return; }
-      // If no editor open, open it first then show panel
-      if (!state.editing) {
-        await openEditorById(id, algo.moduleKind === "template" ? "templates" : "components");
-      }
-      openTestPanel(algo, null);
+      openTestPage(algo);
     }
 
     function openTestPanel(algo, sourceContent) {
@@ -8818,6 +9904,605 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       }
     }
 
+    // ===== 任务 1：辅助函数 =====
+    function _isBase64Image(s) {
+      if (typeof s !== "string") return false;
+      if (s.startsWith("data:image")) return true;
+      const trimmed = s.replace(/\s/g, "").replace(/=+$/, "");
+      if (trimmed.length < 100) return false;
+      return /^(\/9j\/|iVBOR|R0lGOD|UklGR)/.test(trimmed);
+    }
+
+    function _ensureDataUrl(base64Str) {
+      if (typeof base64Str !== "string") return "";
+      if (base64Str.startsWith("data:image")) return base64Str;
+      const trimmed = base64Str.replace(/\s/g, "");
+      let mime = "image/png";
+      if (trimmed.startsWith("/9j/")) mime = "image/jpeg";
+      else if (trimmed.startsWith("R0lGOD")) mime = "image/gif";
+      else if (trimmed.startsWith("UklGR")) mime = "image/webp";
+      return "data:" + mime + ";base64," + trimmed;
+    }
+
+    function _escapeJsString(value) {
+      return String(value ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, "\\r")
+        .replace(/\n/g, "\\n");
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(String(text ?? ""))
+        .then(() => showToast("已复制到剪贴板"))
+        .catch(() => showToast("复制失败"));
+    }
+
+    function downloadBlob(data, filename, mimeType) {
+      const blob = (data instanceof Blob) ? data : new Blob([data], { type: mimeType || "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "download";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadBase64File(base64, filename, mimeType) {
+      let raw = String(base64 || "");
+      if (raw.startsWith("data:") && raw.includes(",")) raw = raw.split(",")[1] || "";
+      raw = raw.replace(/\s/g, "");
+      const padding = raw.length % 4;
+      if (padding) raw += "=".repeat(4 - padding);
+      const byteChars = atob(raw);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      downloadBlob(byteArr, filename || "download", mimeType || "application/octet-stream");
+    }
+
+    function showImageFullscreen(src) {
+      const mask = document.createElement("div");
+      mask.className = "image-fullscreen-mask";
+      const img = document.createElement("img");
+      img.src = src;
+      mask.appendChild(img);
+      mask.onclick = () => mask.remove();
+      document.body.appendChild(mask);
+    }
+
+    // ===== 任务 2：参数收集函数 =====
+    function collectTestParams() {
+      const algo = state._testAlgo;
+      if (!algo) return { args: [], kwargs: {} };
+      const kwargs = {};
+      for (const param of (algo.params || [])) {
+        const card = Array.from(document.querySelectorAll(".param-card"))
+          .find(el => el.dataset.paramName === param.name);
+        if (card) {
+          const skipCheckbox = card.querySelector(".param-skip-checkbox");
+          if (skipCheckbox && skipCheckbox.checked) continue;
+        }
+        let val = state._testParamValues[param.name];
+        if (val === undefined) continue;
+        const hint = param.widget_hint || inferParamWidget(param) || "str";
+        switch (hint) {
+          case "int":
+            val = (val === "" || val === null) ? null : parseInt(String(val), 10);
+            break;
+          case "float":
+            val = (val === "" || val === null) ? null : parseFloat(String(val));
+            break;
+          case "bool":
+            break;
+          case "list":
+          case "dict":
+          case "json":
+          case "dataframe":
+            if (typeof val === "string") {
+              try {
+                val = JSON.parse(val);
+              } catch (err) {
+                val = parseParamValueByType(param.type, val);
+              }
+            }
+            break;
+          case "image":
+          case "file":
+          case "audio":
+          case "video":
+            break;
+          case "images":
+            if (!Array.isArray(val)) val = [val];
+            break;
+          default:
+            val = String(val ?? "");
+            break;
+        }
+        kwargs[param.name] = val;
+      }
+      return { args: [], kwargs };
+    }
+
+    // ===== 任务 3：运行函数 =====
+    async function runFullTest() {
+      const algo = state._testAlgo;
+      if (!algo) {
+        showToast("未选择算法");
+        return;
+      }
+      const btn = document.getElementById("testRunBtn");
+      const elapsedEl = document.getElementById("testElapsed");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "运行中...";
+      }
+      if (elapsedEl) elapsedEl.textContent = "运行中...";
+      try {
+        const payload = collectTestParams();
+        const id = algo.id || algo.registryId;
+        const response = await api("/api/v1/algorithms/" + encodeURIComponent(id) + "/execute", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+        state._testResult = response;
+        if (elapsedEl) elapsedEl.textContent = "耗时 " + (response.elapsed_ms || 0).toFixed(1) + " ms";
+        renderTestOutput(response);
+      } catch (err) {
+        state._testResult = { success: false, error: err.message, result: null, output_hint: "error" };
+        if (elapsedEl) elapsedEl.textContent = "执行失败";
+        renderTestOutput(state._testResult);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "运行测试";
+        }
+      }
+    }
+
+    // ===== 任务 4：输出路由 =====
+    function renderTestOutput(response) {
+      const tab = state._testOutputTab || "output";
+      switchOutputTab(tab);
+    }
+
+    function switchOutputTab(tabName) {
+      state._testOutputTab = tabName;
+      document.querySelectorAll("#outputTabs .output-tab").forEach(el => {
+        el.classList.toggle("active", el.dataset.tab === tabName);
+      });
+      const response = state._testResult;
+      const content = document.getElementById("outputContent");
+      if (!content) return;
+      if (!response) {
+        content.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>';
+        return;
+      }
+      switch (tabName) {
+        case "output":
+          renderRawOutput(response);
+          break;
+        case "structured":
+          renderStructuredOutput(response);
+          break;
+        case "chart":
+          renderChartOutput(response);
+          break;
+        default:
+          renderRawOutput(response);
+          break;
+      }
+    }
+
+    // ===== 任务 5：原始输出渲染 =====
+    function renderRawOutput(response) {
+      const container = document.getElementById("outputContent");
+      if (!container) return;
+      let html = "";
+      if (response.stdout) {
+        html += '<div class="output-section-label">打印输出</div>';
+        html += '<div class="output-text">' + esc(response.stdout) + "</div>";
+      }
+      if (response.error) {
+        html += '<div class="output-section-label">错误信息</div>';
+        html += '<div class="output-error">' + esc(response.error) + "</div>";
+      }
+      if (response.result !== null && response.result !== undefined) {
+        html += '<div class="output-section-label">返回值</div>';
+        if (typeof response.result === "string") {
+          html += '<div class="output-text">' + esc(response.result) + "</div>";
+        } else {
+          html += '<div class="output-json">' + esc(JSON.stringify(response.result, null, 2)) + "</div>";
+        }
+        html += '<div class="output-action-bar"><button class="output-action-btn" onclick="copyToClipboard(JSON.stringify(state._testResult.result, null, 2))">复制返回值</button></div>';
+      }
+      if (!html) html = '<div style="color:var(--text-secondary);text-align:center;padding:40px">无输出</div>';
+      container.innerHTML = html;
+    }
+
+    // ===== 任务 6：结构化输出渲染 =====
+    function renderStructuredOutput(response) {
+      const container = document.getElementById("outputContent");
+      if (!container) return;
+      if (!response.success && response.error) {
+        container.innerHTML = '<div class="output-error">' + esc(response.error) + "</div>";
+        return;
+      }
+      const result = response.result;
+      const hint = response.output_hint || inferOutputHintFromSample(result) || "text";
+      switch (hint) {
+        case "text": renderOutputText(container, result); break;
+        case "json": renderOutputJson(container, result); break;
+        case "table": renderOutputTable(container, result); break;
+        case "image": renderOutputImage(container, result); break;
+        case "images": renderOutputImages(container, result); break;
+        case "chart": renderOutputChart(container, result); break;
+        case "html": renderOutputHtml(container, result); break;
+        case "file": renderOutputFile(container, result); break;
+        case "error": container.innerHTML = '<div class="output-error">' + esc(response.error || "执行出错") + "</div>"; break;
+        case "mixed": renderOutputMixed(container, result); break;
+        default: renderOutputJson(container, result); break;
+      }
+    }
+
+    function renderOutputText(container, result) {
+      const val = (result === null || result === undefined) ? "null" : String(result);
+      container.innerHTML = "";
+      const text = document.createElement("div");
+      text.style.fontSize = "24px";
+      text.style.fontWeight = "600";
+      text.style.padding = "20px 0";
+      text.style.color = "var(--text)";
+      text.textContent = val;
+      const bar = document.createElement("div");
+      bar.className = "output-action-bar";
+      const btn = document.createElement("button");
+      btn.className = "output-action-btn";
+      btn.textContent = "复制";
+      btn.onclick = () => copyToClipboard(val);
+      bar.appendChild(btn);
+      container.appendChild(text);
+      container.appendChild(bar);
+    }
+
+    function renderOutputJson(container, result) {
+      container.innerHTML = "";
+      const bar = document.createElement("div");
+      bar.className = "output-action-bar";
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "output-action-btn";
+      copyBtn.textContent = "复制JSON";
+      copyBtn.onclick = () => copyToClipboard(JSON.stringify(result, null, 2));
+      bar.appendChild(copyBtn);
+      container.appendChild(bar);
+      const tree = document.createElement("div");
+      tree.className = "json-tree";
+      tree.appendChild(renderJsonTree(result, 0));
+      container.appendChild(tree);
+    }
+
+    function renderJsonTree(value, depth) {
+      if (depth > 10) {
+        const s = document.createElement("span");
+        s.textContent = "...";
+        return s;
+      }
+      const frag = document.createDocumentFragment();
+      if (value === null || value === undefined) {
+        const s = document.createElement("span");
+        s.className = "json-tree-null";
+        s.textContent = "null";
+        frag.appendChild(s);
+        return frag;
+      }
+      if (typeof value === "boolean") {
+        const s = document.createElement("span");
+        s.className = "json-tree-bool";
+        s.textContent = String(value);
+        frag.appendChild(s);
+        return frag;
+      }
+      if (typeof value === "number") {
+        const s = document.createElement("span");
+        s.className = "json-tree-num";
+        s.textContent = String(value);
+        frag.appendChild(s);
+        return frag;
+      }
+      if (typeof value === "string") {
+        if (_isBase64Image(value)) {
+          const img = document.createElement("img");
+          img.src = _ensureDataUrl(value);
+          img.className = "output-image";
+          img.style.maxHeight = "120px";
+          img.onclick = () => showImageFullscreen(img.src);
+          frag.appendChild(img);
+          return frag;
+        }
+        const s = document.createElement("span");
+        s.className = "json-tree-str";
+        s.textContent = '"' + (value.length > 200 ? value.slice(0, 200) + "..." : value) + '"';
+        frag.appendChild(s);
+        return frag;
+      }
+      if (Array.isArray(value)) {
+        const toggle = document.createElement("span");
+        toggle.className = "json-tree-toggle";
+        toggle.textContent = "▼";
+        const label = document.createElement("span");
+        label.className = "json-tree-key";
+        label.textContent = "[" + value.length + " 项]";
+        const childDiv = document.createElement("div");
+        childDiv.className = "json-tree-children";
+        value.forEach((item, i) => {
+          const row = document.createElement("div");
+          const idx = document.createElement("span");
+          idx.className = "json-tree-key";
+          idx.textContent = i + ": ";
+          row.appendChild(idx);
+          row.appendChild(renderJsonTree(item, depth + 1));
+          childDiv.appendChild(row);
+        });
+        toggle.onclick = () => {
+          childDiv.classList.toggle("collapsed");
+          toggle.textContent = childDiv.classList.contains("collapsed") ? "▶" : "▼";
+        };
+        frag.appendChild(toggle);
+        frag.appendChild(label);
+        frag.appendChild(childDiv);
+        return frag;
+      }
+      if (typeof value === "object") {
+        const keys = Object.keys(value);
+        const toggle = document.createElement("span");
+        toggle.className = "json-tree-toggle";
+        toggle.textContent = "▼";
+        const label = document.createElement("span");
+        label.className = "json-tree-key";
+        label.textContent = "{" + keys.length + " 个字段}";
+        const childDiv = document.createElement("div");
+        childDiv.className = "json-tree-children";
+        keys.forEach(key => {
+          const row = document.createElement("div");
+          const k = document.createElement("span");
+          k.className = "json-tree-key";
+          k.textContent = key + ": ";
+          row.appendChild(k);
+          row.appendChild(renderJsonTree(value[key], depth + 1));
+          childDiv.appendChild(row);
+        });
+        toggle.onclick = () => {
+          childDiv.classList.toggle("collapsed");
+          toggle.textContent = childDiv.classList.contains("collapsed") ? "▶" : "▼";
+        };
+        frag.appendChild(toggle);
+        frag.appendChild(label);
+        frag.appendChild(childDiv);
+        return frag;
+      }
+      const s = document.createElement("span");
+      s.textContent = String(value);
+      frag.appendChild(s);
+      return frag;
+    }
+
+    function _normalizeOutputTableData(result) {
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        if (Array.isArray(result.rows)) {
+          const headers = Array.isArray(result.columns) ? result.columns : (result.rows[0] && typeof result.rows[0] === "object" && !Array.isArray(result.rows[0]) ? Object.keys(result.rows[0]) : []);
+          const rows = result.rows.map(row => Array.isArray(row) ? row : headers.map(h => row?.[h]));
+          return { headers, rows };
+        }
+        if (Array.isArray(result.data)) return _normalizeOutputTableData(result.data);
+      }
+      if (!Array.isArray(result) || !result.length) return null;
+      if (typeof result[0] === "object" && !Array.isArray(result[0])) {
+        const headers = Object.keys(result[0]);
+        const rows = result.map(r => headers.map(h => r[h]));
+        return { headers, rows };
+      }
+      if (Array.isArray(result[0])) {
+        let headers = result[0].map((_, i) => "列" + (i + 1));
+        let rows = result;
+        if (result.length > 1 && result[0].every(c => typeof c === "string" && isNaN(Number(c)))) {
+          headers = result[0];
+          rows = result.slice(1);
+        }
+        return { headers, rows };
+      }
+      return null;
+    }
+
+    function renderOutputTable(container, result) {
+      const spec = _normalizeOutputTableData(result);
+      if (!spec || !spec.headers.length) {
+        renderOutputJson(container, result);
+        return;
+      }
+      const headers = spec.headers;
+      const rows = spec.rows || [];
+      const maxShow = 100;
+      const truncated = rows.length > maxShow;
+      const showRows = truncated ? rows.slice(0, maxShow) : rows;
+      let html = '<div class="output-action-bar"><button class="output-action-btn" onclick="copyTableAsTsv()">复制表格</button><span style="font-size:12px;color:var(--text-secondary)">共 ' + rows.length + " 行</span></div>";
+      html += '<div style="max-height:500px;overflow:auto"><table class="output-table"><thead><tr>';
+      headers.forEach(h => { html += "<th>" + esc(h) + "</th>"; });
+      html += "</tr></thead><tbody>";
+      showRows.forEach(row => {
+        html += "<tr>";
+        row.forEach(cell => { html += "<td>" + esc(cell ?? "") + "</td>"; });
+        html += "</tr>";
+      });
+      html += "</tbody></table></div>";
+      if (truncated) {
+        html += '<div style="text-align:center;padding:8px"><button class="output-action-btn" onclick="this.parentElement.previousElementSibling.style.maxHeight=\'none\';this.remove()">显示全部（共 ' + rows.length + " 行）</button></div>";
+      }
+      container.innerHTML = html;
+      window._lastTableHeaders = headers;
+      window._lastTableRows = rows;
+    }
+
+    function copyTableAsTsv() {
+      if (!window._lastTableHeaders) return;
+      let tsv = window._lastTableHeaders.join("\t") + "\n";
+      window._lastTableRows.forEach(row => {
+        tsv += row.map(c => String(c ?? "")).join("\t") + "\n";
+      });
+      copyToClipboard(tsv);
+    }
+
+    function renderOutputImage(container, result) {
+      const raw = String(result ?? "");
+      const src = _ensureDataUrl(raw);
+      const downloadRaw = raw.startsWith("data:") ? (raw.split(",")[1] || raw) : raw;
+      container.innerHTML = '<div><img class="output-image" src="' + _escapeJsString(src).replace(/"/g, "&quot;") + '" onclick="showImageFullscreen(this.src)" /></div>' +
+        '<div class="output-action-bar"><button class="output-action-btn" onclick="downloadBase64File(\'' + _escapeJsString(downloadRaw) + "', 'output.png', 'image/png')\">下载图片</button></div>";
+    }
+
+    function renderOutputImages(container, result) {
+      if (!Array.isArray(result)) {
+        renderOutputImage(container, result);
+        return;
+      }
+      let html = '<div style="margin-bottom:8px;font-size:13px;color:var(--text-secondary)">共 ' + result.length + " 张图片</div>";
+      html += '<div class="output-images-grid">';
+      result.forEach(item => {
+        const src = _ensureDataUrl(String(item));
+        html += '<div style="cursor:pointer" onclick="showImageFullscreen(\'' + _escapeJsString(src) + '\')"><img src="' + _escapeJsString(src).replace(/"/g, "&quot;") + '" style="width:100%;border-radius:6px" /></div>';
+      });
+      html += "</div>";
+      container.innerHTML = html;
+    }
+
+    function renderOutputChart(container, result) {
+      if (typeof echarts === "undefined") {
+        container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">页面未加载 ECharts 库，无法绘制图表。<br>降级显示 JSON 数据：</div>';
+        const jsonDiv = document.createElement("div");
+        jsonDiv.className = "output-json";
+        jsonDiv.textContent = JSON.stringify(result, null, 2);
+        container.appendChild(jsonDiv);
+        return;
+      }
+      const chartDiv = document.createElement("div");
+      chartDiv.style.width = "100%";
+      chartDiv.style.height = "400px";
+      container.innerHTML = "";
+      container.appendChild(chartDiv);
+      const chart = echarts.init(chartDiv);
+      let option = {};
+      if (Array.isArray(result) && result.every(v => typeof v === "number")) {
+        option = { xAxis: { type: "category", data: result.map((_, i) => i) }, yAxis: { type: "value" }, series: [{ data: result, type: "line", smooth: true }], tooltip: { trigger: "axis" } };
+      } else if (result && typeof result === "object" && !Array.isArray(result)) {
+        if (result.labels && result.values) {
+          option = { tooltip: { trigger: "item" }, series: [{ type: "pie", data: result.labels.map((l, i) => ({ name: l, value: result.values[i] })) }] };
+        } else if (result.x && result.y) {
+          option = { xAxis: { type: "category", data: result.x }, yAxis: { type: "value" }, series: [{ data: result.y, type: "line", smooth: true }], tooltip: { trigger: "axis" } };
+        } else {
+          renderOutputJson(container, result);
+          return;
+        }
+      } else if (Array.isArray(result) && result.length && typeof result[0] === "object") {
+        const keys = Object.keys(result[0]).filter(k => typeof result[0][k] === "number");
+        const categories = result.map((_, i) => i);
+        option = { xAxis: { type: "category", data: categories }, yAxis: { type: "value" }, legend: { data: keys }, series: keys.map(k => ({ name: k, type: "bar", data: result.map(r => r[k]) })), tooltip: { trigger: "axis" } };
+      } else {
+        renderOutputJson(container, result);
+        return;
+      }
+      chart.setOption(option);
+      window.addEventListener("resize", () => chart.resize(), { passive: true });
+    }
+
+    function renderOutputHtml(container, result) {
+      const iframe = document.createElement("iframe");
+      iframe.sandbox = "allow-same-origin";
+      iframe.style.width = "100%";
+      iframe.style.border = "1px solid var(--border)";
+      iframe.style.borderRadius = "6px";
+      iframe.style.minHeight = "200px";
+      container.innerHTML = "";
+      container.appendChild(iframe);
+      iframe.srcdoc = String(result);
+      iframe.onload = () => {
+        try {
+          iframe.style.height = iframe.contentDocument.body.scrollHeight + 20 + "px";
+        } catch (err) {
+          iframe.style.height = "300px";
+        }
+      };
+    }
+
+    function renderOutputFile(container, result) {
+      if (result && typeof result === "object" && result.filename && (result.content || result.base64)) {
+        const b64 = result.base64 || btoa(result.content);
+        container.innerHTML = '<div style="padding:20px;text-align:center"><div style="font-size:16px;margin-bottom:12px">' + esc(result.filename) + "</div>" +
+          '<button class="output-download-btn" onclick="downloadBase64File(\'' + _escapeJsString(b64) + "', '" + _escapeJsString(result.filename) + "')\">下载文件</button></div>";
+      } else {
+        renderOutputJson(container, result);
+      }
+    }
+
+    function renderOutputMixed(container, result) {
+      container.innerHTML = "";
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        Object.entries(result).forEach(([key, val]) => {
+          const section = document.createElement("div");
+          section.style.marginBottom = "16px";
+          const label = document.createElement("div");
+          label.className = "output-section-label";
+          label.textContent = key;
+          section.appendChild(label);
+          const content = document.createElement("div");
+          if (_isBase64Image(val)) {
+            renderOutputImage(content, val);
+          } else if (Array.isArray(val) && val.length && typeof val[0] === "object") {
+            renderOutputTable(content, val);
+          } else if (typeof val === "object") {
+            content.className = "json-tree";
+            content.appendChild(renderJsonTree(val, 0));
+          } else {
+            const t = document.createElement("div");
+            t.className = "output-text";
+            t.textContent = String(val);
+            content.appendChild(t);
+          }
+          section.appendChild(content);
+          container.appendChild(section);
+        });
+      } else {
+        renderOutputJson(container, result);
+      }
+    }
+
+    // ===== 任务 7：图表 Tab =====
+    function renderChartOutput(response) {
+      const container = document.getElementById("outputContent");
+      if (!container) return;
+      if (!response || !response.result) {
+        container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">无数据</div>';
+        return;
+      }
+      const result = response.result;
+      const hint = response.output_hint;
+      if (hint === "chart") {
+        renderOutputChart(container, result);
+        return;
+      }
+      if (Array.isArray(result) && result.every(v => typeof v === "number")) {
+        renderOutputChart(container, result);
+        return;
+      }
+      if (Array.isArray(result) && result.length && typeof result[0] === "object") {
+        const numKeys = Object.keys(result[0]).filter(k => typeof result[0][k] === "number");
+        if (numKeys.length) {
+          renderOutputChart(container, result);
+          return;
+        }
+      }
+      container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">当前结果不适合绘制图表</div>';
+    }
+
     function init() {
       renderNav();
       bindGlobalKeys();
@@ -8923,6 +10608,49 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.openComponentTestModal = openComponentTestModal;
     window.openTestPanel = openTestPanel;
     window.closeTestPanel = closeTestPanel;
+    window.openTestPage = openTestPage;
+    window.closeTestPage = closeTestPage;
+    window.renderTestParamCards = renderTestParamCards;
+    window.renderOneParamCard = renderOneParamCard;
+    window.renderIntInput = renderIntInput;
+    window.renderFloatInput = renderFloatInput;
+    window.renderStrInput = renderStrInput;
+    window.renderTextInput = renderTextInput;
+    window.renderBoolInput = renderBoolInput;
+    window.renderJsonInput = renderJsonInput;
+    window.renderImageInput = renderImageInput;
+    window.renderImagesInput = renderImagesInput;
+    window.renderFileInput = renderFileInput;
+    window.renderLiteralInput = renderLiteralInput;
+    window.renderUrlInput = renderUrlInput;
+    window.renderDatetimeInput = renderDatetimeInput;
+    window.renderColorInput = renderColorInput;
+    window.renderPasswordInput = renderPasswordInput;
+    window.initTestDivider = initTestDivider;
+    window._isBase64Image = _isBase64Image;
+    window._ensureDataUrl = _ensureDataUrl;
+    window.copyToClipboard = copyToClipboard;
+    window.downloadBlob = downloadBlob;
+    window.downloadBase64File = downloadBase64File;
+    window.collectTestParams = collectTestParams;
+    window.runFullTest = runFullTest;
+    window.renderTestOutput = renderTestOutput;
+    window.switchOutputTab = switchOutputTab;
+    window.renderRawOutput = renderRawOutput;
+    window.renderStructuredOutput = renderStructuredOutput;
+    window.renderOutputText = renderOutputText;
+    window.renderOutputJson = renderOutputJson;
+    window.renderJsonTree = renderJsonTree;
+    window.renderOutputTable = renderOutputTable;
+    window.copyTableAsTsv = copyTableAsTsv;
+    window.renderOutputImage = renderOutputImage;
+    window.renderOutputImages = renderOutputImages;
+    window.renderOutputChart = renderOutputChart;
+    window.renderOutputHtml = renderOutputHtml;
+    window.renderOutputFile = renderOutputFile;
+    window.renderOutputMixed = renderOutputMixed;
+    window.renderChartOutput = renderChartOutput;
+    window.showImageFullscreen = showImageFullscreen;
     window.fillTestExample = fillTestExample;
     window.toggleTestHistory = toggleTestHistory;
     window.applyTestHistory = applyTestHistory;

@@ -105,7 +105,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _watcher = FileWatcher(registry, on_change=_broadcast, on_delete=_broadcast)
         _watcher.start(resolved)
 
-    # Start background cleanup for temporary uploads.
+    # 启动临时上传文件清理任务：每 30 分钟清理一次超过 60 分钟的文件。
     asyncio.create_task(_cleanup_temp_uploads())
 
     yield
@@ -116,10 +116,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 async def _cleanup_temp_uploads() -> None:
-    """Periodically delete temp upload files older than 60 minutes."""
+    """定期删除超过 60 分钟的临时上传文件。"""
     temp_root = Path(tempfile.gettempdir()) / "algolib_uploads"
     while True:
-        await asyncio.sleep(300)  # check every 5 minutes
+        await asyncio.sleep(1800)
         if not temp_root.exists():
             continue
         cutoff = time.time() - 3600

@@ -6,6 +6,7 @@ import importlib.util
 import ast
 import json
 import logging
+import re
 import shutil
 import sys
 import tempfile
@@ -31,6 +32,8 @@ from ..models.schemas import (
     PublishAsComponentRequest,
 )
 from ..sdk.ast_parser import AstParser
+from ..sdk.auth_utils import get_current_user
+from ..sdk.param_inferrer import infer_output_widget
 from ..sdk.registry import AlgorithmEntry, AlgorithmRegistry, normalize_module_kind
 from ..sdk.sse_manager import sse_manager
 
@@ -917,17 +920,33 @@ def _load_entry_module(entry: AlgorithmEntry) -> types.ModuleType:
 
 
 def _preprocess_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
-    """自动剥离 kwargs 中 Data URL 前缀（data:image/png;base64,xxx → xxx），
-    使算法代码可以直接 base64.b64decode() 而无需处理前缀。
+    """预处理 kwargs 中的 base64 数据，便于算法直接使用。
+
+    - 自动剥离 Data URL 前缀：data:image/png;base64,xxx -> xxx
+    - 对纯 base64 字符串自动补齐 "=" padding
+    - list 参数递归执行同样处理
     """
-    processed: dict[str, Any] = {}
-    for key, value in kwargs.items():
-        if isinstance(value, str) and value.startswith("data:") and ";base64," in value[:100]:
-            comma_idx = value.index(",")
-            processed[key] = value[comma_idx + 1:]
-        else:
-            processed[key] = value
-    return processed
+
+    def _normalize_value(value: Any) -> Any:
+        if isinstance(value, list):
+            return [_normalize_value(item) for item in value]
+        if not isinstance(value, str):
+            return value
+
+        text = value
+        if text.startswith("data:") and ";base64," in text[:100]:
+            comma_idx = text.index(",")
+            text = text[comma_idx + 1:]
+
+        compact = "".join(text.split())
+        if len(compact) > 100 and re.fullmatch(r"[A-Za-z0-9+/=_-]+", compact):
+            remainder = len(compact) % 4
+            if remainder:
+                compact += "=" * (4 - remainder)
+            return compact
+        return text
+
+    return {key: _normalize_value(value) for key, value in kwargs.items()}
 
 
 def _execute_entry(entry: AlgorithmEntry, args: list[Any], kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -944,6 +963,7 @@ def _execute_entry(entry: AlgorithmEntry, args: list[Any], kwargs: dict[str, Any
         return {
             "success": True,
             "result": _serialize_result(result),
+            "output_hint": infer_output_widget(entry.return_type, result),
             "error": "",
             "elapsed_ms": elapsed_ms,
         }
@@ -953,6 +973,7 @@ def _execute_entry(entry: AlgorithmEntry, args: list[Any], kwargs: dict[str, Any
         return {
             "success": False,
             "result": None,
+            "output_hint": "error",
             "error": str(exc),
             "elapsed_ms": elapsed_ms,
         }
@@ -993,8 +1014,6 @@ def _find_entries_for_docs(registry: AlgorithmRegistry, call_namespace: str) -> 
         return sorted(entries, key=lambda item: item.call_prefix)
     return []
 
-
-from ..sdk.auth_utils import get_current_user
 
 _ALGORITHMS_ROOT = Path(__file__).resolve().parents[2] / "algorithms_root"
 _REVIEW_LOG_PATH = _ALGORITHMS_ROOT / ".review_log.json"
@@ -3142,26 +3161,28 @@ async def algo_changes_sse(registry: AlgorithmRegistry = Depends(get_registry)) 
 
 
 @router.post("/upload-temp")
-async def upload_temp_file_v2(request: Request, file: UploadFile = File(...)) -> dict[str, Any]:
-    """Upload a file to a per-user temporary directory and return the server path.
-    Files are automatically cleaned up after 60 minutes.
-    """
-    try:
-        current_user = get_current_user(request)
-        user_id = str(current_user.get("id") or "anon")
-    except Exception:
-        user_id = "anon"
+async def upload_temp_file(file: UploadFile = File(...), request: Request = None) -> dict[str, Any]:
+    """上传文件到当前用户的临时目录，并返回服务端临时路径。"""
+    current_user = get_current_user(request)
+    user_id = str(current_user.get("id") or "anon")
 
     temp_dir = Path(tempfile.gettempdir()) / "algolib_uploads" / user_id
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     original = file.filename or "upload"
-    safe_name = f"{uuid_lib.uuid4().hex[:8]}_{Path(original).name}"
+    suffix = Path(original).suffix
+    safe_name = f"{uuid_lib.uuid4().hex}{suffix}"
     dest = temp_dir / safe_name
     try:
         content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="上传文件不能为空")
+        if len(content) > 50 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="上传文件不能超过 50MB")
         dest.write_bytes(content)
-    except Exception as exc:  # noqa: BLE001
+    except HTTPException:
+        raise
+    except OSError as exc:
         raise HTTPException(status_code=500, detail=f"文件上传失败：{exc}") from exc
     return {
         "success": True,
@@ -3172,7 +3193,7 @@ async def upload_temp_file_v2(request: Request, file: UploadFile = File(...)) ->
 
 
 @router.post("/test/upload-temp")
-async def upload_temp_file(file: UploadFile = File(...)) -> dict[str, str]:
+async def upload_temp_test_file(file: UploadFile = File(...)) -> dict[str, str]:
     """Upload a file to a temp path and return its path (for use in test kwargs)."""
     original = file.filename or "upload"
     suffix = Path(original).suffix
@@ -3263,6 +3284,31 @@ async def invoke_algorithm_by_namespace(
     return _execute_entry(entry, request.args, request.kwargs)
 
 
+@router.post("/algorithms/{algorithm_id:path}/execute")
+async def execute_algorithm_by_id(
+    algorithm_id: str,
+    request: ExecuteRequest,
+    http_request: Request,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """按前端暴露的 algorithm_id 执行算法，供全屏测试页使用。"""
+
+    base_id = algorithm_id
+    owner_id: str | None = None
+    if "@@" in algorithm_id:
+        base_id, owner_id = algorithm_id.split("@@", 1)
+
+    entry = (
+        _entry_by_owner(registry, base_id, owner_id)
+        or registry.get_by_id(algorithm_id)
+        or registry.get_by_id(base_id)
+    )
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
+    _ensure_user_callable_status(entry, http_request)
+    return _execute_entry(entry, request.args, request.kwargs)
+
+
 @router.post("/{namespace}/{func_name}")
 async def execute_algorithm(
     namespace: str,
@@ -3292,7 +3338,6 @@ def _parse_blocks_from_source(source: str) -> list[dict[str, Any]] | None:
     标记格式：# === BLOCK: 标题 [LOCKED] ===
     如果源码中没有任何 BLOCK 标记，返回 None。
     """
-    import re
     lines = source.split("\n")
     block_pattern = re.compile(r"^#\s*===\s*BLOCK:\s*(.+?)(?:\s*\[LOCKED\])?\s*===\s*$")
     locked_pattern = re.compile(r"\[LOCKED\]")

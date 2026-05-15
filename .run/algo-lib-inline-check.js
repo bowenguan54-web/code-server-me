@@ -1,5 +1,7 @@
 
     const BASE = window._ALGO_BASE || "http://127.0.0.1:8000";
+    // 项目根目录，用于断点终端运行时设置 PYTHONPATH
+    const _PROJECT_ROOT_HINT = window._ALGO_PROJECT_ROOT || "/home/guan/code-server-me";
     window._activeMonaco = null;
 
     const state = {
@@ -7,6 +9,8 @@
       data: { components: [], templates: [], snippets: [] },
       categories: { components: [], templates: [] },
       filters: {},
+      pageScroll: {},
+      pendingScrollRestore: "",
       editing: null,
       monacoReady: null,
       monaco: null,
@@ -25,7 +29,9 @@
       logsPage: 1,
       snippetResults: [],
       snippetCursor: 0,
-      navCollapsed: {},
+      algoCallResults: [],
+      algoCallCursor: 0,
+      navCollapsed: { "components-group": true, "templates-group": true, "snippets-group": true },
       selectedNavNs: "",
       sse: null,
       currentUser: null,
@@ -36,8 +42,39 @@
       compTestFileUploads: {},
       _compTestAlgo: null,
       _compTestSource: null,
+      testPanelOpen: false,
+      testPanelWidth: 420,
+      _pendingDebugParams: null,
+      _tpLastResult: undefined,
+      _tpResultTab: "output",
+      _tpTableData: {},
+      _testAlgo: null,
+      _testParamValues: {},
+      _testResult: null,
+      _testOutputTab: "output",
       tplEditor: null,
-      tplModel: null
+      tplModel: null,
+      blockEditor: null,
+      // ── IDE 底部面板 ──
+      bottomTab: "output",
+      bottomPanelOpen: false,
+      terminalWs: null,
+      executeWs: null,
+      xterm: null,
+      xtermFitAddon: null,
+      terminalInited: false,
+      // ── 调试 ──
+      debugBreakpoints: new Map(),   // filename → Set<lineNumber>
+      debugSession: null             // { ws, status, currentFile, currentLine, variables, stack, consoleLog, startMsg }
+    };
+
+    const WIDGET_ZH = {
+      int: "整数", float: "小数", str: "文本", text: "长文本",
+      bool: "布尔", list: "列表", dict: "字典", json: "JSON",
+      dataframe: "表格数据", image: "图片", images: "多张图片",
+      file: "文件", audio: "音频", video: "视频", url: "网址",
+      literal: "下拉选择", datetime: "日期时间", color: "颜色",
+      password: "密码"
     };
 
     function qs(selector, root = document) { return root.querySelector(selector); }
@@ -136,6 +173,23 @@
       window.clearTimeout(showToast._timer);
       showToast._timer = window.setTimeout(() => el.classList.add("hidden"), 2600);
     }
+
+    function showConfirm(message, onOk) {
+      const modal = qs("#modalRoot");
+      modal.classList.remove("hidden");
+      modal.innerHTML = `
+        <div class="modal" style="max-width:420px">
+          <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:var(--text)">${esc(message)}</p>
+          <div class="modal-actions">
+            <button id="_confirmCancelBtn">取消</button>
+            <button class="danger" id="_confirmOkBtn">确定</button>
+          </div>
+        </div>
+      `;
+      const close = () => { modal.innerHTML = ""; modal.classList.add("hidden"); };
+      qs("#_confirmCancelBtn").addEventListener("click", close);
+      qs("#_confirmOkBtn").addEventListener("click", () => { close(); onOk(); });
+    }
     async function api(path, options = {}) {
       const headers = { ...(options.headers || {}) };
       if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
@@ -161,8 +215,14 @@
     }
     function pageTitle(page) {
       return {
-        components: "算法组件",
+        components: "算法",
+        "components-general": "通用算法",
+        "components-system": "系统算法",
+        "components-domain": "领域算法",
         templates: "算法模板",
+        "templates-general": "通用模板",
+        "templates-system": "系统模板",
+        "templates-domain": "领域模板",
         snippets: "代码片段",
         "my-algos": "我的算法",
         review: "算法审核",
@@ -231,8 +291,7 @@
       return !!(state.currentUser?.id && ownerId === state.currentUser.id);
     }
     function canManageAlgorithm(item) {
-      const status = getStatus(item);
-      if (status === "published" && state.currentUser?.role !== "admin") return false;
+      if (isPublicItem(item)) return false;
       return state.currentUser?.role === "admin" || ownsAlgorithm(item);
     }
     function canSubmitAlgorithm(item) {
@@ -260,57 +319,93 @@
     }
     function safeId(id) { return encodeURIComponent(id); }
     function currentModuleKind(page) {
-      if (page === "my-algos") return "component";
-      if (page === "components") return "component";
-      if (page === "templates") return "template";
+      if (page === "my-algos" || page === "components" || page.startsWith("components-")) return "component";
+      if (page === "templates" || page.startsWith("templates-")) return "template";
       return "snippet";
     }
 
+    function parentPageOf(page) {
+      if (page === "components-general" || page === "components-system" || page === "components-domain") return "components";
+      if (page === "templates-general" || page === "templates-system" || page === "templates-domain") return "templates";
+      return page;
+    }
+
     function renderNav() {
-      const pages = [
-        ["components", "算法组件"],
-        ["templates", "算法模板"],
-        ["snippets", "代码片段"],
-        ...(state.currentUser ? [["my-algos", "我的算法"]] : []),
-        ...(state.currentUser?.role === "admin" ? [["review", "算法审核"]] : []),
-        ["settings", "系统设置"],
-        ...(state.currentUser && state.currentUser.role === "admin" ? [["users", "用户管理"]] : [])
-      ];
-      const subPages = ["components", "templates", "my-algos"];
-      qs("#sidebar").innerHTML = [
+      const isAlgoGroupActive = state.page.startsWith("components-");
+      const isTemplateGroupActive = state.page.startsWith("templates-");
+      const algoCollapsed = state.navCollapsed["components-group"];
+      const templateCollapsed = state.navCollapsed["templates-group"];
+
+      const subItem = (page, label) => {
+        const isActive = state.page === page;
+        return `<div class="nav-item ${isActive ? "active" : ""}" data-page="${page}" style="padding-left:26px"><span class="nav-dot" style="width:5px;height:5px;opacity:.7"></span>${label}</div>`;
+      };
+
+      const html = [
         '<div class="brand">Algo<span>Lib</span></div>',
-        ...pages.flatMap(([page, label]) => {
-          const isActive = page === state.page;
-          if (!subPages.includes(page)) {
-            return [`<div class="nav-item ${isActive ? "active" : ""}" data-page="${page}"><span class="nav-dot"></span>${label}</div>`];
-          }
-          const cats = state.categories[page] || [];
-          const collapsed = state.navCollapsed[page];
-          const colBtn = cats.length > 0
-            ? `<button class="nav-collapse-btn ${collapsed ? "collapsed" : ""}" data-toggle="${page}" title="${collapsed ? "展开" : "收起"}">▾</button>`
-            : "";
-          const item = `<div class="nav-item ${isActive ? "active" : ""}" data-page="${page}" style="display:flex;align-items:center;gap:10px;"><span class="nav-dot"></span>${label}${colBtn}</div>`;
-          if (collapsed) return [item];
-          const subs = cats.slice(0, 12).map(cat => {
-            const name = cat.zh_name || cat.namespace || "";
-            const ns = cat.namespace || "";
-            const isActive = state.selectedNavNs === ns && state.page === page;
-            return `<div class="nav-sub${isActive ? " active-sub" : ""}" data-page="${page}" data-ns="${esc(ns)}" title="${esc(name)}">${esc(name)}</div>`;
-          });
-          return [item, ...subs];
-        }),
+        // 算法 group
+        `<div class="nav-item nav-group-hd ${isAlgoGroupActive ? "active" : ""}" data-group="components-group" style="display:flex;align-items:center;gap:10px">
+          <span class="nav-dot"></span>算法
+          <button class="nav-collapse-btn ${algoCollapsed ? "collapsed" : ""}" data-toggle="components-group" style="margin-left:auto" title="${algoCollapsed ? "展开" : "收起"}">▾</button>
+        </div>`,
+        `<div class="nav-sub-group ${algoCollapsed ? "collapsed" : ""}" data-sub="components-group">${
+          [subItem("components-general", "通用算法"), subItem("components-system", "系统算法"), subItem("components-domain", "领域算法")].join("")
+        }</div>`,
+        // 算法模板 group
+        `<div class="nav-item nav-group-hd ${isTemplateGroupActive ? "active" : ""}" data-group="templates-group" style="display:flex;align-items:center;gap:10px">
+          <span class="nav-dot"></span>算法模板
+          <button class="nav-collapse-btn ${templateCollapsed ? "collapsed" : ""}" data-toggle="templates-group" style="margin-left:auto" title="${templateCollapsed ? "展开" : "收起"}">▾</button>
+        </div>`,
+        `<div class="nav-sub-group ${templateCollapsed ? "collapsed" : ""}" data-sub="templates-group">${
+          [subItem("templates-general", "通用模板"), subItem("templates-system", "系统模板"), subItem("templates-domain", "领域模板")].join("")
+        }</div>`,
+        ...(() => {
+          const snippetCats = state.categories["snippets"] || [];
+          const snippetCollapsed = state.navCollapsed["snippets-group"];
+          const isSnippetActive = state.page === "snippets";
+          const subItems = snippetCats.map(cat => {
+            const ns = cat.namespace;
+            const isSubActive = isSnippetActive && state.selectedNavNs === ns;
+            return `<div class="nav-item nav-snippet-cat${isSubActive ? " active" : ""}" data-ns="${esc(ns)}" style="padding-left:26px"><span class="nav-dot" style="width:5px;height:5px;opacity:.7"></span>${esc(cat.zh_name || ns)}</div>`;
+          }).join("");
+          return [
+            `<div class="nav-item ${isSnippetActive ? "active" : ""}" data-page="snippets" style="display:flex;align-items:center;gap:10px">
+              <span class="nav-dot"></span>代码片段
+              <button class="nav-collapse-btn ${snippetCollapsed ? "collapsed" : ""}" data-toggle="snippets-group" style="margin-left:auto" title="${snippetCollapsed ? "展开" : "收起"}">▾</button>
+            </div>`,
+            `<div class="nav-sub-group ${snippetCollapsed ? "collapsed" : ""}" data-sub="snippets-group">${subItems}</div>`
+          ];
+        })(),
+        ...(state.currentUser ? [
+          `<div class="nav-item ${state.page === "my-algos" ? "active" : ""}" data-page="my-algos"><span class="nav-dot"></span>我的算法</div>`,
+        ] : []),
+        ...(state.currentUser?.role === "admin" ? [`<div class="nav-item ${state.page === "review" ? "active" : ""}" data-page="review"><span class="nav-dot"></span>算法审核</div>`] : []),
+        `<div class="nav-item ${state.page === "settings" ? "active" : ""}" data-page="settings"><span class="nav-dot"></span>系统设置</div>`,
+        ...(state.currentUser?.role === "admin" ? [`<div class="nav-item ${state.page === "users" ? "active" : ""}" data-page="users"><span class="nav-dot"></span>用户管理</div>`] : []),
         state.currentUser ? `<div style="margin-top:auto;padding:10px 8px 0;border-top:1px solid var(--line);font-size:12px;color:var(--text-dim)">
           <div style="color:var(--text);font-weight:600">${esc(state.currentUser.display_name || state.currentUser.username)}</div>
           <div style="margin:2px 0 6px">${esc(state.currentUser.role === "admin" ? "管理员" : "普通用户")}</div>
           <button class="ghost" style="font-size:12px;padding:4px 8px" onclick="window.doLogout()">退出登录</button>
         </div>` : ""
-      ].join("");
-      qsa(".nav-item").forEach(el => {
+      ];
+      qs("#sidebar").innerHTML = html.join("");
+
+      // Group header: clicking navigates to first sub-page; collapse button toggles
+      qsa(".nav-group-hd").forEach(el => {
+        el.addEventListener("click", (evt) => {
+          if (evt.target.classList.contains("nav-collapse-btn")) return;
+          const group = el.dataset.group;
+          if (group === "components-group") switchPage("components-general");
+          else if (group === "templates-group") switchPage("templates-general");
+        });
+      });
+
+      qsa(".nav-item[data-page]").forEach(el => {
         el.addEventListener("click", (evt) => {
           if (evt.target.classList.contains("nav-collapse-btn")) return;
           const page = el.dataset.page;
+          if (!page) return;
           if (state.page === page) {
-            // 已在此页面：仅清空分类过滤器，显示全部内容
             const filterCat = qs("#filterCategory");
             if (filterCat) { filterCat.value = ""; applyFilters(); }
             return;
@@ -318,22 +413,13 @@
           switchPage(page);
         });
       });
-      qsa(".nav-collapse-btn").forEach(btn => {
-        btn.addEventListener("click", (evt) => {
-          evt.stopPropagation();
-          const page = btn.dataset.toggle;
-          state.navCollapsed[page] = !state.navCollapsed[page];
-          renderNav();
-        });
-      });
-      qsa(".nav-sub").forEach(el => {
-        el.addEventListener("click", (event) => {
-          event.stopPropagation();
-          const page = el.dataset.page;
+
+      qsa(".nav-snippet-cat").forEach(el => {
+        el.addEventListener("click", () => {
           const ns = el.dataset.ns;
           state.selectedNavNs = ns;
-          if (state.page !== page) {
-            switchPage(page);
+          if (state.page !== "snippets") {
+            switchPage("snippets");
             window.setTimeout(() => scrollToSection(ns), 400);
           } else {
             renderNav();
@@ -341,16 +427,33 @@
           }
         });
       });
+
+      qsa(".nav-collapse-btn").forEach(btn => {
+        btn.addEventListener("click", (evt) => {
+          evt.stopPropagation();
+          const key = btn.dataset.toggle;
+          const isNowCollapsed = !state.navCollapsed[key];
+          state.navCollapsed[key] = isNowCollapsed;
+          const sub = qs(`.nav-sub-group[data-sub="${key}"]`);
+          if (sub) sub.classList.toggle("collapsed", isNowCollapsed);
+          btn.classList.toggle("collapsed", isNowCollapsed);
+          btn.title = isNowCollapsed ? "展开" : "收起";
+        });
+      });
     }
 
     function switchPage(page) {
+      // Normalize legacy bare page IDs to first sub-page
+      if (page === "components") page = "components-general";
+      if (page === "templates") page = "templates-general";
       state.page = page;
       qsa(".nav-item").forEach(el => el.classList.toggle("active", el.dataset.page === page));
       renderPage(page);
     }
 
     function renderPage(page) {
-      if (page === "components" || page === "templates" || page === "snippets" || page === "my-algos") {
+      const parentP = parentPageOf(page);
+      if (parentP === "components" || parentP === "templates" || page === "snippets" || page === "my-algos") {
         renderModulePage(page);
         return;
       }
@@ -370,9 +473,19 @@
     }
 
     async function loadModuleData(page) {
+      // Sub-pages share data with their parent page
+      const parentP = parentPageOf(page);
+      if (parentP !== page) {
+        const result = await loadModuleData(parentP);
+        state.data[page] = state.data[parentP];
+        state.categories[page] = state.categories[parentP];
+        return result;
+      }
       if (page === "snippets") {
         const data = await api("/api/v1/snippets");
         state.data.snippets = normalizeListPayload(data, "snippets");
+        const catSet = new Set(state.data.snippets.map(item => groupKey(item, "snippets")).filter(Boolean));
+        state.categories["snippets"] = [...catSet].sort().map(ns => ({ namespace: ns, zh_name: ns }));
         return state.data.snippets;
       }
       if (page === "my-algos") {
@@ -409,16 +522,16 @@
           <input id="filterSearch" placeholder="搜索名称、命名空间、描述、标签" oninput="window.applyFilters()" />
           <select id="filterCategory" onchange="window.applyFilters()"><option value="">全部分类</option></select>
           <select id="filterLanguage" onchange="window.applyFilters()"><option value="">全部语言</option></select>
-          ${(page === "components" || page === "my-algos") ? '<select id="filterStatus" onchange="window.applyFilters()"><option value="">全部状态</option></select>' : ""}
+          ${(page === "components" || page === "my-algos" || page.startsWith("components-")) ? '<select id="filterStatus" onchange="window.applyFilters()"><option value="">全部状态</option></select>' : ""}
           ${page === "snippets" ? '<select id="filterScope" onchange="window.applyFilters()"><option value="">全部权限</option><option value="private">私有</option><option value="team">公有</option></select>' : ""}
           <button onclick="window.applyFilters()">筛选</button>
           <span class="spacer"></span>
           <div class="toolbar-actions">
-            ${(page === "components" || page === "templates" || page === "my-algos") ? `<button onclick="window.createRootCategory('${page}')">新建分类</button>` : ""}
-            <button class="primary" onclick="window.createNew('${page === "my-algos" ? "components" : page}')">新建</button>
+            ${(page === "components" || page === "templates" || page === "my-algos" || page.startsWith("components-") || page.startsWith("templates-")) ? `<button onclick="window.createRootCategory('${parentPageOf(page)}')">新建分类</button>` : ""}
+            <button class="primary" onclick="window.createNew('${page === "my-algos" ? "components" : parentPageOf(page)}')">新建</button>
           </div>
         </div>
-        ${(page === "components" || page === "my-algos") ? `<div class="quick-filters" id="quickFilters">
+        ${(page === "components" || page === "my-algos" || page.startsWith("components-")) ? `<div class="quick-filters" id="quickFilters">
           <button class="active" data-qf="" onclick="window.setQuickFilter('','${page}')">全部</button>
           <button class="qf-success" data-qf="published" onclick="window.setQuickFilter('published','${page}')">公有</button>
           <button data-qf="draft" onclick="window.setQuickFilter('draft','${page}')">私有</button>
@@ -431,6 +544,7 @@
       loadModuleData(page).then(() => {
         renderNav();
         hydrateFilters(page);
+        restoreListViewState(page);
         renderCards(page);
       }).catch(error => {
         qs("#list").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
@@ -472,21 +586,21 @@
         const time = item.updated_at || item.created_at || item.updatedAt || "";
         return String(time).slice(0, 10) === new Date().toISOString().slice(0, 10);
       }).length;
-      if (page === "components" || page === "my-algos") {
+      if (page === "components" || page === "my-algos" || page.startsWith("components-")) {
         const publishedCount = items.filter(item => getStatus(item) === "published").length;
         const reviewingCount = items.filter(item => getStatus(item) === "reviewing").length;
         const draftCount = items.filter(item => getStatus(item) === "draft").length;
-        const statLabel = page === "my-algos" ? "我的算法总数" : "算法组件总数";
+        const statLabel = page === "my-algos" ? "我的算法总数" : "算法总数";
         qs("#stats").innerHTML = [
           `<article class="stat-card accent-info"><div class="stat-label">${statLabel}</div><div class="stat-value">${items.length}</div><div class="stat-desc">${categoryCount} 个分类 · 今日更新 ${todayCount}</div></article>`,
           `<article class="stat-card accent-success"><div class="stat-label">公有</div><div class="stat-value">${publishedCount}</div><div class="stat-desc">私有 ${draftCount} 个</div></article>`,
           `<article class="stat-card${reviewingCount > 0 ? " accent-warning" : ""}"><div class="stat-label">待审核</div><div class="stat-value${reviewingCount > 0 ? " accent-warning" : ""}">${reviewingCount}</div><div class="stat-desc">等待审核中</div></article>`,
-          ...(page === "components" ? [
+          ...(page === "components" || page.startsWith("components-") ? [
             `<article class="stat-card"><div class="stat-label">公共组件</div><div class="stat-value">${items.filter(item => (item.ownerId || "system") === "system").length}</div><div class="stat-desc">所有账号可见</div></article>`,
           ] : []),
         ].join("");
         // 渲染审核 banner（仅 components 页）
-        if (page === "components") {
+        if (page === "components" || page.startsWith("components-")) {
         let banner = qs("#reviewBanner");
         if (!banner) {
           banner = document.createElement("div");
@@ -494,7 +608,7 @@
           qs("#stats").insertAdjacentElement("afterend", banner);
         }
         banner.innerHTML = reviewingCount > 0
-          ? `<div class="review-banner">⚠ 有 ${reviewingCount} 个算法正在等待审核，请及时处理。<span class="spacer"></span><a onclick="window.setQuickFilter('reviewing','components')">查看审核中</a></div>`
+          ? `<div class="review-banner">⚠ 有 ${reviewingCount} 个算法正在等待审核，请及时处理。<span class="spacer"></span><a onclick="window.setQuickFilter('reviewing','${page}')">查看审核中</a></div>`
           : "";
         } // end if (page === "components")
       } else {
@@ -522,12 +636,14 @@
         return acc;
       }, {});
       // 仅在查看全部分类时补入空分类（筛选了某个分类时不显示空分类）
-      if (!state.filter?.category) {
+      const selectedCategory = qs("#filterCategory")?.value || "";
+      if (!selectedCategory) {
         (state.categories[page] || []).forEach(cat => {
           if (!(cat.namespace in groups)) groups[cat.namespace] = [];
         });
       }
-      qs("#list").innerHTML = Object.keys(groups).sort().map(key => `
+      const groupKeys = Object.keys(groups).filter(key => !selectedCategory || groups[key].length > 0).sort();
+      qs("#list").innerHTML = groupKeys.map(key => `
         <section class="folder-section">
           <div class="folder-head">
             <button class="ghost folder-toggle" onclick="window.toggleFolder(this)">▾</button>
@@ -541,10 +657,14 @@
           <div class="folder-body">${groups[key].map(item => renderCard(item, page)).join("")}</div>
         </section>
       `).join("") || '<div class="empty">暂无数据</div>';
+      if (state.pendingScrollRestore === page) {
+        state.pendingScrollRestore = "";
+        restoreMainScroll(page);
+      }
     }
 
     function renderCard(item, page) {
-      const kind = page === "templates" ? "template" : page === "snippets" ? "snippet" : "";
+      const kind = (page === "templates" || page.startsWith("templates-")) ? "template" : page === "snippets" ? "snippet" : "";
       const status = getStatus(item);
       const id = item.id;
       const isAdmin = state.currentUser?.role === "admin";
@@ -553,14 +673,14 @@
       const privacyText = privacyLabel(item);
       const privacyClass = isPublicItem(item) ? "success" : "warning";
       const isMyAlgosPage = page === "my-algos";
-      const effectivePage = isMyAlgosPage ? "components" : page;
+      const effectivePage = isMyAlgosPage ? "components" : page.startsWith("components-") ? "components" : page.startsWith("templates-") ? "templates" : page;
       const reviewStatusVisible = ["reviewing", "rejected", "approved"].includes(status);
       let btns = [];
       if (effectivePage === "components") {
         if (status === "published" && !isAdmin) btns.push(`<button onclick="window.openEditorById('${esc(id)}','${esc(page)}')">编辑</button>`);
         else if (canManage) btns.push(`<button onclick="window.openEditorById('${esc(id)}','${esc(page)}')">编辑</button>`);
         else if (state.currentUser) btns.push(`<button onclick="window.openEditorById('${esc(id)}','components')">编辑</button>`);
-        if (state.currentUser) btns.push(`<button onclick="window.openComponentTestModalById('${esc(id)}')">测试</button>`);
+        if (state.currentUser) btns.push(`<button onclick="window.openComponentTestModalById('${esc(id)}','${esc(page)}')">测试</button>`);
         if (canManage) btns.push(`<button onclick="window.editAlgorithmInfo('${esc(id)}','${esc(page)}')">基本信息</button>`);
         btns.push(`<button onclick="window.showApiDoc('${esc(id)}')">查看 API 文档</button>`);
         if (canManage && status === "rejected") {
@@ -572,7 +692,7 @@
         } else if (canSubmitAlgorithm(item)) {
           btns.push(`<button class="warning" onclick="window.openSubmitModal('${esc(id)}')" >${status === "rejected" ? "重新提交" : "提交审核"}</button>`);
         }
-        if (canManage && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
+        if (!isAdmin && isOwner && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
         if (isAdmin || (canManage && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
       } else if (effectivePage === "templates") {
         if (status === "published" && !isAdmin) btns.push(`<button onclick="window.openEditorById('${esc(id)}','templates')">编辑</button>`);
@@ -586,14 +706,14 @@
         } else if (canSubmitAlgorithm(item)) {
           btns.push(`<button class="warning" onclick="window.openSubmitModal('${esc(id)}')">${status === "rejected" ? "重新提交" : "提交审核"}</button>`);
         }
-        if (canManage && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
+        if (!isAdmin && isOwner && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
         if (isAdmin || (canManage && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
       } else {
         if (status === "published" && !isAdmin) btns.push(`<button onclick="window.editSnippet('${esc(id)}', true)">编辑</button>`);
         else if (canManage || ownsSnippet(item)) btns.push(`<button onclick="window.editSnippet('${esc(id)}')">编辑</button>`);
         btns.push(`<button onclick="window.copySnippet('${esc(id)}')">复制</button>`);
         if (canSubmitSnippet(item)) btns.push(`<button class="warning" onclick="window.submitSnippetReview('${esc(id)}')">提交审核</button>`);
-        if ((ownsSnippet(item) || isAdmin) && status === "reviewing") btns.push(`<button onclick="window.withdrawSnippetReview('${esc(id)}')">撤回</button>`);
+        if (!isAdmin && ownsSnippet(item) && status === "reviewing") btns.push(`<button onclick="window.withdrawSnippetReview('${esc(id)}')">撤回</button>`);
         if (isAdmin && status === "reviewing") {
           btns.push(`<button class="success" onclick="window.publishSnippet('${esc(id)}')">正式发布</button>`);
           btns.push(`<button class="danger" onclick="window.rejectSnippetReview('${esc(id)}')">驳回</button>`);
@@ -621,7 +741,60 @@
       `;
     }
 
-    function applyFilters() { state.selectedNavNs = ""; renderCards(state.page); }
+    function applyFilters() {
+      state.selectedNavNs = "";
+      rememberListViewState(state.page);
+      renderCards(state.page);
+    }
+    function rememberListViewState(page = state.page) {
+      if (!page) return;
+      const main = qs("#main");
+      state.filters[page] = {
+        search: qs("#filterSearch")?.value || "",
+        category: qs("#filterCategory")?.value || "",
+        language: qs("#filterLanguage")?.value || "",
+        status: qs("#filterStatus")?.value || "",
+        scope: qs("#filterScope")?.value || "",
+        scrollTop: main?.scrollTop || state.pageScroll?.[page] || 0,
+      };
+      if (main) state.pageScroll[page] = main.scrollTop || 0;
+    }
+    function restoreListViewState(page = state.page) {
+      const saved = state.filters?.[page];
+      if (!saved) return;
+      const setValue = (selector, value) => {
+        const el = qs(selector);
+        if (!el) return;
+        const hasOption = !("options" in el) || Array.from(el.options || []).some(opt => opt.value === value);
+        el.value = hasOption ? (value || "") : "";
+      };
+      const search = qs("#filterSearch");
+      if (search) search.value = saved.search || "";
+      setValue("#filterCategory", saved.category);
+      setValue("#filterLanguage", saved.language);
+      setValue("#filterStatus", saved.status);
+      setValue("#filterScope", saved.scope);
+      const qfContainer = qs("#quickFilters");
+      if (qfContainer) {
+        qfContainer.querySelectorAll("button").forEach(btn => btn.classList.toggle("active", btn.dataset.qf === (qs("#filterStatus")?.value || "")));
+      }
+      if (saved.scrollTop !== undefined) state.pageScroll[page] = saved.scrollTop || 0;
+    }
+    function rememberMainScroll(page = state.page) {
+      rememberListViewState(page);
+      const main = qs("#main");
+      if (!main || !page) return;
+      state.pageScroll[page] = main.scrollTop || 0;
+    }
+    function restoreMainScroll(page = state.page) {
+      const top = state.pageScroll?.[page] || 0;
+      const restore = () => {
+        const main = qs("#main");
+        if (main) main.scrollTop = top;
+      };
+      requestAnimationFrame(() => requestAnimationFrame(restore));
+      window.setTimeout(restore, 120);
+    }
     function scrollToSection(ns) {
       const sections = qsa(".folder-section");
       for (const sec of sections) {
@@ -648,6 +821,7 @@
         const active = qfContainer.querySelector(`[data-qf="${status}"]`);
         if (active) active.classList.add("active");
       }
+      rememberListViewState(page);
       renderCards(page);
     }
     function toggleFolder(button) { button.closest(".folder-section").classList.toggle("collapsed"); }
@@ -883,7 +1057,8 @@
       models: new Map(),
       mode: "template",
       importedFromPicker: false,
-      functions: []
+      functions: [],
+      returnPage: ""
     };
 
     function defaultAlgorithmCode(name) {
@@ -901,16 +1076,18 @@
     }
 
     async function openAlgorithmWorkspace(page) {
-      const moduleKind = page === "templates" ? "template" : "component";
-      let cats = state.categories[page] || [];
+      const parentP = parentPageOf(page);
+      const moduleKind = parentP === "templates" ? "template" : "component";
+      newAlgoState.returnPage = page;
+      let cats = state.categories[parentP] || [];
       if (!cats.length) {
         try {
           const catData = await api(`/api/v1/categories?module_kind=${currentModuleKind(page)}`);
           cats = normalizeListPayload(catData, "categories");
-          state.categories[page] = cats;
+          state.categories[parentP] = cats;
         } catch (_e) { cats = []; }
       }
-      const defaultNs = page === "templates" ? "templates" : "custom";
+      const defaultNs = parentP === "templates" ? "templates" : "custom";
       const catOptions = cats.map(c => `<option value="${esc(c.namespace)}">${esc(c.zhName || c.zh_name || c.namespace)}</option>`).join("");
       newAlgoState.files = newTemplateFiles("simple", "my_algorithm", "basic");
       newAlgoState.currentFile = newAlgoState.files[0].relative_path;
@@ -920,13 +1097,13 @@
         <div class="new-workspace">
           <div class="editor-top">
             <button onclick="window.switchPage('${page}')">返回</button>
-            <strong>${page === "templates" ? "新建算法模板" : "新建算法"}</strong>
+            <strong>${parentP === "templates" ? "新建算法模板" : "新建算法"}</strong>
             <span class="spacer"></span>
             <button onclick="window.testWorkspaceSource()">测试当前文件</button>
             <button onclick="window.checkWorkspaceCode()">检查代码</button>
             <button class="primary" onclick="window.saveWorkspaceAlgorithm('${moduleKind}')">保存草稿</button>
           </div>
-          ${page === "templates" ? `<details class="template-usage-details" open>
+          ${parentP === "templates" ? `<details class="template-usage-details" open>
             <summary>📖 算法模板说明（点击折叠）</summary>
             <div class="template-usage-body">
               <strong>新建算法模板界面使用说明：</strong><br>
@@ -951,14 +1128,14 @@
               </select>
             </label>
             <label>版本<input value="1.0.0 初始版本" disabled /></label>
-            <label>中文名称<input id="wsZhName" value="${page === "templates" ? "自定义算法模板" : "自定义算法"}" /></label>
+            <label>中文名称<input id="wsZhName" value="${parentP === "templates" ? "自定义算法模板" : "自定义算法"}" /></label>
             <label id="wsNewCatRow" class="full" style="display:none">新分类信息
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <input id="wsCategoryName" placeholder="中文显示名，如 统计算法" style="flex:1;min-width:140px" />
                 <input id="wsCategoryNs" placeholder="英文命名空间，如 statistics" style="flex:1;min-width:140px" />
               </div>
             </label>
-            <label class="wide">标签<input id="wsTags" value="${page === "templates" ? "模板,自定义" : "自定义,组件"}" /></label>
+            <label class="wide">标签<input id="wsTags" value="${parentP === "templates" ? "模板,自定义" : "自定义,组件"}" /></label>
             <label class="full">描述<textarea id="wsDesc" rows="2">说明算法用途、输入输出和适用场景。</textarea></label>
             <label class="full">测试参数 JSON<textarea id="wsKwargs" rows="3">{"data":[0.1,0.6,0.9],"threshold":0.5}</textarea></label>
           </div>
@@ -1345,7 +1522,7 @@
           body: JSON.stringify({ content: getWorkspaceCode(), function: qs("#wsName").value.trim(), kwargs })
         });
         output.classList.remove("hidden");
-        output.innerHTML = `<pre>${esc(JSON.stringify(result, null, 2))}</pre>`;
+        showResultWithRenderBtn(output, result);
       } catch (error) {
         output.classList.remove("hidden");
         output.innerHTML = `<pre>${esc(error.message)}</pre>`;
@@ -1453,7 +1630,7 @@
           });
         }
         showToast("算法已保存为草稿");
-        switchPage(moduleKind === "template" ? "templates" : "components");
+        switchPage(newAlgoState.returnPage || (moduleKind === "template" ? "templates-general" : "components-general"));
       } catch (error) {
         showToast(error.message);
       }
@@ -1554,7 +1731,7 @@
           body: JSON.stringify({ content: qs("#algCode").value, function: name, kwargs })
         });
         out.classList.remove("hidden");
-        out.innerHTML = `<pre>${esc(JSON.stringify(result, null, 2))}</pre>`;
+        showResultWithRenderBtn(out, result);
         showToast("源码测试通过");
       } catch (error) {
         out.classList.remove("hidden");
@@ -1713,15 +1890,20 @@
     }
 
     async function openEditorById(id, page, expandTest = false) {
+      const returnPage = state.page || page;
+      rememberMainScroll(returnPage);
       const collection = state.data[page] || [];
       const item = collection.find(entry => entry.id === id) || { id };
       await openEditor(item, page, expandTest);
+      if (state.editing) state.editing.returnPage = returnPage;
     }
 
     async function openEditor(item, page, expandTest = false) {
+      const returnPage = state.page || page;
+      rememberMainScroll(returnPage);
       const source = await api(`/api/v1/algorithm-source/${safeId(item.id)}`);
       const algo = source.algorithm || item;
-      state.editing = { id: item.id, page, algo, source, package: null };
+      state.editing = { id: item.id, page, returnPage, algo, source, package: null };
       if (algo.packageId) {
         try {
           const packageData = await api(`/api/v1/packages/${safeId(algo.packageId)}`);
@@ -1741,46 +1923,108 @@
       const nsFunc = namespaceFunction(e.algo);
       const isOwner = canManageAlgorithm(e.algo);
       const isComponentEditor = e.page === "components" || e.page === "templates" || e.page === "my-algos";
+      qs("#main").classList.add("editor-active");
       qs("#main").innerHTML = `
         <div class="editor-view" id="editorView">
-          <div class="editor-top">
-            <button onclick="window.closeEditor()">返回</button>
+          <div class="editor-top-info">
             <span class="breadcrumb">${esc(pageTitle(e.page))} / ${esc(getName(e.algo))}</span>
+            <span class="ns-prefix">${esc(nsPrefix)}</span>
+            <div class="namespace-edit" id="nsBox">
+              <input id="nsInput" value="${esc(nsFunc)}" onblur="window.validateNamespace()" />
+              <div class="field-error" id="nsErr"></div>
+            </div>
+            ${!isOwner && state.currentUser ? `<span class="editor-notice">💡 此算法不属于您，点击「保存」将另存为您的私有草稿</span>` : ""}
+          </div>
+          <div class="editor-toolbar" id="editorToolbar">
+            <button onclick="window.closeEditor()">返回</button>
             <button onclick="window.openComponentTestModal()">测试</button>
-            <button onclick="window.checkCurrentEditorSyntax()">检查代码</button>
             <button onclick="window.editCurrentAlgorithmInfo()">基本信息</button>
-            ${e.page === "templates" ? `<button onclick="window.showTemplateUsage('${esc(e.id)}')">使用说明</button>` : ""}
             ${e.page === "templates" ? `<button onclick="window.editTemplateDescription('${esc(e.id)}')">编辑说明</button>` : ""}
-            ${isComponentEditor && state.currentUser?.role === "admin" ? `<button data-status-btn="1" class="success" onclick="window.openAdminPublishModal('${esc(e.id)}')">正式发布</button>` : ""}
-            ${isComponentEditor && state.currentUser?.role !== "admin" && (canSubmitAlgorithm(e.algo)) ? `<button data-status-btn="1" onclick="window.openSubmitModal('${esc(e.id)}')">${getStatus(e.algo) === "rejected" ? "重新提交" : "提交审核"}</button>` : ""}
-            ${isComponentEditor && ownsAlgorithm(e.algo) && getStatus(e.algo) === "reviewing" ? `<button data-status-btn="1" onclick="window.withdrawReview('${esc(e.id)}')">撤回审核</button>` : ""}
+            ${isComponentEditor && state.currentUser?.role === "admin" && !isPublicItem(e.algo) ? `<button data-status-btn="1" class="success" onclick="window.openAdminPublishModal('${esc(e.id)}')">正式发布</button>` : ""}
+            ${isComponentEditor && state.currentUser?.role !== "admin" && canSubmitAlgorithm(e.algo) ? `<button data-status-btn="1" onclick="window.openSubmitModal('${esc(e.id)}')">${getStatus(e.algo) === "rejected" ? "重新提交" : "提交审核"}</button>` : ""}
             <div class="more-menu-wrap" style="position:relative">
-              <button onclick="this.nextElementSibling.classList.toggle('hidden')">更多 ▾</button>
-              <div class="more-menu hidden" style="position:absolute;top:100%;right:0;z-index:200;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;min-width:120px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,.4)">
+              <button onclick="window._toggleMoreMenu(this)">更多 ▾</button>
+              <div class="more-menu hidden" style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;min-width:130px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,.55)">
+                <div class="more-menu-item" onclick="window.checkCurrentEditorSyntax();this.closest('.more-menu').classList.add('hidden')">检查代码</div>
+                ${e.page === "templates" ? `<div class="more-menu-item" onclick="window.showTemplateUsage('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">使用说明</div>` : ""}
                 <div class="more-menu-item" onclick="window.openSnippetOverlay();this.closest('.more-menu').classList.add('hidden')">插入片段</div>
                 <div class="more-menu-item" onclick="window.showVersions('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">版本历史</div>
+                ${isComponentEditor && state.currentUser?.role !== "admin" && ownsAlgorithm(e.algo) && getStatus(e.algo) === "reviewing" ? `<div class="more-menu-item" onclick="window.withdrawReview('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">撤回审核</div>` : ""}
                 ${isComponentEditor && getStatus(e.algo) === "rejected" ? `<div class="more-menu-item" onclick="window.viewRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">查看驳回内容</div><div class="more-menu-item danger" onclick="window.discardRejectedDraft('${esc(e.id)}');this.closest('.more-menu').classList.add('hidden')">放弃修改</div>` : ""}
               </div>
             </div>
+            <div class="toolbar-divider"></div>
+            <div id="blockEditorControls" style="display:contents"></div>
+            <button id="runBtn" title="运行当前文件 (Ctrl+F5)" onclick="window.executeCurrentFile()">▶ 运行</button>
+            <button id="debugBtn" class="btn-debug" title="启动调试" onclick="window.startDebug()">🔴 调试</button>
+            <button title="打开终端 (Ctrl+\`)" onclick="window.openTerminalPanel()">⌗ 终端</button>
             <span class="spacer"></span>
-            <div class="namespace-edit" id="nsBox">
-              <div style="display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:center">
-                <span class="card-ns">${esc(nsPrefix)}</span>
-                <input id="nsInput" value="${esc(nsFunc)}" onblur="window.validateNamespace()" />
-              </div>
-              <div class="field-error" id="nsErr"></div>
-            </div>
             <button onclick="window.saveAndCloseEditor()">保存并退出</button>
             <button class="primary" onclick="window.saveEditorAll()">保存</button>
-            ${!isOwner && state.currentUser ? `<div class="editor-notice">💡 此算法不属于您，点击「保存」将另存为您的私有草稿</div>` : ""}
           </div>
           <div class="editor-main" id="editorMain">
             <aside class="file-tree" id="fileTree"></aside>
             <div class="tree-resize" onmousedown="window.startTreeResize(event)"></div>
             <div class="monaco-host" id="monacoHost"></div>
+            <div class="r-resize-bar" id="rResizeBar" onmousedown="window.startRightResize(event)"></div>
+            <div class="right-test-panel" id="rightTestPanel"></div>
+          </div>
+          <div class="v-resize-bar" id="vResizeBar" onmousedown="window.startTestResize(event)" ondblclick="window.toggleTestPanel()"></div>
+          <div class="test-panel" id="testPanel"></div>
+          <div class="panel-resize-bar" id="panelResizeBar" onmousedown="window.startPanelResize(event)"></div>
+          <div class="bottom-panel" id="bottomPanel">
+            <div id="debugToolbar" class="debug-toolbar" style="display:none">
+              <button onclick="window.sendDebugAction('continue')" title="继续 (F5)">▶ 继续</button>
+              <button onclick="window.sendDebugAction('next')" title="下一步 (F10)">→ 下一步</button>
+              <button onclick="window.sendDebugAction('step')" title="进入 (F11)">↓ 进入</button>
+              <button onclick="window.sendDebugAction('return')" title="跳出 (Shift+F11)">↑ 跳出</button>
+              <button onclick="window.sendDebugAction('restart')" title="重启调试">↺ 重启</button>
+              <span id="debugStatusText" class="debug-status">调试中...</span>
+            </div>
+            <div class="panel-tabs">
+              <button class="panel-tab active" id="tab-output" onclick="window.switchBottomTab('output')">输出</button>
+              <button class="panel-tab" id="tab-terminal" onclick="window.switchBottomTab('terminal')">终端</button>
+              <button class="panel-tab" id="tab-problems" onclick="window.switchBottomTab('problems')">问题</button>
+              <button class="panel-tab" id="tab-debug" onclick="window.switchBottomTab('debug')">🔴 调试</button>
+              <button class="panel-close-btn" onclick="window.toggleBottomPanel(false)">✕</button>
+            </div>
+            <div class="panel-content">
+              <div class="panel-pane" id="outputPane"><div id="execOutput" class="exec-output"><span class="panel-empty">运行后输出将显示在这里</span></div></div>
+              <div class="panel-pane hidden" id="terminalPane"><div id="xtermHost"></div></div>
+              <div class="panel-pane hidden" id="problemsPane"><div id="problemsList"></div></div>
+              <div class="panel-pane hidden" id="debugPane">
+                <div class="debug-panel">
+                  <div class="debug-panel-section">
+                    <h4>变量</h4>
+                    <div id="debugVarsContent"><span class="panel-empty">等待调试启动...</span></div>
+                  </div>
+                  <div class="debug-panel-section">
+                    <h4>调用堆栈</h4>
+                    <div id="debugStackContent"><span class="panel-empty">等待调试启动...</span></div>
+                  </div>
+                  <div class="debug-panel-section" style="display:flex;flex-direction:column;min-height:0">
+                    <h4>调试控制台</h4>
+                    <div id="debugConsoleOutput" class="debug-console-output"></div>
+                    <div class="debug-console-input">
+                      <input id="debugConsoleInput" placeholder="输入 Python 表达式..." onkeydown="if(event.key==='Enter')window._debugConsoleEval()" />
+                      <button onclick="window._debugConsoleEval()">执行</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       `;
+      // 初始化 editorMain 的 --tree-width 变量
+      const editorMain = qs("#editorMain");
+      if (editorMain) editorMain.style.setProperty("--tree-width", "232px");
+      // 初始 test panel 高度为 0
+      const editorView = qs("#editorView");
+      if (editorView) {
+        editorView.style.setProperty("--test-height", "0px");
+        editorView.style.setProperty("--vbar-h", "2px");
+      }
     }
 
     async function loadMonaco() {
@@ -1798,7 +2042,19 @@
               { token: "number", foreground: "b5cea8" },
               { token: "identifier", foreground: "dcdcaa" }
             ],
-            colors: { "editor.background": "#040e1f" }
+            colors: {
+              "editor.background": "#040e1f",
+              "editorSuggestWidget.background": "#0d1e35",
+              "editorSuggestWidget.border": "#1e3a5f",
+              "editorSuggestWidget.foreground": "#d4e6f1",
+              "editorSuggestWidget.selectedBackground": "#1a3a60",
+              "editorSuggestWidget.selectedForeground": "#ffffff",
+              "editorSuggestWidget.highlightForeground": "#7dd3fc",
+              "editorSuggestWidget.selectedHighlightForeground": "#bae6fd",
+              "editorHoverWidget.background": "#0d1e35",
+              "editorHoverWidget.border": "#1e3a5f",
+              "editorHoverWidget.foreground": "#d4e6f1"
+            }
           });
           state.monaco = monaco;
           resolve(monaco);
@@ -1810,6 +2066,36 @@
     async function initEditor() {
       const m = await loadMonaco();
       const e = state.editing;
+
+      // 对模板页面的算法，优先尝试分块编辑器
+      if (e.page === "templates") {
+        // 先查询是否有 blocks 数据
+        let hasBlocks = false;
+        try {
+          const blocksResp = await api(`/api/v1/templates/${safeId(e.id)}/blocks`);
+          hasBlocks = Array.isArray(blocksResp.blocks) && blocksResp.blocks.length > 0;
+        } catch (_) { hasBlocks = false; }
+
+        if (hasBlocks) {
+          // 清理旧分块编辑器（如有）
+          if (state.blockEditor) cleanupBlockEditor();
+          // 替换 monacoHost 为容纳分块编辑器的容器
+          const monacoHost = qs("#monacoHost");
+          if (monacoHost) {
+            monacoHost.id = "blockEditorRoot";
+            monacoHost.style.cssText = "display:flex;flex-direction:column;overflow:hidden;background:var(--bg)";
+          }
+          const container = qs("#blockEditorRoot");
+          if (container) {
+            // 使用 item 对象初始化分块编辑器
+            const item = { id: e.id, type: "template", moduleKind: "template",
+              ownerId: e.algo?.ownerId || e.algo?.owner_id };
+            initBlockEditor(container, item);
+          }
+          return;  // 跳过标准 Monaco 初始化
+        }
+      }
+
       const source = e.source || {};
       let files = [];
       if (Array.isArray(source.folder_files) && source.folder_files.length) {
@@ -1867,6 +2153,7 @@
         tabSize: 4,
         autoIndent: "full",
         folding: true,
+        glyphMargin: true,
         bracketPairColorization: { enabled: true },
         quickSuggestions: { other: true, comments: false, strings: false },
         scrollbar: {
@@ -1879,9 +2166,19 @@
       state.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => saveCurrentFile());
       state.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
       state.editor.onDidChangeModelContent(() => runEditorLocalDiagnostics());
+      // >>> DEBUG INTEGRATION POINT: init breakpoints (replaces old initBreakpoints)
+      initDebugBreakpoints(state.editor);
+      // Debug keyboard shortcuts
+      state.editor.addAction({ id: "debug-continue", label: "继续", keybindings: [m.KeyCode.F5], run: () => sendDebugAction("continue") });
+      state.editor.addAction({ id: "debug-next", label: "下一步", keybindings: [m.KeyCode.F10], run: () => sendDebugAction("next") });
+      state.editor.addAction({ id: "debug-step", label: "进入", keybindings: [m.KeyCode.F11], run: () => sendDebugAction("step") });
+      state.editor.addAction({ id: "debug-stepout", label: "跳出", keybindings: [m.KeyMod.Shift | m.KeyCode.F11], run: () => sendDebugAction("return") });
       await registerCompletionProvider();
       runEditorLocalDiagnostics();
       renderTestPanel();
+      if (state.bottomPanelOpen) {
+        window.setTimeout(() => toggleBottomPanel(true), 100);
+      }
     }
 
     function runEditorLocalDiagnostics(showResult = false) {
@@ -2013,6 +2310,11 @@
       state.editor.focus();
       renderFileTree();
       renderTestPanel();
+      // >>> DEBUG INTEGRATION POINT: sync breakpoint decorations to switched file
+      updateBreakpointDecorations();
+      if (state.debugSession?.currentFile === filename && state.debugSession?.currentLine) {
+        updateCurrentLineDecoration(state.debugSession.currentLine);
+      }
     }
 
     function openSourceFileModal(mode, oldName = "") {
@@ -2212,7 +2514,11 @@
     }
 
     async function saveEditorAll() {
-      await saveCurrentFile();
+      if (state.blockEditor) {
+        await saveBlockEditor();
+      } else {
+        await saveCurrentFile();
+      }
       const input = qs("#nsInput");
       if (state.editing?.algo && input && input.value.trim()) {
         const desired = `${namespacePrefix(state.editing.algo)}${input.value.trim()}`;
@@ -2275,28 +2581,41 @@
       state.completionDisposable = m.languages.registerCompletionItemProvider("python", {
         triggerCharacters: ["."],
         provideCompletionItems(model, position) {
-          const before = model.getValueInRange({
-            startLineNumber: position.lineNumber,
-            startColumn: Math.max(1, position.column - 12),
-            endLineNumber: position.lineNumber,
-            endColumn: position.column
-          });
-          if (!before.includes("alg.")) return { suggestions: [] };
+          const lineText = model.getLineContent(position.lineNumber);
+          const textBefore = lineText.substring(0, position.column - 1);
+          // Match the full alg.xxx.yyy expression up to cursor
+          const algMatch = textBefore.match(/\balg(?:\.\w+)*\.?\w*$/);
+          if (!algMatch) return { suggestions: [] };
+          const startColumn = position.column - algMatch[0].length;
+          const range = {
+            startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+            startColumn, endColumn: position.column
+          };
           return {
             suggestions: state.completionItems.map(item => {
-              const call = item.callPrefix || item.call_prefix || item.label || "";
+              const call = item.callPrefix || item.call_prefix || "";
+              if (!call) return null;
+              const ns = item.namespace || call.split(".")[1] || "";
               const params = item.params || [];
-              const insertText = item.insertText || item.callSnippet || `${call}(${params.map((param, index) => `\${${index + 1}:${param.name || "arg"}}`).join(", ")})`;
+              const insertText = item.callSnippet ||
+                `${call}(${params.map((p, i) => `\${${i + 1}:${p.name || "arg"}}`).join(", ")})`;
+              const zhName = item.zhName || item.zh_name || "";
+              const zhDesc = item.zhDescription || item.zh_description || "";
+              const tags = (item.zhTags || item.zh_tags || []).join("、");
               return {
-                label: call,
+                label: { label: call, description: zhName ? `${zhName} | ${ns}` : ns },
+                filterText: call,
+                sortText: call,
                 kind: m.languages.CompletionItemKind.Function,
                 insertText,
                 insertTextRules: m.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                documentation: item.zhDescription || item.zh_description || item.documentation || "",
-                detail: `${completionPrivacy(item)} · ${item.detail || call}`,
-                range: null
+                detail: completionPrivacy(item),
+                documentation: {
+                  value: [zhName ? `**${zhName}**` : "", zhDesc, tags ? `\n标签: ${tags}` : ""].filter(Boolean).join("\n\n")
+                },
+                range
               };
-            })
+            }).filter(Boolean)
           };
         }
       });
@@ -2333,7 +2652,7 @@
     }
 
     function closeEditor() {
-      const page = state.editing?.page || state.page;
+      const page = state.editing?.returnPage || state.editing?.page || state.page;
       if (state.editor) {
         state.editor.dispose();
         state.editor = null;
@@ -2346,34 +2665,72 @@
       state.viewStates.clear();
       state.editing = null;
       window._activeMonaco = null;
+      // 清理分块编辑器（如有）
+      if (state.blockEditor) cleanupBlockEditor();
+      // 清理 IDE 底部面板
+      if (state.terminalWs) { state.terminalWs.close(); state.terminalWs = null; }
+      if (state.executeWs) { state.executeWs.close(); state.executeWs = null; }
+      if (state.xterm) { state.xterm.dispose(); state.xterm = null; }
+      state.xtermFitAddon = null;
+      state.terminalInited = false;
+      state.bottomPanelOpen = false;
+      // 恢复 main 的 padding
+      const main = qs("#main");
+      if (main) main.classList.remove("editor-active");
+      state.pendingScrollRestore = page;
       switchPage(page);
+      restoreMainScroll(page);
     }
 
     async function saveAndCloseEditor() {
-      await saveCurrentFile();
+      if (state.blockEditor) {
+        await saveBlockEditor();
+      } else {
+        await saveCurrentFile();
+      }
       closeEditor();
     }
 
     function setTestHeight(height) {
       state.testHeight = Math.max(0, Math.min(500, Number(height) || 0));
+      const view = qs("#editorView");
+      if (view) {
+        view.style.setProperty("--test-height", `${state.testHeight}px`);
+        view.style.setProperty("--vbar-h", state.testHeight > 0 ? "8px" : "2px");
+      }
       const panel = qs("#testPanel");
       if (!panel) return;
-      panel.style.height = `${state.testHeight}px`;
       panel.classList.toggle("open", state.testHeight > 0);
-      state.editor?.layout();
+      // Layout all active editors
+      _layoutAllEditors();
+    }
+
+    function toggleTestPanel() {
+      const next = (state.testHeight || 0) > 0 ? 0 : 220;
+      setTestHeight(next);
     }
 
     function startTestResize(event) {
       event.preventDefault();
-      const startY = event.clientY;
-      const startHeight = state.testHeight || 0;
-      function move(moveEvent) {
-        const next = Math.max(120, Math.min(500, startHeight - (moveEvent.clientY - startY)));
-        setTestHeight(next);
+      const view = qs("#editorView");
+      if (!view) return;
+      const viewRect = view.getBoundingClientRect();
+      document.body.style.userSelect = "none";
+      function move(e) {
+        requestAnimationFrame(() => {
+          // Distance from bottom of editorView to mouse = test panel height
+          const next = Math.max(0, Math.min(500, viewRect.bottom - e.clientY));
+          state.testHeight = next;
+          view.style.setProperty("--test-height", `${next}px`);
+          const panel = qs("#testPanel");
+          if (panel) panel.classList.toggle("open", next > 0);
+        });
       }
       function up() {
+        document.body.style.userSelect = "";
         document.removeEventListener("mousemove", move);
         document.removeEventListener("mouseup", up);
+        _layoutAllEditors();
       }
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", up);
@@ -2381,20 +2738,35 @@
 
     function startTreeResize(event) {
       event.preventDefault();
-      const root = qs("#editorView");
+      const main = qs("#editorMain");
+      if (!main) return;
+      const mainRect = main.getBoundingClientRect();
       const startX = event.clientX;
-      const initial = parseInt(getComputedStyle(root).getPropertyValue("--tree-width")) || 232;
-      function move(moveEvent) {
-        const width = Math.max(120, Math.min(320, initial + moveEvent.clientX - startX));
-        root.style.setProperty("--tree-width", `${width}px`);
-        state.editor?.layout();
+      const initial = parseInt(getComputedStyle(main).getPropertyValue("--tree-width")) || 232;
+      document.body.style.userSelect = "none";
+      function move(e) {
+        requestAnimationFrame(() => {
+          const width = Math.max(120, Math.min(320, initial + e.clientX - startX));
+          main.style.setProperty("--tree-width", `${width}px`);
+        });
       }
       function up() {
+        document.body.style.userSelect = "";
         document.removeEventListener("mousemove", move);
         document.removeEventListener("mouseup", up);
+        _layoutAllEditors();
       }
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", up);
+    }
+
+    function _layoutAllEditors() {
+      state.editor?.layout();
+      state.tplEditor?.layout();
+      if (state.blockEditor) {
+        state.blockEditor.editors.forEach(ed => { try { ed.layout(); } catch (_) {} });
+        try { state.blockEditor.sourceEditor?.layout(); } catch (_) {}
+      }
     }
 
     function currentFunctions() {
@@ -2484,11 +2856,11 @@
         topBar.insertBefore(btn, insertBefore);
       };
       const isAdminUser = state.currentUser?.role === "admin";
-      if (isComponentEditor && isAdminUser) {
+      if (isComponentEditor && isAdminUser && !isPublicItem(e.algo)) {
         addBtn("正式发布", "success", () => window.openAdminPublishModal(id));
       } else if (isComponentEditor && canSubmitAlgorithm(e.algo)) {
         addBtn(status === "rejected" ? "重新提交" : "提交审核", "", () => window.openSubmitModal(id));
-      } else if (isComponentEditor && ownsAlgorithm(e.algo) && status === "reviewing") {
+      } else if (isComponentEditor && !isAdminUser && ownsAlgorithm(e.algo) && status === "reviewing") {
         addBtn("撤回审核", "", () => window.withdrawReview(id));
       }
     }
@@ -2616,6 +2988,178 @@
         return;
       }
       out.innerHTML = `<pre>${esc(value)}</pre>`;
+    }
+
+    // ── Smart render helpers ────────────────────────────────────────────────
+    function _jsonToTableData(result) {
+      if (!result || typeof result !== "object") return null;
+      // explicit table output
+      if (result.__output_type__ === "table" && Array.isArray(result.columns) && Array.isArray(result.rows))
+        return { columns: result.columns, rows: result.rows };
+      const data = result.result !== undefined ? result.result : result;
+      if (Array.isArray(data) && data.length && typeof data[0] === "object" && !Array.isArray(data[0])) {
+        const columns = Object.keys(data[0]);
+        const rows = data.map(row => columns.map(c => row[c]));
+        return { columns, rows };
+      }
+      if (Array.isArray(data) && data.length && Array.isArray(data[0])) {
+        const columns = data[0].map((_, i) => `col${i}`);
+        const rows = data;
+        return { columns, rows };
+      }
+      if (!Array.isArray(data) && typeof data === "object") {
+        const values = Object.values(data);
+        if (values.every(v => typeof v !== "object")) {
+          return { columns: ["键", "值"], rows: Object.entries(data) };
+        }
+        if (values.every(v => Array.isArray(v))) {
+          const keys = Object.keys(data);
+          const len = Math.max(...values.map(v => v.length));
+          const columns = ["index", ...keys];
+          const rows = Array.from({ length: len }, (_, i) => [i, ...keys.map(k => data[k][i] ?? "")]);
+          return { columns, rows };
+        }
+      }
+      return null;
+    }
+
+    function _jsonToChartOption(result) {
+      if (!result || typeof result !== "object") return null;
+      if (result.__output_type__ === "chart" && result.option) return result.option;
+      const data = result.result !== undefined ? result.result : result;
+      if (Array.isArray(data) && data.every(v => typeof v === "number")) {
+        return { xAxis: { type: "category", data: data.map((_, i) => i) }, yAxis: { type: "value" }, series: [{ type: "line", data, smooth: true }], tooltip: { trigger: "axis" } };
+      }
+      if (!Array.isArray(data) && typeof data === "object") {
+        const entries = Object.entries(data);
+        if (entries.every(([, v]) => typeof v === "number")) {
+          return { xAxis: { type: "category", data: entries.map(([k]) => k) }, yAxis: { type: "value" }, series: [{ type: "bar", data: entries.map(([, v]) => v) }], tooltip: { trigger: "axis" } };
+        }
+        if (entries.every(([, v]) => Array.isArray(v) && v.every(x => typeof x === "number"))) {
+          const len = Math.max(...entries.map(([, v]) => v.length));
+          return {
+            xAxis: { type: "category", data: Array.from({ length: len }, (_, i) => i) },
+            yAxis: { type: "value" },
+            legend: {},
+            series: entries.map(([name, vals]) => ({ name, type: "line", data: vals, smooth: true })),
+            tooltip: { trigger: "axis" }
+          };
+        }
+      }
+      if (Array.isArray(data) && data.length && typeof data[0] === "object") {
+        const keys = Object.keys(data[0]);
+        const xKey = keys[0];
+        const yKeys = keys.slice(1).filter(k => typeof data[0][k] === "number");
+        if (yKeys.length) {
+          return {
+            xAxis: { type: "category", data: data.map(r => r[xKey]) },
+            yAxis: { type: "value" },
+            legend: yKeys.length > 1 ? {} : undefined,
+            series: yKeys.map(k => ({ name: k, type: "line", data: data.map(r => r[k]), smooth: true })),
+            tooltip: { trigger: "axis" }
+          };
+        }
+      }
+      return null;
+    }
+
+    function showResultWithRenderBtn(container, result) {
+      let jsonStr;
+      try { jsonStr = JSON.stringify(result, null, 2); } catch { jsonStr = String(result); }
+      container.innerHTML = "";
+
+      const ot = result?.__output_type__;
+
+      // ── Image mode: auto-render, provide JSON toggle ──
+      if (ot === "image" && result?.src) {
+        const bar = document.createElement("div");
+        bar.className = "render-mode-bar";
+        bar.innerHTML = `
+          <button class="render-mode-btn active" data-rmode="image">🖼️ 图片</button>
+          <button class="render-mode-btn" data-rmode="json">{ } JSON</button>`;
+        container.appendChild(bar);
+        const content = document.createElement("div");
+        container.appendChild(content);
+        function showImageView() {
+          bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "image"));
+          content.innerHTML = "";
+          if (result.title) {
+            const p = document.createElement("p");
+            p.style.cssText = "color:var(--accent);margin:4px 0 8px;font-size:13px";
+            p.textContent = result.title;
+            content.appendChild(p);
+          }
+          const img = document.createElement("img");
+          img.src = result.src;
+          img.alt = result.alt || "";
+          img.style.cssText = `max-width:${Number(result.width) || 600}px;border-radius:6px;display:block`;
+          content.appendChild(img);
+        }
+        function showJsonView() {
+          bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "json"));
+          content.innerHTML = `<pre>${esc(jsonStr)}</pre>`;
+        }
+        bar.addEventListener("click", e => {
+          const btn = e.target.closest(".render-mode-btn");
+          if (!btn) return;
+          if (btn.dataset.rmode === "image") showImageView(); else showJsonView();
+        });
+        showImageView();
+        return;
+      }
+
+      // render-mode bar
+      const bar = document.createElement("div");
+      bar.className = "render-mode-bar";
+      bar.innerHTML = `
+        <button class="render-mode-btn active" data-rmode="json">{ } JSON</button>
+        <button class="render-mode-btn" data-rmode="table">📋 渲染为表格</button>
+        <button class="render-mode-btn" data-rmode="chart">📊 渲染为图表</button>`;
+      container.appendChild(bar);
+
+      const content = document.createElement("div");
+      container.appendChild(content);
+
+      function showJson() {
+        bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "json"));
+        content.innerHTML = `<pre>${esc(jsonStr)}</pre>`;
+      }
+      function showTable() {
+        bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "table"));
+        const td = _jsonToTableData(result);
+        if (!td) { content.innerHTML = `<pre style="color:var(--warning)">无法转换为表格</pre>`; return; }
+        const thead = `<thead><tr>${td.columns.map(c => `<th>${esc(String(c))}</th>`).join("")}</tr></thead>`;
+        const tbody = `<tbody>${td.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell == null ? "" : String(cell))}</td>`).join("")}</tr>`).join("")}</tbody>`;
+        content.innerHTML = `<div style="overflow:auto"><table class="output-table">${thead}${tbody}</table></div>`;
+      }
+      function showChart() {
+        bar.querySelectorAll(".render-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.rmode === "chart"));
+        const option = _jsonToChartOption(result);
+        if (!option) { content.innerHTML = `<pre style="color:var(--warning)">无法转换为图表</pre>`; return; }
+        const host = document.createElement("div");
+        host.className = "echart-host";
+        content.innerHTML = "";
+        content.appendChild(host);
+        try {
+          const chart = echarts.init(host, "dark");
+          chart.setOption(option);
+          const ro = new ResizeObserver(() => chart.resize());
+          ro.observe(host);
+        } catch (e) { content.innerHTML = `<pre style="color:var(--danger)">${esc(e.message)}</pre>`; }
+      }
+
+      bar.addEventListener("click", e => {
+        const btn = e.target.closest(".render-mode-btn");
+        if (!btn) return;
+        if (btn.dataset.rmode === "json") showJson();
+        else if (btn.dataset.rmode === "table") showTable();
+        else if (btn.dataset.rmode === "chart") showChart();
+      });
+
+      // auto-select mode based on __output_type__
+      if (ot === "table") showTable();
+      else if (ot === "chart") showChart();
+      else showJson();
     }
 
     function testCaseKey() {
@@ -2853,35 +3397,91 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const item = (state.data.components || []).concat(state.data.templates || []).find(i => i.id === id)
         || (state.editing?.id === id ? state.editing.algo : null);
       if (!item) { showToast("算法不存在"); return; }
-      const name = item.zhName || item.funcName || id;
-      const version = item.version || "1.0.0";
-      const hasPublic = !!item.targetPublicCallPrefix;
-      const bumpOptions = [
-        { type: "keep", label: "保持当前版本", v: version },
-        { type: "patch", label: "补丁版本 (patch)", v: _bumpSemver(version, "patch") },
-        { type: "minor", label: "次版本 (minor)", v: _bumpSemver(version, "minor") },
-        { type: "major", label: "主版本 (major)", v: _bumpSemver(version, "major") },
+      let draftInfo = null;
+      try {
+        const draftResp = await api(`/api/v1/algorithms/${safeId(id)}/review-draft`);
+        draftInfo = draftResp?.draft || null;
+      } catch (error) {
+        draftInfo = null;
+      }
+      // Check for namespace conflicts (same as openSubmitModal)
+      let hasConflict = false;
+      let conflictPublicPrefix = "";
+      let conflictBaseVersion = "";
+      let conflictVersionOptions = null;
+      try {
+        const check = await api(`/api/v1/algorithms/${safeId(id)}/submit-check`);
+        hasConflict = !!check.hasConflict;
+        if (hasConflict) {
+          conflictPublicPrefix = check.publicAlgorithm?.callPrefix || item.callPrefix || "";
+          conflictBaseVersion = check.baseVersion || "";
+          conflictVersionOptions = check.versionOptions || null;
+        }
+      } catch (_) {}
+      const draftMeta = draftInfo?.metadata || {};
+      const name = draftMeta.zh_name || item.zhName || item.funcName || id;
+      const desc = draftMeta.zh_description || item.zhDescription || "";
+      const itemTags = item.zhTags || item.tags || [];
+      const tags = Array.isArray(draftMeta.zh_tags) ? draftMeta.zh_tags.join(",") : (Array.isArray(itemTags) ? itemTags.join(",") : "");
+      const baseVersion = draftInfo?.base_public_version || conflictBaseVersion || item.version || "1.0.0";
+      const isIteration = draftInfo?.review_kind === "version_iteration" || !!draftInfo?.target_public_call_prefix || !!item.targetPublicCallPrefix || hasConflict;
+      const defaultType = draftInfo?.version_bump_type || (isIteration ? "patch" : "keep");
+      const bumpOptions = conflictVersionOptions || [
+        { value: baseVersion, type: "keep", label: `保持当前版本 ${baseVersion}` },
+        { value: _bumpSemver(baseVersion, "patch"), type: "patch", label: `补丁版本 patch` },
+        { value: _bumpSemver(baseVersion, "minor"), type: "minor", label: `次版本 minor` },
+        { value: _bumpSemver(baseVersion, "major"), type: "major", label: `主版本 major` },
       ];
-      showModal(`
-        <div class="modal-box" style="max-width:480px">
-          <h3 style="margin:0 0 12px">正式发布 — ${esc(name)}</h3>
-          <p style="color:var(--text-dim);margin:0 0 16px;font-size:13px">
-            管理员直接发布，无需审核流程。${hasPublic ? "这是对已有公有算法的版本迭代。" : "这将把私有算法发布为公有算法。"}
+      const bumpOptsNorm = bumpOptions.map(o => ({ v: o.value || o.v || baseVersion, type: o.type || "patch", label: o.label || o.type }));
+      const selectedVersion = draftInfo?.version_bump || (bumpOptsNorm.find(o => o.type === defaultType)?.v || baseVersion);
+      const conflictHtml = (hasConflict && !draftInfo) ? `
+        <div class="form-row" style="grid-column:1/-1">
+          <label>命名空间冲突</label>
+          <div class="notice warning" style="margin:0;padding:10px 14px;background:rgba(220,150,0,.12);border:1px solid var(--warning,#e0a800);border-radius:6px">
+            该命名空间已被公有算法 <code>${esc(conflictPublicPrefix)}</code> 占用，本次发布将作为<strong>版本迭代</strong>处理，请确认版本策略后发布。
+          </div>
+        </div>
+      ` : "";
+      qs("#modalRoot").classList.remove("hidden");
+      qs("#modalRoot").innerHTML = `
+        <div class="modal" style="max-width:680px">
+          <h3>正式发布：${esc(name)}</h3>
+          <p class="desc" style="margin:0 0 12px">
+            ${isIteration
+              ? `这是对现有公有算法 <code>${esc(draftInfo?.target_public_call_prefix || item.targetPublicCallPrefix || conflictPublicPrefix || item.callPrefix || "")}</code> 的版本迭代，请确认版本策略和提交信息后发布。`
+              : "这是一次新建发布，确认后将进入公有算法库。"}
           </p>
           <div class="form-grid">
+            ${conflictHtml}
             <div class="form-row">
-              <label>当前版本</label>
-              <span style="padding:6px 0;display:block">${esc(version)}</span>
+              <label>发布类型</label>
+              <span class="tag ${isIteration ? "warning" : "success"}">${isIteration ? "版本迭代" : "新建发布"}</span>
             </div>
             <div class="form-row">
-              <label>发布版本号</label>
+              <label>基础版本</label>
+              <span style="padding:6px 0;display:block">${esc(baseVersion)}</span>
+            </div>
+            <div class="form-row">
+              <label>版本迭代方式</label>
               <select id="adminPublishBump" style="width:100%">
-                ${bumpOptions.map(o => `<option value="${esc(o.v)}" data-type="${esc(o.type)}">${esc(o.label)} → ${esc(o.v)}</option>`).join("")}
+                ${bumpOptsNorm.map(o => `<option value="${esc(o.v)}" data-type="${esc(o.type)}" ${o.v === selectedVersion ? "selected" : ""}>${esc(o.label)} → ${esc(o.v)}</option>`).join("")}
               </select>
             </div>
             <div class="form-row">
+              <label>中文名称（可微调）</label>
+              <input id="adminPublishZhName" value="${esc(name)}" />
+            </div>
+            <div class="form-row">
+              <label>描述（可微调）</label>
+              <textarea id="adminPublishDesc" rows="3">${esc(desc)}</textarea>
+            </div>
+            <div class="form-row">
+              <label>标签（逗号分隔）</label>
+              <input id="adminPublishTags" value="${esc(tags)}" />
+            </div>
+            <div class="form-row">
               <label>发布说明 <span style="color:var(--text-dim);font-size:12px">（可选）</span></label>
-              <textarea id="adminPublishNote" rows="2" placeholder="本次发布的主要变更..."></textarea>
+              <textarea id="adminPublishNote" rows="2" placeholder="本次发布的主要变更...">${esc(draftInfo?.note || "")}</textarea>
             </div>
           </div>
           <div class="modal-actions">
@@ -2889,7 +3489,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
             <button class="success" onclick="window.confirmAdminPublish('${esc(id)}')">确认发布</button>
           </div>
         </div>
-      `);
+      `;
     }
 
     function _bumpSemver(v, type) {
@@ -2905,11 +3505,14 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const version_bump = sel ? sel.value : "";
       const version_bump_type = sel?.selectedOptions?.[0]?.dataset?.type || "patch";
       const note = qs("#adminPublishNote")?.value.trim() || "";
+      const zh_name = qs("#adminPublishZhName")?.value.trim() || "";
+      const zh_description = qs("#adminPublishDesc")?.value.trim() || "";
+      const zh_tags = (qs("#adminPublishTags")?.value || "").split(",").map(s => s.trim()).filter(Boolean);
       closeModal();
       try {
         const result = await api(`/api/v1/algorithms/${safeId(id)}/admin-publish`, {
           method: "POST",
-          body: JSON.stringify({ version_bump, version_bump_type, note }),
+          body: JSON.stringify({ version_bump, version_bump_type, note, metadata: { zh_name, zh_description, zh_tags } }),
         });
         showToast("已正式发布");
         await loadModuleData("components");
@@ -3131,30 +3734,34 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const entries = normalizedMeta.length
         ? normalizedMeta.map(param => [param.name, values?.[param.name], param.type || inferTplParamType(values?.[param.name])])
         : Object.entries(values || {}).map(([name, rawValue]) => [name, rawValue, inferTplParamType(rawValue)]);
-      if (state.tplTestMode === "files") {
-        wrap.innerHTML = entries.map(([name, _rv, type]) => {
-          const typeText = String(type || "str");
-          const upload = state.tplFileUploads[name];
-          const btnLabel = upload ? `✓ ${esc(upload.filename)}` : "选择文件";
-          const btnStyle = upload ? "color:#16a34a" : "";
-          const pathInfo = upload
-            ? `<div style="font-size:11px;color:#888;margin-top:2px">路径: ${esc(upload.path)}</div>`
-            : `<div style="font-size:11px;color:#aaa;margin-top:2px">支持图片、音频、npy 等任意格式，文件路径自动注入参数</div>`;
-          return `<div class="param-field"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px"><label style="margin:0">${esc(name)} · ${esc(typeText)}</label><button type="button" class="ghost" style="padding:2px 10px;font-size:12px;${btnStyle}" onclick="window.openTplBinaryUpload('${esc(name)}')">${btnLabel}</button></div>${pathInfo}</div>`;
-        }).join("") || '<div class="empty">未解析到函数参数，请检查函数名或源码。</div>';
-        return;
-      }
+      if (!entries.length) { wrap.innerHTML = '<div class="empty">未解析到函数参数，请检查函数名或源码。</div>'; return; }
       wrap.innerHTML = entries.map(([name, rawValue, type]) => {
         const typeText = String(type || "str");
-        const importButton = /list|dict|DataFrame|dataframe/i.test(typeText)
-          ? `<button type="button" class="ghost" style="padding:2px 10px;font-size:12px" onclick="window.openTplParamImport('${esc(name)}')">导入文件</button>`
-          : "";
-        const head = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><label style="margin:0">${esc(name)} · ${esc(typeText)}</label>${importButton}</div>`;
+        const upload = (state.tplFileUploads || {})[name];
+        const uploadLabel = upload
+          ? (upload.multi ? `✅ ${upload.paths.length} 个文件` : `✅ ${esc(upload.filename)}`)
+          : null;
+        const uploadRow = upload
+          ? `<span style="font-size:11px;color:#16a34a">${uploadLabel}</span>
+             <button type="button" class="ghost" style="padding:1px 7px;font-size:11px;color:var(--text-dim)" onclick="window.clearTplFileUpload('${esc(name)}')" title="移除">✕</button>`
+          : `<label title="单文件" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📄<input type="file" style="display:none" onchange="window.onTplUnifiedFileUpload(event,'${esc(name)}','single')"/></label>
+             <label title="多张图片" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📚<input type="file" multiple style="display:none" onchange="window.onTplUnifiedFileUpload(event,'${esc(name)}','multi')"/></label>
+             <label title="整个文件夹" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📁<input type="file" webkitdirectory style="display:none" onchange="window.onTplUnifiedFileUpload(event,'${esc(name)}','folder')"/></label>`;
+        const head = `<div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;flex-wrap:wrap">
+          <label style="margin:0;flex:1;min-width:80px">${esc(name)} · ${esc(typeText)}</label>
+          <div style="display:flex;gap:3px;align-items:center">${uploadRow}</div>
+        </div>`;
+        if (upload) {
+          const pathInfo = upload.multi
+            ? upload.paths.map(p => `<div style="font-size:11px;color:#888">${esc(p)}</div>`).join("")
+            : `<div style="font-size:11px;color:#888">路径: ${esc(upload.path)}</div>`;
+          return `<div class="param-field">${head}${pathInfo}</div>`;
+        }
         if (/bool/i.test(typeText)) {
-          return `<div class="param-field"><label>${esc(name)} · bool</label><select data-param="${esc(name)}" data-type="bool"><option value="false"${rawValue === false ? " selected" : ""}>false</option><option value="true"${rawValue === true ? " selected" : ""}>true</option></select></div>`;
+          return `<div class="param-field">${head}<select data-param="${esc(name)}" data-type="bool"><option value="false"${rawValue === false ? " selected" : ""}>false</option><option value="true"${rawValue === true ? " selected" : ""}>true</option></select></div>`;
         }
         if (/list|dict|DataFrame|dataframe/i.test(typeText)) {
-          const textValue = rawValue === "" ? "" : JSON.stringify(rawValue, null, 2);
+          const textValue = rawValue === "" ? "" : (typeof rawValue === "string" ? rawValue : JSON.stringify(rawValue, null, 2));
           const placeholder = /DataFrame|dataframe/i.test(typeText)
             ? "支持 CSV / JSON 数组"
             : (/list/i.test(typeText) ? "支持 JSON 数组，或逗号/换行分隔，如 0.1,0.6,0.9" : "支持 JSON 对象，或 key=value / key:value 多行输入");
@@ -3164,7 +3771,58 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           return `<div class="param-field">${head}<input type="number" data-param="${esc(name)}" data-type="${esc(typeText)}" value="${esc(String(rawValue ?? ""))}" /></div>`;
         }
         return `<div class="param-field">${head}<input data-param="${esc(name)}" data-type="${esc(typeText)}" value="${esc(String(rawValue ?? ""))}" /></div>`;
-      }).join("") || '<div class="empty">未解析到函数参数，请检查函数名或源码。</div>';
+      }).join("");
+    }
+
+    async function _uploadFilesHelper(files) {
+      const IMAGE_EXTS = /\.(png|jpe?g|gif|bmp|webp|tiff?|svg)$/i;
+      const fileList = Array.from(files).filter(f => {
+        // For folder uploads only keep image files; for explicit multi keep all
+        return true;
+      });
+      const results = [];
+      for (const file of fileList) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch(BASE + "/api/v1/test/upload-temp", {
+          method: "POST",
+          headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+          body: fd
+        });
+        if (!r.ok) { const txt = await r.text(); throw new Error(txt); }
+        const data = await r.json();
+        results.push({ path: data.path, filename: data.filename || file.name });
+      }
+      return results;
+    }
+
+    async function onTplUnifiedFileUpload(event, paramName, mode) {
+      const files = event.target?.files;
+      if (!files || !files.length) return;
+      const isMulti = mode === "multi" || mode === "folder" || files.length > 1;
+      showToast(`正在上传 ${files.length} 个文件...`);
+      try {
+        const results = await _uploadFilesHelper(files);
+        if (!state.tplFileUploads) state.tplFileUploads = {};
+        const savedValues = {};
+        qsa("#tplTestParams [data-param]").forEach(el => { savedValues[el.dataset.param] = el.value; });
+        if (isMulti) {
+          state.tplFileUploads[paramName] = { multi: true, paths: results.map(r => r.path), filenames: results.map(r => r.filename) };
+        } else {
+          state.tplFileUploads[paramName] = { multi: false, path: results[0].path, filename: results[0].filename };
+        }
+        const paramsMeta = getTplFunctionParams(currentFunction()?.func_name || currentFunction()?.name || "");
+        renderTplTestParams(savedValues, paramsMeta);
+        showToast(`已上传 ${results.length} 个文件`);
+      } catch (e) { showToast("上传出错: " + e.message); }
+    }
+
+    function clearTplFileUpload(paramName) {
+      if (state.tplFileUploads) delete state.tplFileUploads[paramName];
+      const savedValues = {};
+      qsa("#tplTestParams [data-param]").forEach(el => { savedValues[el.dataset.param] = el.value; });
+      const paramsMeta = getTplFunctionParams(currentFunction()?.func_name || currentFunction()?.name || "");
+      renderTplTestParams(savedValues, paramsMeta);
     }
 
     function collectTplTestParams() {
@@ -3212,23 +3870,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       showToast(`已导入 ${file.name} 到参数 ${paramName}`);
     }
 
-    function setTplTestMode(mode) {
-      state.tplTestMode = mode;
-      if (mode === "params") state.tplFileUploads = {};
-      const paramsBtn = qs("#tplModeParamsBtn");
-      const filesBtn = qs("#tplModeFilesBtn");
-      const hint = qs("#tplModeHint");
-      const loadExBtn = qs("#tplLoadExBtn");
-      if (paramsBtn) paramsBtn.classList.toggle("primary", mode === "params");
-      if (filesBtn) filesBtn.classList.toggle("primary", mode === "files");
-      if (hint) hint.textContent = mode === "files"
-        ? "上传文件，文件路径自动注入参数（适合图片 / 音频 / npy）"
-        : "直接在表单中输入参数值";
-      if (loadExBtn) loadExBtn.style.display = mode === "files" ? "none" : "";
-      const fnName = qs("#tplTestFunction")?.value.trim() || qs("#tplName")?.value.trim() || "my_algorithm";
-      const paramsMeta = getTplFunctionParams(fnName);
-      renderTplTestParams({}, paramsMeta);
-    }
+    function setTplTestMode(_mode) { /* unified mode — no-op */ }
 
     function openTplBinaryUpload(paramName) {
       state.tplImportTarget = paramName;
@@ -3247,14 +3889,14 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       try {
         const formData = new FormData();
         formData.append("file", file);
-        const resp = await fetch("/api/v1/test/upload-temp", {
+        const resp = await fetch(BASE + "/api/v1/test/upload-temp", {
           method: "POST",
           headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
           body: formData,
         });
         if (!resp.ok) throw new Error(await resp.text());
         const result = await resp.json();
-        state.tplFileUploads[paramName] = { path: result.path, filename: result.filename || file.name };
+        state.tplFileUploads[paramName] = { multi: false, path: result.path, filename: result.filename || file.name };
         if (statusEl) statusEl.textContent = "";
         showToast(`已上传 ${file.name}`);
         const fnName = qs("#tplTestFunction")?.value.trim() || qs("#tplName")?.value.trim() || "my_algorithm";
@@ -3288,9 +3930,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         <div class="modal" style="max-width:920px;width:min(92vw,920px)">
           <h3>测试代码</h3>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-            <button id="tplModeParamsBtn" class="primary" onclick="window.setTplTestMode('params')">普通参数模式</button>
-            <button id="tplModeFilesBtn" onclick="window.setTplTestMode('files')">外部文件模式</button>
-            <span id="tplModeHint" style="font-size:12px;color:#888">直接在表单中输入参数值</span>
+            <span style="font-size:12px;color:#888">可直接输入参数值，或点击参数右侧「📎 上传」按鈕上传文件（图片、音频、npy 等）</span>
           </div>
           <div class="form-grid" style="margin-bottom:8px">
             <div class="form-row"><label>函数名</label><input id="tplTestFunction" value="${esc(name)}" onblur="window.refreshTplTestParamsFromFunction()" /></div>
@@ -3349,19 +3989,10 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         let kwargs;
         const fnName = qs("#tplTestFunction")?.value.trim() || qs("#tplName")?.value.trim() || "my_algorithm";
         const timeout = Number(qs("#tplTestTimeout")?.value || "5");
-        if (state.tplTestMode === "files") {
-          kwargs = {};
-          const paramsMeta = getTplFunctionParams(fnName);
-          const missing = paramsMeta.filter(p => !state.tplFileUploads[p.name]).map(p => p.name);
-          if (missing.length > 0) {
-            showToast(`请先为以下参数选择文件: ${missing.join(", ")}`);
-            return;
-          }
-          paramsMeta.forEach(p => { kwargs[p.name] = state.tplFileUploads[p.name].path; });
-        } else {
-          kwargs = collectTplTestParams();
-          if (qs("#tplInputExample")) qs("#tplInputExample").value = JSON.stringify(kwargs, null, 2);
-        }
+        kwargs = collectTplTestParams();
+        // Override with uploaded file paths where applicable
+        Object.entries(state.tplFileUploads || {}).forEach(([name, info]) => { kwargs[name] = info.multi ? info.paths : info.path; });
+        if (qs("#tplInputExample")) qs("#tplInputExample").value = JSON.stringify(kwargs, null, 2);
         const result = await api("/api/v1/run-source", {
           method: "POST",
           body: JSON.stringify({
@@ -3373,7 +4004,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         });
         const elapsed = result.elapsed_ms ?? Math.round(performance.now() - started);
         status.textContent = `✅ ${elapsed} ms`;
-        output.innerHTML = `<pre>${esc(JSON.stringify(result.result ?? result, null, 2))}</pre>`;
+        showResultWithRenderBtn(output, result.result ?? result);
       } catch (error) {
         status.textContent = `❌ ${Math.round(performance.now() - started)} ms`;
         output.innerHTML = `<pre>${esc(error.message)}</pre>`;
@@ -3988,7 +4619,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       state.snippetEditing = { id: saveId, snippet };
       qs("#main").innerHTML = `
         <div class="editor-view snippet-editor" id="snippetEditorView">
-          <div class="editor-top">
+          <div class="editor-top-info">
             <button onclick="window.closeSnippetEditor()">返回</button>
             <span class="breadcrumb">代码片段 / ${esc(snippet.zh_name || snippet.name || "新建片段")}</span>
             ${saveId ? `<span class="tag ${statusClass(getStatus(snippet))}">${esc(statusLabel(getStatus(snippet)))}</span>` : `<span class="tag warning">私有草稿</span>`}
@@ -4161,6 +4792,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         closeModal();
         showToast("片段已删除");
         await loadModuleData("snippets");
+        renderNav();
         renderCards("snippets");
       } catch (error) {
         showToast(error.message);
@@ -4250,6 +4882,83 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       qs("#snippetOverlay").classList.add("hidden");
       qs("#snippetOverlay").innerHTML = "";
     }
+
+    function openAlgoCallOverlay() {
+      const overlay = qs("#snippetOverlay");
+      overlay.classList.remove("hidden");
+      overlay.innerHTML = `
+        <div class="overlay-card">
+          <div style="color:#94a3b8;font-size:11px;margin-bottom:8px">Ctrl+Alt+I &nbsp;|&nbsp; 搜索算法，回车插入调用代码</div>
+          <input id="algoCallSearchInput" placeholder="搜索算法名称 / 调用前缀…" autocomplete="off" style="width:100%;box-sizing:border-box" />
+          <div id="algoCallResults" style="max-height:320px;overflow-y:auto;margin-top:6px"></div>
+        </div>
+      `;
+      const input = qs("#algoCallSearchInput");
+      input.focus();
+      const closeOverlay = () => { overlay.classList.add("hidden"); overlay.innerHTML = ""; };
+      input.addEventListener("input", () => _renderAlgoCallResults(input.value));
+      input.addEventListener("keydown", event => {
+        if (event.key === "Escape") { closeOverlay(); }
+        if (event.key === "ArrowDown") { state.algoCallCursor = Math.min(state.algoCallCursor + 1, state.algoCallResults.length - 1); _renderAlgoCallResults(); event.preventDefault(); }
+        if (event.key === "ArrowUp") { state.algoCallCursor = Math.max(state.algoCallCursor - 1, 0); _renderAlgoCallResults(); event.preventDefault(); }
+        if (event.key === "Enter") {
+          const item = state.algoCallResults[state.algoCallCursor];
+          if (item) { _insertAlgoCall(item); closeOverlay(); }
+        }
+      });
+      // 如果补全数据还没加载则先拉取，完成后再渲染结果
+      if (!state.completionItems || state.completionItems.length === 0) {
+        qs("#algoCallResults").innerHTML = '<div class="empty" style="color:#94a3b8;padding:12px">数据加载中…</div>';
+        registerCompletionProvider().then(() => _renderAlgoCallResults(input.value || ""));
+      } else {
+        _renderAlgoCallResults("");
+      }
+    }
+
+    function _renderAlgoCallResults(keyword) {
+      const root = qs("#algoCallResults");
+      if (!root) return;
+      const q = (keyword || "").toLowerCase();
+      const items = state.completionItems || [];
+      const filtered = q
+        ? items.filter(item => {
+            const call = (item.callPrefix || item.call_prefix || "").toLowerCase();
+            const desc = (item.zhDescription || item.zh_description || "").toLowerCase();
+            return call.includes(q) || desc.includes(q);
+          })
+        : items;
+      state.algoCallResults = filtered.slice(0, 30);
+      if (state.algoCallCursor >= state.algoCallResults.length) state.algoCallCursor = 0;
+      root.innerHTML = state.algoCallResults.map((item, index) => {
+        const call = item.callPrefix || item.call_prefix || "";
+        const desc = item.zhDescription || item.zh_description || "";
+        const params = (item.params || []).map(p => p.name || "arg").join(", ");
+        return `
+          <div class="snippet-result ${index === state.algoCallCursor ? "active" : ""}" onclick="window._pickAlgoCall(${index})" style="display:flex;flex-direction:column;gap:3px">
+            <div style="display:flex;align-items:baseline;gap:10px">
+              <code style="color:#7dd3fc;font:13px/1.4 Consolas,'Courier New',monospace;flex-shrink:0">${esc(call)}</code>
+              <span style="color:#94a3b8;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(desc.slice(0, 50))}</span>
+            </div>
+            ${params ? `<span style="color:#6ee7b7;font:11px/1.3 Consolas,'Courier New',monospace">(${esc(params)})</span>` : ""}
+          </div>
+        `;
+      }).join("") || '<div class="empty" style="color:#94a3b8;padding:12px">暂无算法（请稍候数据加载）</div>';
+    }
+
+    function _insertAlgoCall(item) {
+      const call = item.callPrefix || item.call_prefix || "";
+      const params = (item.params || []).map(p => p.name || "arg").join(", ");
+      insertSnippet(`${call}(${params})`);
+    }
+
+    window._pickAlgoCall = function(index) {
+      const item = state.algoCallResults[index];
+      if (!item) return;
+      _insertAlgoCall(item);
+      const overlay = qs("#snippetOverlay");
+      overlay.classList.add("hidden");
+      overlay.innerHTML = "";
+    };
 
     async function searchSnippetOverlay(keyword) {
       try {
@@ -4344,7 +5053,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
             ${filterBtn("rejected", "已驳回", cntRejected)}
           </div>
           <table class="api-table">
-            <thead><tr><th>算法</th><th>命名空间</th><th style="width:110px;white-space:nowrap">审核状态</th><th style="width:80px">类型</th><th style="width:240px;white-space:nowrap">操作</th></tr></thead>
+            <thead><tr><th>算法</th><th>命名空间</th><th style="width:110px;white-space:nowrap">审核状态</th><th style="width:80px">类型</th><th style="width:240px;white-space:nowrap;text-align:center">操作</th></tr></thead>
             <tbody>${filtered.map(row => {
               const live = row._live;
               const rowStatus = row.status;
@@ -4358,7 +5067,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
                 <td><code>${esc(ns)}</code></td>
                 <td style="white-space:nowrap"><span class="tag ${statusClass(rowStatus)}">${esc(reviewStatusLabel(rowStatus))}</span></td>
                 <td>${kindLabel ? `<span class="tag ${kindCls}">${esc(kindLabel)}</span>` : ""}</td>
-                <td style="white-space:nowrap">
+                <td style="white-space:nowrap;text-align:center">
                   ${live ? `<button onclick="window.openEditorById('${esc(liveId)}','${liveKind}',true)">查看/测试</button>` : ""}
                   ${live && rowStatus === "rejected" ? `<button class="ghost" onclick="window.viewRejectReason('${esc(liveId)}')">驳回原因</button><button class="warning" onclick="window.undoRejectReview('${esc(liveId)}')">撤销驳回</button>` : ""}
                   ${live && rowStatus === "reviewing" ? `<button class="success" onclick="window.openAdminPublishModal('${esc(liveId)}')">正式发布</button><button class="danger" onclick="window.rejectReview('${esc(liveId)}')">驳回</button>` : ""}
@@ -4413,10 +5122,12 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       try {
         // 如果我的算法编辑器打开中，跳过 SSE 刷新，避免销毁未保存内容
         if (qs("#myeditor-code")) return;
-        if (["components", "templates", "snippets", "my-algos"].includes(state.page)) {
+        const parentP = parentPageOf(state.page);
+        if (["components", "templates", "snippets", "my-algos"].includes(parentP)) {
           await loadModuleData(state.page);
           renderNav();
           hydrateFilters(state.page);
+          restoreListViewState(state.page);
           renderCards(state.page);
         }
         await registerCompletionProvider();
@@ -4437,14 +5148,718 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       qs("#clock").textContent = new Date().toLocaleString();
     }
 
+    // ── IDE 底部面板函数 ──────────────────────────────────────────────────────
+
+    function switchBottomTab(tab) {
+      state.bottomTab = tab;
+      ["output", "terminal", "problems", "debug"].forEach(t => {
+        const btn = qs(`#tab-${t}`);
+        if (btn) btn.classList.toggle("active", t === tab);
+        const pane = qs(`#${t}Pane`);
+        if (pane) pane.classList.toggle("hidden", t !== tab);
+      });
+      if (tab === "terminal" && !state.terminalInited) initTerminal();
+      if (tab === "problems") refreshProblemsPane();
+    }
+
+    function toggleBottomPanel(open) {
+      state.bottomPanelOpen = (open !== undefined) ? open : !state.bottomPanelOpen;
+      const panel = qs("#bottomPanel");
+      if (panel) panel.classList.toggle("open", state.bottomPanelOpen);
+      const resizeBar = qs("#panelResizeBar");
+      if (resizeBar) resizeBar.classList.toggle("visible", state.bottomPanelOpen);
+    }
+
+    function startPanelResize(event) {
+      event.preventDefault();
+      const view = qs("#editorView");
+      if (!view) return;
+      document.body.style.userSelect = "none";
+      function move(e) {
+        requestAnimationFrame(() => {
+          const newH = Math.max(80, Math.min(600, view.getBoundingClientRect().bottom - e.clientY));
+          qs("#bottomPanel")?.style.setProperty("--panel-h", `${newH}px`);
+        });
+      }
+      function up() {
+        document.body.style.userSelect = "";
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+      }
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    }
+
+    function initTerminal() {
+      if (state.terminalInited) return;
+      if (!window.Terminal) { showToast("xterm.js 未加载，终端不可用"); return; }
+      const host = qs("#xtermHost");
+      if (!host) return;
+      state.xterm = new window.Terminal({
+        theme: { background: "#040e1f", foreground: "#d4e6f1", cursor: "#58a6ff" },
+        fontSize: 13,
+        fontFamily: "monospace",
+        cursorBlink: true,
+        scrollback: 3000
+      });
+      if (window.FitAddon?.FitAddon) {
+        state.xtermFitAddon = new window.FitAddon.FitAddon();
+        state.xterm.loadAddon(state.xtermFitAddon);
+      }
+      if (window.WebLinksAddon?.WebLinksAddon) {
+        state.xterm.loadAddon(new window.WebLinksAddon.WebLinksAddon());
+      }
+      state.xterm.open(host);
+      if (state.xtermFitAddon) state.xtermFitAddon.fit();
+      state.terminalInited = true;
+      connectWsTerminal();
+      const ro = new ResizeObserver(() => { if (state.xtermFitAddon) state.xtermFitAddon.fit(); });
+      ro.observe(host);
+      state.xterm.onData(data => {
+        if (state.terminalWs && state.terminalWs.readyState === WebSocket.OPEN) {
+          state.terminalWs.send(JSON.stringify({ type: "input", data }));
+        }
+      });
+      state.xterm.onResize(({ cols, rows }) => {
+        if (state.terminalWs && state.terminalWs.readyState === WebSocket.OPEN) {
+          state.terminalWs.send(JSON.stringify({ type: "resize", rows, cols }));
+        }
+      });
+    }
+
+    function connectWsTerminal() {
+      if (state.terminalWs && state.terminalWs.readyState === WebSocket.OPEN) return;
+      const token = state.token || localStorage.getItem("algolib_token") || "";
+      const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+      const host = new URL(BASE).host;
+      // 传入算法文件所在目录作为终端 cwd
+      const sourceFile = state.editing?.algo?.sourceFile || "";
+      const cwdParam = sourceFile ? encodeURIComponent(sourceFile.replace(/\/[^\/]+$/, "")) : "";
+      const wsUrl = `${wsProto}//${host}/ws/terminal?token=${encodeURIComponent(token)}${cwdParam ? `&cwd=${cwdParam}` : ""}`;
+      const ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        if (state.xterm) state.xterm.writeln("\x1b[32m[终端已连接]\x1b[0m");
+        if (sourceFile && state.xterm) {
+          state.xterm.writeln(`\x1b[33m📄 ${sourceFile}\x1b[0m`);
+          state.xterm.writeln(`\x1b[2m# 运行: python3 ${sourceFile}\x1b[0m`);
+        }
+        if (state.xterm) {
+          const rows = state.xterm.rows || 24, cols = state.xterm.cols || 80;
+          ws.send(JSON.stringify({ type: "resize", rows, cols }));
+        }
+      };
+      ws.onmessage = ev => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === "output" && state.xterm) state.xterm.write(msg.data);
+        } catch { if (state.xterm) state.xterm.write(ev.data); }
+      };
+      ws.onclose = () => { if (state.xterm) state.xterm.writeln("\r\n\x1b[33m[连接已断开]\x1b[0m"); state.terminalWs = null; };
+      ws.onerror = () => { if (state.xterm) state.xterm.writeln("\r\n\x1b[31m[连接错误]\x1b[0m"); };
+      state.terminalWs = ws;
+    }
+
+    function openTerminalPanel() {
+      toggleBottomPanel(true);
+      switchBottomTab("terminal");
+      if (!state.terminalInited) initTerminal();
+      else if (!state.terminalWs || state.terminalWs.readyState !== WebSocket.OPEN) connectWsTerminal();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // 断点 & 调试系统
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── 断点管理 ──────────────────────────────────────────────────────────────
+    let _dbgBpDecIds = [];
+    let _dbgCurDecIds = [];
+
+    function initDebugBreakpoints(editor) {
+      // >>> DEBUG INTEGRATION POINT: called after Monaco editor is created
+      editor.onMouseDown(e => {
+        const { type } = e.target;
+        const monaco = state.monaco;
+        if (!monaco) return;
+        if (
+          type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+          type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
+        ) {
+          const line = e.target.position?.lineNumber;
+          if (!line || !state.currentFile) return;
+          if (!state.debugBreakpoints.has(state.currentFile)) {
+            state.debugBreakpoints.set(state.currentFile, new Set());
+          }
+          const bps = state.debugBreakpoints.get(state.currentFile);
+          if (bps.has(line)) bps.delete(line);
+          else bps.add(line);
+          updateBreakpointDecorations();
+        }
+      });
+    }
+
+    function updateBreakpointDecorations() {
+      // >>> DEBUG INTEGRATION POINT: called from switchFile and initDebugBreakpoints
+      const editor = state.editor;
+      const monaco = state.monaco;
+      if (!editor || !monaco) return;
+      const bps = state.debugBreakpoints.get(state.currentFile) || new Set();
+      _dbgBpDecIds = editor.deltaDecorations(
+        _dbgBpDecIds,
+        Array.from(bps).map(line => ({
+          range: new monaco.Range(line, 1, line, 1),
+          options: {
+            isWholeLine: true,
+            className: "debug-breakpoint-line",
+            glyphMarginClassName: "debug-breakpoint-glyph",
+            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          },
+        }))
+      );
+    }
+
+    function updateCurrentLineDecoration(line) {
+      const editor = state.editor;
+      const monaco = state.monaco;
+      if (!editor || !monaco) return;
+      _dbgCurDecIds = editor.deltaDecorations(
+        _dbgCurDecIds,
+        line
+          ? [
+              {
+                range: new monaco.Range(line, 1, line, 1),
+                options: {
+                  isWholeLine: true,
+                  className: "debug-current-line",
+                  glyphMarginClassName: "debug-current-glyph",
+                },
+              },
+            ]
+          : []
+      );
+    }
+
+    function clearAllBreakpoints() {
+      state.debugBreakpoints.clear();
+      updateBreakpointDecorations();
+      updateBlockBreakpointDecorations();
+    }
+
+    // ── 分块编辑器断点支持 ────────────────────────────────────────────────────
+
+    /** 分块模式下使用的虚拟文件名（与后端保持一致） */
+    function getBlockFileName() {
+      const funcName = state.editing?.algo?.funcName;
+      return funcName ? `${funcName}.py` : "__template__.py";
+    }
+
+    /** 计算 blockId 对应块在合并文件中的行偏移量（0-based） */
+    function getBlockLineOffset(blockId) {
+      if (!state.blockEditor) return 0;
+      const sorted = [...state.blockEditor.blocks].sort((a, b) => a.order - b.order);
+      let offset = 0;
+      for (const block of sorted) {
+        if (block.id === blockId) return offset;
+        offset += block.code.split('\n').length;
+      }
+      return offset;
+    }
+
+    /** 为单个分块 Monaco 实例绑定断点点击事件 */
+    function initBlockDebugBreakpoints(editor, blockId, monaco) {
+      editor.onMouseDown(e => {
+        const { type } = e.target;
+        if (
+          type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+          type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
+        ) {
+          const localLine = e.target.position?.lineNumber;
+          if (!localLine) return;
+          syncEditorsToBlocks();
+          const filename = getBlockFileName();
+          const globalLine = getBlockLineOffset(blockId) + localLine;
+          if (!state.debugBreakpoints.has(filename)) {
+            state.debugBreakpoints.set(filename, new Set());
+          }
+          const bps = state.debugBreakpoints.get(filename);
+          if (bps.has(globalLine)) bps.delete(globalLine);
+          else bps.add(globalLine);
+          updateBlockBreakpointDecorations();
+        }
+      });
+    }
+
+    /** 刷新所有分块编辑器的断点装饰 */
+    function updateBlockBreakpointDecorations() {
+      if (!state.blockEditor) return;
+      const monaco = state.monaco;
+      if (!monaco) return;
+      syncEditorsToBlocks();
+      const filename = getBlockFileName();
+      const bps = state.debugBreakpoints.get(filename) || new Set();
+      if (!state.blockEditor._bpDecIds) state.blockEditor._bpDecIds = new Map();
+      state.blockEditor.editors.forEach((ed, blockId) => {
+        const offset = getBlockLineOffset(blockId);
+        const block = state.blockEditor.blocks.find(b => b.id === blockId);
+        const lineCount = block ? block.code.split('\n').length : 0;
+        const localBps = Array.from(bps).filter(g => g > offset && g <= offset + lineCount);
+        const prevIds = state.blockEditor._bpDecIds.get(blockId) || [];
+        const newIds = ed.deltaDecorations(
+          prevIds,
+          localBps.map(g => ({
+            range: new monaco.Range(g - offset, 1, g - offset, 1),
+            options: {
+              isWholeLine: true,
+              className: "debug-breakpoint-line",
+              glyphMarginClassName: "debug-breakpoint-glyph",
+              stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+            },
+          }))
+        );
+        state.blockEditor._bpDecIds.set(blockId, newIds);
+      });
+    }
+
+    /** 在正确的分块编辑器上显示当前调试行（globalLine 为合并文件中的行号） */
+    function updateBlockCurrentLineDecoration(globalLine) {
+      if (!state.blockEditor) return;
+      const monaco = state.monaco;
+      if (!monaco) return;
+      syncEditorsToBlocks();
+      if (!state.blockEditor._curDecIds) state.blockEditor._curDecIds = new Map();
+      state.blockEditor.editors.forEach((ed, blockId) => {
+        const offset = getBlockLineOffset(blockId);
+        const block = state.blockEditor.blocks.find(b => b.id === blockId);
+        const lineCount = block ? block.code.split('\n').length : 0;
+        const localLine = (globalLine && globalLine > offset && globalLine <= offset + lineCount)
+          ? globalLine - offset : null;
+        const prevIds = state.blockEditor._curDecIds.get(blockId) || [];
+        const newIds = ed.deltaDecorations(
+          prevIds,
+          localLine ? [{
+            range: new monaco.Range(localLine, 1, localLine, 1),
+            options: {
+              isWholeLine: true,
+              className: "debug-current-line",
+              glyphMarginClassName: "debug-current-glyph",
+            },
+          }] : []
+        );
+        state.blockEditor._curDecIds.set(blockId, newIds);
+        if (localLine) ed.revealLineInCenter(localLine);
+      });
+    }
+
+    // ── 调试会话 ──────────────────────────────────────────────────────────────
+
+    function updateDebugStatus(html) {
+      const el = qs("#debugStatusText");
+      if (el) el.innerHTML = html;
+    }
+
+    function startDebug() {
+      if (state.debugSession) {
+        stopDebug();
+        return;
+      }
+
+      // Collect all file contents
+      let files = [];
+      if (state.blockEditor) {
+        // 分块编辑器模式：将所有 block 合并为一个文件
+        syncEditorsToBlocks();
+        const sorted = [...state.blockEditor.blocks].sort((a, b) => a.order - b.order);
+        const mergedContent = sorted.map(b => b.code).join("");
+        const blockFileName = getBlockFileName();
+        files = [{ filename: blockFileName, content: mergedContent }];
+      } else {
+        state.models.forEach((model, filename) => {
+          files.push({ filename, content: model.getValue() });
+        });
+      }
+      if (files.length === 0) { showToast("没有可调试的文件"); return; }
+
+      // Find entry file (is_entry flag) and function name
+      let entry_file = null;
+      if (state.blockEditor) {
+        entry_file = getBlockFileName();
+      } else {
+        state.fileMeta.forEach((meta, filename) => {
+          if (meta.is_entry) entry_file = filename;
+        });
+        if (!entry_file) entry_file = state.currentFile || files[0].filename;
+      }
+      const entry_func = state.editing?.algo?.funcName || "main";
+
+      // Collect breakpoints
+      const breakpoints = {};
+      state.debugBreakpoints.forEach((bpSet, filename) => {
+        if (bpSet.size > 0) breakpoints[filename] = Array.from(bpSet);
+      });
+
+      // Collect test params
+      let params = {};
+      try {
+        const page = state.editing?.page || "";
+        if (page === "component" || page === "components") {
+          params = state._pendingDebugParams ?? collectCompTestParams();
+          state._pendingDebugParams = null;
+        } else if (page === "templates" || page === "template") {
+          // 读取模板页面「输入示例 JSON」字段（与「运行」按钮行为一致）
+          const raw = qs("#tplInputExample")?.value || "{}";
+          let parsed = {};
+          try { parsed = JSON.parse(raw); } catch (_e) {}
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) parsed = {};
+          params = parsed;
+        }
+      } catch (_e) {}
+
+      // Set editor read-only during debug
+      if (state.blockEditor) {
+        state.blockEditor.editors.forEach(ed => ed.updateOptions({ readOnly: true }));
+      } else {
+        state.editor?.updateOptions({ readOnly: true });
+      }
+
+      const token = state.token || localStorage.getItem("algolib_token") || "";
+      const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+      const host = new URL(BASE).host;
+      const wsUrl = `${wsProto}//${host}/ws/debug?token=${encodeURIComponent(token)}`;
+      const ws = new WebSocket(wsUrl);
+
+      const startMsg = { action: "start", files, entry_file, entry_func, params, breakpoints };
+      state.debugSession = {
+        ws,
+        status: "connecting",
+        currentFile: null,
+        currentLine: null,
+        variables: [],
+        stack: [],
+        consoleLog: [],
+        startMsg,
+      };
+
+      ws.onopen = () => ws.send(JSON.stringify(startMsg));
+      ws.onmessage = ev => {
+        try { handleDebugMessage(JSON.parse(ev.data)); } catch (_e) {}
+      };
+      ws.onclose = () => cleanupDebug();
+      ws.onerror = () => { showToast("调试连接失败"); cleanupDebug(); };
+
+      // Update toolbar button to "stop"
+      const btn = qs("#debugBtn");
+      if (btn) {
+        btn.textContent = "⏹ 停止";
+        btn.className = "btn-debug-stop";
+        btn.onclick = () => window.stopDebug();
+      }
+    }
+
+    function stopDebug() {
+      if (!state.debugSession) return;
+      try { state.debugSession.ws.send(JSON.stringify({ action: "quit" })); } catch (_e) {}
+      setTimeout(() => { try { state.debugSession?.ws.close(); } catch (_e) {} }, 200);
+      cleanupDebug();
+    }
+
+    function cleanupDebug() {
+      if (state.blockEditor) {
+        // 恢复分块编辑器可写状态，清除当前行装饰
+        state.blockEditor.editors.forEach((ed, blockId) => {
+          const block = state.blockEditor.blocks.find(b => b.id === blockId);
+          ed.updateOptions({ readOnly: !!(block?.locked && !state.blockEditor.designMode) });
+        });
+        updateBlockCurrentLineDecoration(null);
+      } else {
+        state.editor?.updateOptions({ readOnly: false });
+        updateCurrentLineDecoration(null);
+      }
+      state.debugSession = null;
+      const toolbar = qs("#debugToolbar");
+      if (toolbar) toolbar.style.display = "none";
+      const btn = qs("#debugBtn");
+      if (btn) {
+        btn.textContent = "🔴 调试";
+        btn.className = "btn-debug";
+        btn.onclick = () => window.startDebug();
+      }
+    }
+
+    function handleDebugMessage(msg) {
+      if (!state.debugSession) return;
+
+      switch (msg.type) {
+        case "started":
+          state.debugSession.status = "running";
+          const toolbar = qs("#debugToolbar");
+          if (toolbar) toolbar.style.display = "flex";
+          toggleBottomPanel(true);
+          switchBottomTab("debug");
+          showToast("调试已启动");
+          break;
+
+        case "stopped":
+          state.debugSession.status = "paused";
+          state.debugSession.currentFile = msg.file;
+          state.debugSession.currentLine = msg.line;
+          // Clear running state — we're paused at a breakpoint
+          const toolbar2 = qs("#debugToolbar");
+          if (toolbar2) toolbar2.classList.remove("running");
+          if (state.blockEditor) {
+            updateBlockCurrentLineDecoration(msg.line);
+          } else {
+            if (msg.file && msg.file !== state.currentFile && state.models.has(msg.file)) {
+              switchFile(msg.file);
+            }
+            updateCurrentLineDecoration(msg.line);
+            state.editor?.revealLineInCenter(msg.line);
+          }
+          updateDebugStatus(`暂停于 ${msg.func}() 第 ${msg.line} 行`);
+          break;
+
+        case "locals":
+          state.debugSession.variables = msg.variables || [];
+          renderDebugVariables();
+          break;
+
+        case "stack":
+          state.debugSession.stack = msg.frames || [];
+          renderDebugStack();
+          break;
+
+        case "eval_result":
+          appendDebugConsole("cmd", `>>> ${msg.expression}`);
+          if (msg.error) appendDebugConsole("error", msg.error);
+          else appendDebugConsole("result", msg.result || "");
+          break;
+
+        case "output":
+          appendDebugConsole(msg.stream === "stderr" ? "error" : "result", msg.data);
+          break;
+
+        case "ended": {
+          const reason = msg.reason || "completed";
+          const ms = (msg.elapsed_ms || 0).toFixed(0);
+          showToast(`调试结束：${reason}（耗时 ${ms}ms）`);
+          cleanupDebug();
+          break;
+        }
+
+        case "error":
+          appendDebugConsole("error", msg.message || "未知错误");
+          break;
+      }
+    }
+
+    function sendDebugAction(action, extra) {
+      if (!state.debugSession?.ws) { showToast("调试会话未启动"); return; }
+      const msg = { action };
+      if (action === "eval" && extra) msg.expression = extra;
+      if (action === "restart" && state.debugSession.startMsg) {
+        state.debugSession.ws.send(JSON.stringify(state.debugSession.startMsg));
+        return;
+      }
+      // Show "running" state while executing between breakpoints
+      if (["continue", "next", "step", "return"].includes(action)) {
+        const toolbar = qs("#debugToolbar");
+        if (toolbar) toolbar.classList.add("running");
+        updateDebugStatus('<span class="debug-running-dot"></span>执行中...');
+      }
+      state.debugSession.ws.send(JSON.stringify(msg));
+    }
+
+    function _debugConsoleEval() {
+      const input = qs("#debugConsoleInput");
+      const expr = input?.value?.trim();
+      if (!expr) return;
+      sendDebugAction("eval", expr);
+      if (input) input.value = "";
+    }
+
+    // ── UI 渲染 ────────────────────────────────────────────────────────────────
+
+    function renderDebugVariables() {
+      const el = qs("#debugVarsContent");
+      if (!el) return;
+      const vars = state.debugSession?.variables || [];
+      if (!vars.length) {
+        el.innerHTML = '<span class="panel-empty">无局部变量</span>';
+        return;
+      }
+      el.innerHTML = vars.map(v =>
+        `<div class="debug-var-item"><span class="debug-var-name">${esc(v.name)}</span>` +
+        `<span class="debug-var-type"> :${esc(v.type)}</span>` +
+        ` = <span class="debug-var-value">${esc(v.repr)}</span></div>`
+      ).join("");
+    }
+
+    function renderDebugStack() {
+      const el = qs("#debugStackContent");
+      if (!el) return;
+      const frames = state.debugSession?.stack || [];
+      if (!frames.length) {
+        el.innerHTML = '<span class="panel-empty">无堆栈信息</span>';
+        return;
+      }
+      el.innerHTML = frames.map((f, i) =>
+        `<div class="debug-stack-item${i === 0 ? " active" : ""}" onclick="window._debugJumpFrame(${i})">` +
+        `<span class="debug-stack-func">${esc(f.func)}</span> ` +
+        `<span class="debug-stack-loc">(${esc(f.file)}:${f.line})</span></div>`
+      ).join("");
+    }
+
+    function appendDebugConsole(type, text) {
+      if (!state.debugSession) return;
+      state.debugSession.consoleLog.push({ type, text });
+      const el = qs("#debugConsoleOutput");
+      if (!el) return;
+      const entry = document.createElement("div");
+      entry.className = `debug-console-entry ${type}`;
+      entry.textContent = text;
+      el.appendChild(entry);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function _debugJumpFrame(idx) {
+      const frame = state.debugSession?.stack?.[idx];
+      if (!frame) return;
+      if (frame.file && state.models.has(frame.file)) {
+        if (frame.file !== state.currentFile) switchFile(frame.file);
+        state.editor?.revealLineInCenter(frame.line);
+      }
+    }
+
+    window.clearAllBreakpoints = clearAllBreakpoints;
+    window.startDebug = startDebug;
+    window.stopDebug = stopDebug;
+    window.sendDebugAction = sendDebugAction;
+    window._debugConsoleEval = _debugConsoleEval;
+    window._debugJumpFrame = _debugJumpFrame;
+
+    // ▶ 运行：直接执行当前代码
+    function executeCurrentFile() {
+      const model = state.editor?.getModel();
+      if (!model) { showToast("编辑器未就绪"); return; }
+      toggleBottomPanel(true);
+      switchBottomTab("output");
+      runCodeViaWs(model.getValue());
+    }
+
+    function _setRunBtnRunning(running) {
+      const btn = qs("#runBtn");
+      if (!btn) return;
+      if (running) {
+        btn.classList.add("running");
+        btn.disabled = true;
+        btn.dataset.origText = btn.textContent;
+        btn.textContent = "运行中...";
+      } else {
+        btn.classList.remove("running");
+        btn.disabled = false;
+        btn.textContent = btn.dataset.origText || "▶ 运行";
+      }
+    }
+
+    function runCodeViaWs(code) {
+      const out = qs("#execOutput");
+      if (out) out.innerHTML = '<span class="info">正在运行…</span>';
+      _setRunBtnRunning(true);
+      const _onResult = () => _setRunBtnRunning(false);
+      if (state.executeWs && state.executeWs.readyState === WebSocket.OPEN) {
+        state.executeWs.send(JSON.stringify({ action: "run", code }));
+        // Patch result handler to also reset button for existing ws
+        const origMsg = state.executeWs.onmessage;
+        state.executeWs.onmessage = ev => {
+          if (origMsg) origMsg.call(state.executeWs, ev);
+          try {
+            const m = JSON.parse(ev.data);
+            if (m.type === "result") _setRunBtnRunning(false);
+          } catch {}
+        };
+        return;
+      }
+      const token = state.token || localStorage.getItem("algolib_token") || "";
+      const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+      const host = new URL(BASE).host;
+      const ws = new WebSocket(`${wsProto}//${host}/ws/execute?token=${encodeURIComponent(token)}`);
+      ws.onopen = () => ws.send(JSON.stringify({ action: "run", code }));
+      ws.onmessage = ev => {
+        try {
+          const msg = JSON.parse(ev.data);
+          const outEl = qs("#execOutput");
+          if (!outEl) return;
+          if (msg.type === "stdout") outEl.innerHTML += `<span class="so">${esc(msg.data)}</span>`;
+          else if (msg.type === "stderr") outEl.innerHTML += `<span class="se">${esc(msg.data)}</span>`;
+          else if (msg.type === "result") {
+            const cls = msg.success ? "ok" : "err";
+            outEl.innerHTML += `<span class="${cls}">── 退出码 ${msg.exit_code}，耗时 ${Math.round(msg.elapsed_ms)}ms ──</span>`;
+            _setRunBtnRunning(false);
+          }
+          outEl.scrollTop = outEl.scrollHeight;
+        } catch { /* ignore */ }
+      };
+      ws.onerror = () => {
+        const outEl = qs("#execOutput");
+        if (outEl) outEl.innerHTML += '<span class="err">WebSocket 连接失败</span>';
+        _setRunBtnRunning(false);
+      };
+      state.executeWs = ws;
+    }
+
+    function refreshProblemsPane() {
+      const list = qs("#problemsList");
+      if (!list) return;
+      if (!state.editor || !state.monaco) { list.innerHTML = '<span class="panel-empty">暂无问题</span>'; return; }
+      const model = state.editor.getModel();
+      if (!model) { list.innerHTML = '<span class="panel-empty">暂无问题</span>'; return; }
+      const markers = state.monaco.editor.getModelMarkers({ resource: model.uri });
+      if (!markers.length) { list.innerHTML = '<span class="panel-empty">✔ 没有检测到问题</span>'; return; }
+      list.innerHTML = markers.map(mk => {
+        const sevClass = mk.severity >= 8 ? "psev-error" : "psev-warn";
+        const sevLabel = mk.severity >= 8 ? "错误" : "警告";
+        const ln = mk.startLineNumber, col = mk.startColumn;
+        return `<div class="problem-row" onclick="jumpToLine(${ln},${col})" title="跳转到第 ${ln} 行">
+          <span class="${sevClass}">${sevLabel}</span>
+          <span class="prob-pos">行 ${ln}</span>
+          <span class="prob-msg">${esc(mk.message)}</span>
+        </div>`;
+      }).join("");
+    }
+
+    // 问题条目跳转
+    let _flashDecIds = [];
+    function jumpToLine(line, col) {
+      const editor = window._activeMonaco, monaco = state.monaco;
+      if (!editor || !monaco) return;
+      editor.revealLineInCenter(line);
+      editor.setPosition({ lineNumber: line, column: Math.max(1, col || 1) });
+      editor.focus();
+      if (_flashDecIds.length) _flashDecIds = editor.deltaDecorations(_flashDecIds, []);
+      _flashDecIds = editor.deltaDecorations([], [{
+        range: new monaco.Range(line, 1, line, 1),
+        options: { isWholeLine: true, className: "flash-highlight-line" }
+      }]);
+      setTimeout(() => { _flashDecIds = editor.deltaDecorations(_flashDecIds, []); }, 1200);
+    }
+    window.jumpToLine = jumpToLine;
+
     function bindGlobalKeys() {
       document.addEventListener("keydown", event => {
         if (event.ctrlKey && event.altKey && !event.metaKey && event.key.toLowerCase() === "s") {
           event.preventDefault();
           openSnippetOverlay();
         }
+        if (event.ctrlKey && event.altKey && !event.metaKey && event.key.toLowerCase() === "i") {
+          event.preventDefault();
+          openAlgoCallOverlay();
+        }
         if (event.key === "Escape" && !qs("#snippetOverlay").classList.contains("hidden")) {
           closeSnippetOverlay();
+        }
+        if (event.ctrlKey && !event.altKey && !event.metaKey && event.key === "F5") {
+          if (state.editor) { event.preventDefault(); executeCurrentFile(); }
+        }
+        if (event.ctrlKey && !event.altKey && !event.metaKey && event.key === "`") {
+          if (qs("#editorView")) { event.preventDefault(); openTerminalPanel(); }
         }
       });
       qs("#modalRoot").addEventListener("click", event => {
@@ -4455,6 +5870,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           qsa(".more-menu").forEach(m => m.classList.add("hidden"));
         }
       });
+      window.addEventListener("resize", () => _layoutAllEditors());
     }
 
     function showLoginPage() {
@@ -4546,6 +5962,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         state.categories["my-algos"] = Object.keys(cats).map(ns => ({ namespace: ns, zh_name: ns }));
         renderNav();
         hydrateFilters("my-algos");
+        restoreListViewState("my-algos");
         renderCards("my-algos");
       } catch (err) {
         if (qs("#list")) qs("#list").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
@@ -4647,7 +6064,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           <div style="display:flex;gap:8px;margin-top:6px">
             <button onclick="window.runMyAlgoTest('${esc(algoId)}')">▶ 运行</button>
           </div>
-          <pre id="mytest-output" style="margin-top:8px;background:var(--surface-2,#1e1e1e);border:1px solid var(--line);border-radius:6px;padding:10px;font-size:12px;min-height:60px;white-space:pre-wrap;overflow:auto;max-height:300px"></pre>
+          <div id="mytest-output" class="output" style="margin-top:8px;min-height:60px"></div>
         </div>
       </div>`;
 
@@ -4735,7 +6152,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           method: "POST",
           body: JSON.stringify({ content: codeEl.value, kwargs: params }),
         });
-        outputEl.textContent = JSON.stringify(data.result ?? data, null, 2);
+        showResultWithRenderBtn(outputEl, data.result ?? data);
       } catch (err) {
         outputEl.textContent = "错误：" + err.message;
       }
@@ -4791,22 +6208,24 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     }
 
     async function withdrawMyAlgoReview(algoId) {
-      if (!confirm("确定撤回审核提交？算法将返回草稿状态。")) return;
-      try {
-        await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}/withdraw`, { method: "POST" });
-        showToast("已撤回提交");
-        if (qs("#my-algo-list")) refreshMyAlgoList();
-        else switchPage("my-algos");
-      } catch (err) { showToast(err.message); }
+      showConfirm("确定撤回审核提交？算法将返回草稿状态。", async () => {
+        try {
+          await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}/withdraw`, { method: "POST" });
+          showToast("已撤回提交");
+          if (qs("#my-algo-list")) refreshMyAlgoList();
+          else switchPage("my-algos");
+        } catch (err) { showToast(err.message); }
+      });
     }
 
     async function deleteMyAlgo(algoId) {
-      if (!confirm("确定删除该算法？此操作不可恢复。")) return;
-      try {
-        await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}`, { method: "DELETE" });
-        showToast("算法已删除");
-        refreshMyAlgoList();
-      } catch (err) { showToast(err.message); }
+      showConfirm("确定删除该算法？此操作不可恢复。", async () => {
+        try {
+          await api(`/api/v1/algorithms/${encodeURIComponent(algoId)}`, { method: "DELETE" });
+          showToast("算法已删除");
+          refreshMyAlgoList();
+        } catch (err) { showToast(err.message); }
+      });
     }
 
     async function renderUsersPage() {
@@ -4923,156 +6342,1482 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     }
 
     async function deleteUser(userId) {
-      if (!confirm("确定删除该用户？此操作不可恢复。")) return;
+      showConfirm("确定删除该用户？此操作不可恢复。", async () => {
+        try {
+          await api(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
+          showToast("用户已删除");
+          renderUsersPage();
+        } catch (err) { showToast(err.message); }
+      });
+    }
+
+    function openTestPage(algo) {
+      if (!algo) { showToast("未找到可测试的算法"); return; }
+      const host = document.getElementById("testFullpage");
+      const main = document.getElementById("main");
+      if (!host || !main) return;
+      if (host.parentElement !== main) main.appendChild(host);
+      state._testAlgo = algo;
+      state._testParamValues = {};
+      state._testResult = null;
+      state._testOutputTab = "output";
+      state._compTestAlgo = algo;
+      state._compTestSource = null;
+      state.compTestFileUploads = {};
+      state._tpFileState = {};
+      state.testPanelOpen = true;
+      host.style.display = "flex";
+      document.getElementById("testAlgoName").textContent = algo.zhName || algo.funcName || algo.name || algo.id || "算法";
+      document.getElementById("testAlgoNs").textContent = algo.callPrefix || algo.displayNamespace || "";
+      renderTestParamCards(algo.params || []);
+      document.getElementById("outputContent").innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>';
+      document.getElementById("testElapsed").textContent = "";
+      switchOutputTab("output");
+      initTestDivider();
+    }
+
+    function closeTestPage() {
+      const host = document.getElementById("testFullpage");
+      if (host) host.style.display = "none";
+      state._testAlgo = null;
+      state._testParamValues = {};
+      state._testResult = null;
+      state.testPanelOpen = false;
+    }
+
+    function renderTestParamCards(params) {
+      const container = document.getElementById("testParamCards");
+      if (!container) return;
+      container.innerHTML = "";
+      if (!params || !params.length) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "color:var(--text-secondary);text-align:center;padding:32px";
+        empty.textContent = "该算法无需输入参数";
+        container.appendChild(empty);
+        return;
+      }
+      for (const param of params) {
+        container.appendChild(renderOneParamCard(param));
+      }
+    }
+
+    function renderOneParamCard(param) {
+      const card = document.createElement("div");
+      card.className = "param-card";
+      card.dataset.paramName = param.name || "";
+      const header = document.createElement("div");
+      header.className = "param-card-header";
+      const left = document.createElement("div");
+      const nameEl = document.createElement("span");
+      nameEl.className = "param-name";
+      nameEl.textContent = param.name || "";
+      const badge = document.createElement("span");
+      badge.className = "param-type-badge";
+      const widgetHint = param.widget_hint || inferParamWidget(param);
+      badge.textContent = WIDGET_ZH[widgetHint] || param.type || widgetHint;
+      left.appendChild(nameEl);
+      left.appendChild(badge);
+      header.appendChild(left);
+
+      const canSkip = param.nullable || param.default === "None" || param.default === null;
+      let skipInput = null;
+      if (canSkip) {
+        const skip = document.createElement("label");
+        skip.className = "param-skip-label";
+        skipInput = document.createElement("input");
+        skipInput.type = "checkbox";
+        skipInput.className = "param-skip-checkbox";
+        skipInput.dataset.testSkip = param.name || "";
+        const skipText = document.createElement("span");
+        skipText.textContent = "跳过此参数";
+        skip.appendChild(skipInput);
+        skip.appendChild(skipText);
+        header.appendChild(skip);
+      }
+      card.appendChild(header);
+
+      const desc = param.description || param.desc || param.zh_description || "";
+      if (desc) {
+        const descEl = document.createElement("div");
+        descEl.className = "param-desc";
+        descEl.textContent = desc;
+        card.appendChild(descEl);
+      }
+
+      const inputArea = document.createElement("div");
+      inputArea.className = "param-input-area";
+      switch (widgetHint) {
+        case "int": renderIntInput(param, inputArea); break;
+        case "float": renderFloatInput(param, inputArea); break;
+        case "str": renderStrInput(param, inputArea); break;
+        case "text": renderTextInput(param, inputArea); break;
+        case "bool": renderBoolInput(param, inputArea); break;
+        case "list":
+        case "dict":
+        case "json":
+        case "dataframe": renderJsonInput(param, inputArea); break;
+        case "image": renderImageInput(param, inputArea); break;
+        case "images": renderImagesInput(param, inputArea); break;
+        case "file":
+        case "audio":
+        case "video": renderFileInput(param, inputArea); break;
+        case "literal": renderLiteralInput(param, inputArea); break;
+        case "url": renderUrlInput(param, inputArea); break;
+        case "datetime": renderDatetimeInput(param, inputArea); break;
+        case "color": renderColorInput(param, inputArea); break;
+        case "password": renderPasswordInput(param, inputArea); break;
+        default: renderStrInput(param, inputArea); break;
+      }
+      if (skipInput) {
+        skipInput.addEventListener("change", () => {
+          inputArea.style.opacity = skipInput.checked ? "0.4" : "1";
+          inputArea.style.pointerEvents = skipInput.checked ? "none" : "";
+        });
+      }
+      card.appendChild(inputArea);
+      return card;
+    }
+
+    function _cleanDefaultValue(value) {
+      if (value === undefined || value === null || value === "None") return "";
+      let text = String(value);
+      if ((text.startsWith("'") && text.endsWith("'")) || (text.startsWith('"') && text.endsWith('"'))) text = text.slice(1, -1);
+      return text;
+    }
+
+    function renderIntInput(param, container) {
+      const input = document.createElement("input");
+      input.type = "number"; input.step = "1"; input.className = "input-number";
+      input.placeholder = "请输入整数";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value === "" ? null : parseInt(input.value, 10); });
+      if (input.value !== "") state._testParamValues[param.name] = parseInt(input.value, 10);
+      container.appendChild(input);
+    }
+
+    function renderFloatInput(param, container) {
+      const input = document.createElement("input");
+      input.type = "number"; input.step = "any"; input.className = "input-number";
+      input.placeholder = "请输入数字";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value === "" ? null : parseFloat(input.value); });
+      if (input.value !== "") state._testParamValues[param.name] = parseFloat(input.value);
+      container.appendChild(input);
+    }
+
+    function renderStrInput(param, container) {
+      const input = document.createElement("input");
+      input.type = "text"; input.className = "input-text"; input.placeholder = "请输入文本";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value; });
+      if (input.value) state._testParamValues[param.name] = input.value;
+      container.appendChild(input);
+    }
+
+    function renderTextInput(param, container) {
+      const ta = document.createElement("textarea");
+      ta.className = "input-textarea"; ta.rows = 4; ta.placeholder = "请输入长文本";
+      ta.value = _cleanDefaultValue(param.default);
+      ta.addEventListener("input", () => { state._testParamValues[param.name] = ta.value; });
+      if (ta.value) state._testParamValues[param.name] = ta.value;
+      container.appendChild(ta);
+    }
+
+    function renderBoolInput(param, container) {
+      const group = document.createElement("div"); group.className = "input-bool-group";
+      const btnTrue = document.createElement("button"); btnTrue.type = "button"; btnTrue.className = "input-bool-btn"; btnTrue.textContent = "是 (True)";
+      const btnFalse = document.createElement("button"); btnFalse.type = "button"; btnFalse.className = "input-bool-btn"; btnFalse.textContent = "否 (False)";
+      function setVal(val) {
+        state._testParamValues[param.name] = val;
+        btnTrue.classList.toggle("active", val === true);
+        btnFalse.classList.toggle("active", val === false);
+      }
+      btnTrue.onclick = () => setVal(true);
+      btnFalse.onclick = () => setVal(false);
+      if (param.default === "True" || param.default === true) setVal(true);
+      else if (param.default === "False" || param.default === false) setVal(false);
+      group.appendChild(btnTrue); group.appendChild(btnFalse);
+      container.appendChild(group);
+    }
+
+    function renderJsonInput(param, container) {
+      const ta = document.createElement("textarea");
+      ta.className = "input-json-box"; ta.rows = 6;
+      if (param.widget_hint === "dataframe") ta.placeholder = '请输入表格数据，支持 JSON 数组或 CSV 格式\n例如：[{"name":"张三","age":25},{"name":"李四","age":30}]';
+      else if (param.widget_hint === "list") ta.placeholder = "请输入列表，支持 JSON 格式\n例如：[1, 2, 3] 或每行一个值";
+      else if (param.widget_hint === "dict") ta.placeholder = '请输入字典，支持 JSON 格式\n例如：{"key": "value"}';
+      else ta.placeholder = "请输入 JSON 数据";
+      const def = _cleanDefaultValue(param.default);
+      if (def) ta.value = def;
+      ta.addEventListener("input", () => { state._testParamValues[param.name] = ta.value; });
+      if (ta.value) state._testParamValues[param.name] = ta.value;
+      container.appendChild(ta);
+
+      const toolbar = document.createElement("div"); toolbar.className = "json-toolbar";
+      const fmtBtn = document.createElement("button"); fmtBtn.type = "button"; fmtBtn.className = "json-toolbar-btn"; fmtBtn.textContent = "格式化";
+      fmtBtn.onclick = () => {
+        try {
+          ta.value = JSON.stringify(JSON.parse(ta.value), null, 2);
+          state._testParamValues[param.name] = ta.value;
+        } catch (e) { showToast("JSON 格式错误"); }
+      };
+      const importBtn = document.createElement("button"); importBtn.type = "button"; importBtn.className = "json-toolbar-btn"; importBtn.textContent = "从文件导入";
+      importBtn.onclick = () => {
+        const fi = document.createElement("input"); fi.type = "file"; fi.accept = ".json,.csv,.txt";
+        fi.onchange = () => {
+          const file = fi.files[0]; if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (e) => { ta.value = e.target.result; state._testParamValues[param.name] = ta.value; };
+          reader.readAsText(file);
+        };
+        fi.click();
+      };
+      toolbar.appendChild(fmtBtn); toolbar.appendChild(importBtn);
+      container.appendChild(toolbar);
+    }
+
+    function renderImageInput(param, container) {
+      let currentMode = "base64";
+      const dropzone = document.createElement("div"); dropzone.className = "image-dropzone";
+      const text = document.createElement("div"); text.className = "image-dropzone-text"; text.textContent = "点击选择或拖拽图片到此处";
+      const hint = document.createElement("div"); hint.className = "image-dropzone-hint"; hint.textContent = "支持 JPG、PNG、GIF、WebP 格式，也可 Ctrl+V 粘贴";
+      dropzone.appendChild(text); dropzone.appendChild(hint);
+      const fileInput = document.createElement("input"); fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.style.display = "none";
+      const previewContainer = document.createElement("div"); previewContainer.className = "image-preview-container"; previewContainer.style.display = "none";
+      const fileInfoEl = document.createElement("div"); fileInfoEl.className = "image-file-info";
+      let selectedFile = null;
+
+      function handleFile(file) {
+        if (!file || !file.type.startsWith("image/")) { showToast("请选择图片文件"); return; }
+        if (file.size > 50 * 1024 * 1024) { showToast("图片不能超过 50MB"); return; }
+        selectedFile = file;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const dataUrl = e.target.result;
+          previewContainer.innerHTML = "";
+          const item = document.createElement("div"); item.className = "image-preview-item";
+          const img = document.createElement("img"); img.src = dataUrl;
+          const removeBtn = document.createElement("button"); removeBtn.type = "button"; removeBtn.className = "image-preview-remove"; removeBtn.textContent = "×";
+          removeBtn.onclick = () => { selectedFile = null; previewContainer.style.display = "none"; dropzone.style.display = "flex"; fileInfoEl.textContent = ""; state._testParamValues[param.name] = undefined; };
+          item.appendChild(img); item.appendChild(removeBtn); previewContainer.appendChild(item);
+          previewContainer.style.display = "flex"; dropzone.style.display = "none";
+          fileInfoEl.textContent = file.name + " (" + (file.size / 1024).toFixed(1) + " KB)";
+          if (currentMode === "base64") {
+            state._testParamValues[param.name] = extractPureBase64(dataUrl);
+          } else if (currentMode === "path") {
+            state._testParamValues[param.name] = await uploadFullTestTempFile(file);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+
+      dropzone.onclick = () => fileInput.click();
+      fileInput.onchange = () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); };
+      dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add("drag-over"); };
+      dropzone.ondragleave = () => { dropzone.classList.remove("drag-over"); };
+      dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove("drag-over"); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); };
+      container.addEventListener("paste", (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) { if (item.type.startsWith("image/")) { handleFile(item.getAsFile()); break; } }
+      });
+      container.setAttribute("tabindex", "0");
+      container.appendChild(fileInput); container.appendChild(dropzone); container.appendChild(previewContainer); container.appendChild(fileInfoEl);
+
+      const modeSelector = document.createElement("div"); modeSelector.className = "image-mode-selector";
+      ["编码", "路径", "网址"].forEach((label, i) => {
+        const mode = ["base64", "path", "url"][i];
+        const btn = document.createElement("button"); btn.type = "button"; btn.className = "image-mode-btn" + (i === 0 ? " active" : "");
+        btn.textContent = label; btn.dataset.mode = mode;
+        btn.onclick = async () => {
+          modeSelector.querySelectorAll(".image-mode-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active"); currentMode = mode;
+          let urlInput = container.querySelector(".image-url-input");
+          if (mode === "url") {
+            dropzone.style.display = "none"; previewContainer.style.display = "none";
+            if (!urlInput) {
+              urlInput = document.createElement("input"); urlInput.type = "url"; urlInput.className = "input-url image-url-input";
+              urlInput.placeholder = "请输入图片网址 (https://...)";
+              urlInput.addEventListener("input", () => { state._testParamValues[param.name] = urlInput.value; });
+              container.insertBefore(urlInput, modeSelector);
+            }
+            urlInput.style.display = "block";
+          } else {
+            if (urlInput) urlInput.style.display = "none";
+            if (!previewContainer.querySelector("img")) dropzone.style.display = "flex";
+            if (selectedFile && mode === "path") state._testParamValues[param.name] = await uploadFullTestTempFile(selectedFile);
+          }
+        };
+        modeSelector.appendChild(btn);
+      });
+      container.appendChild(modeSelector);
+    }
+
+    function renderImagesInput(param, container) {
+      const files = [];
+      state._testParamValues[param.name] = [];
+      const fileInput = document.createElement("input"); fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.multiple = true; fileInput.style.display = "none";
+      const dropzone = document.createElement("div"); dropzone.className = "image-dropzone";
+      const text = document.createElement("div"); text.className = "image-dropzone-text"; text.textContent = "点击选择或拖拽多张图片到此处";
+      const hint = document.createElement("div"); hint.className = "image-dropzone-hint"; hint.textContent = "可多次添加，单张最大 50MB";
+      dropzone.appendChild(text); dropzone.appendChild(hint);
+      const previewContainer = document.createElement("div"); previewContainer.className = "image-preview-container";
+      const counter = document.createElement("div"); counter.className = "image-file-info"; counter.textContent = "已选 0 张";
+      function refreshValues() {
+        state._testParamValues[param.name] = [];
+        previewContainer.innerHTML = "";
+        files.forEach((file, index) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            state._testParamValues[param.name][index] = extractPureBase64(e.target.result);
+            const item = document.createElement("div"); item.className = "image-preview-item";
+            const img = document.createElement("img"); img.src = e.target.result;
+            const removeBtn = document.createElement("button"); removeBtn.type = "button"; removeBtn.className = "image-preview-remove"; removeBtn.textContent = "×";
+            removeBtn.onclick = () => { files.splice(index, 1); refreshValues(); };
+            item.appendChild(img); item.appendChild(removeBtn); previewContainer.appendChild(item);
+          };
+          reader.readAsDataURL(file);
+        });
+        counter.textContent = "已选 " + files.length + " 张";
+      }
+      function addFiles(list) {
+        Array.from(list || []).forEach(file => {
+          if (!file.type.startsWith("image/")) return;
+          if (file.size <= 50 * 1024 * 1024) files.push(file);
+        });
+        refreshValues();
+      }
+      dropzone.onclick = () => fileInput.click();
+      fileInput.onchange = () => addFiles(fileInput.files);
+      dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add("drag-over"); };
+      dropzone.ondragleave = () => dropzone.classList.remove("drag-over");
+      dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove("drag-over"); addFiles(e.dataTransfer.files); };
+      container.appendChild(fileInput); container.appendChild(dropzone); container.appendChild(previewContainer); container.appendChild(counter);
+    }
+
+    function renderFileInput(param, container) {
+      const uploadArea = document.createElement("div"); uploadArea.className = "file-upload-area";
+      const uploadText = document.createElement("div"); uploadText.className = "image-dropzone-text"; uploadText.textContent = "点击选择或拖拽文件到此处";
+      uploadArea.appendChild(uploadText);
+      const fi = document.createElement("input"); fi.type = "file"; fi.style.display = "none";
+      const widget = param.widget_hint || "";
+      if (widget === "audio") fi.accept = "audio/*";
+      if (widget === "video") fi.accept = "video/*";
+      const infoEl = document.createElement("div");
+      const previewEl = document.createElement("div");
+      function handleFileUpload(file) {
+        if (!file) return;
+        if (file.size > 50 * 1024 * 1024) { showToast("文件不能超过 50MB"); return; }
+        infoEl.innerHTML = "";
+        const info = document.createElement("div"); info.className = "file-info";
+        const nameSpan = document.createElement("span"); nameSpan.textContent = file.name;
+        const sizeSpan = document.createElement("span"); sizeSpan.style.color = "var(--text-secondary)"; sizeSpan.textContent = "(" + (file.size / 1024).toFixed(1) + " KB)";
+        const removeBtn = document.createElement("button"); removeBtn.type = "button"; removeBtn.className = "file-remove-btn"; removeBtn.textContent = "删除";
+        removeBtn.onclick = () => { infoEl.innerHTML = ""; previewEl.innerHTML = ""; uploadArea.style.display = "flex"; state._testParamValues[param.name] = undefined; };
+        info.appendChild(nameSpan); info.appendChild(sizeSpan); info.appendChild(removeBtn); infoEl.appendChild(info);
+        uploadArea.style.display = "none";
+        previewEl.innerHTML = "";
+        if (file.type.startsWith("image/")) {
+          const reader = new FileReader(); reader.onload = (e) => {
+            const img = document.createElement("img"); img.src = e.target.result; img.style.maxWidth = "100px"; img.style.maxHeight = "80px"; img.style.borderRadius = "4px"; img.style.marginTop = "6px";
+            previewEl.appendChild(img);
+          }; reader.readAsDataURL(file);
+        } else if (["text/csv", "application/json", "text/plain"].includes(file.type) || file.name.match(/\.(csv|json|txt)$/)) {
+          if (file.size < 10240) {
+            const reader = new FileReader(); reader.onload = (e) => {
+              const allText = String(e.target.result);
+              const lines = allText.split("\n").slice(0, 5).join("\n");
+              const pre = document.createElement("div"); pre.className = "file-preview-text"; pre.textContent = lines + (allText.split("\n").length > 5 ? "\n..." : "");
+              previewEl.appendChild(pre);
+            }; reader.readAsText(file);
+          }
+        }
+        uploadFullTestTempFile(file).then(path => { state._testParamValues[param.name] = path; }).catch(err => showToast("文件上传失败: " + err.message));
+      }
+      uploadArea.onclick = () => fi.click();
+      fi.onchange = () => { if (fi.files[0]) handleFileUpload(fi.files[0]); };
+      uploadArea.ondragover = (e) => { e.preventDefault(); uploadArea.classList.add("drag-over"); };
+      uploadArea.ondragleave = () => { uploadArea.classList.remove("drag-over"); };
+      uploadArea.ondrop = (e) => { e.preventDefault(); uploadArea.classList.remove("drag-over"); if (e.dataTransfer.files[0]) handleFileUpload(e.dataTransfer.files[0]); };
+      container.appendChild(fi); container.appendChild(uploadArea); container.appendChild(infoEl); container.appendChild(previewEl);
+    }
+
+    function renderLiteralInput(param, container) {
+      const select = document.createElement("select"); select.className = "input-select";
+      const defaultOpt = document.createElement("option"); defaultOpt.value = ""; defaultOpt.textContent = "请选择..."; defaultOpt.disabled = true; defaultOpt.selected = true;
+      select.appendChild(defaultOpt);
+      (param.widget_options || []).forEach(opt => {
+        const o = document.createElement("option"); o.value = opt; o.textContent = opt;
+        if (param.default && (_cleanDefaultValue(param.default) === opt)) { o.selected = true; state._testParamValues[param.name] = opt; }
+        select.appendChild(o);
+      });
+      select.addEventListener("change", () => { state._testParamValues[param.name] = select.value; });
+      container.appendChild(select);
+    }
+
+    function renderUrlInput(param, container) {
+      const input = document.createElement("input"); input.type = "url"; input.className = "input-url"; input.placeholder = "https://...";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value; });
+      if (input.value) state._testParamValues[param.name] = input.value;
+      container.appendChild(input);
+    }
+
+    function renderDatetimeInput(param, container) {
+      const input = document.createElement("input"); input.type = "datetime-local"; input.className = "input-text";
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value ? new Date(input.value).toISOString() : ""; });
+      if (input.value) state._testParamValues[param.name] = new Date(input.value).toISOString();
+      container.appendChild(input);
+    }
+
+    function renderColorInput(param, container) {
+      const wrapper = document.createElement("div"); wrapper.style.display = "flex"; wrapper.style.alignItems = "center"; wrapper.style.gap = "8px";
+      const input = document.createElement("input"); input.type = "color"; input.value = _cleanDefaultValue(param.default) || "#000000";
+      const label = document.createElement("span"); label.style.fontSize = "13px"; label.style.color = "var(--text-secondary)"; label.textContent = input.value;
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value; label.textContent = input.value; });
+      state._testParamValues[param.name] = input.value;
+      wrapper.appendChild(input); wrapper.appendChild(label); container.appendChild(wrapper);
+    }
+
+    function renderPasswordInput(param, container) {
+      const wrapper = document.createElement("div"); wrapper.style.display = "flex"; wrapper.style.gap = "8px"; wrapper.style.alignItems = "center";
+      const input = document.createElement("input"); input.type = "password"; input.className = "input-text"; input.style.flex = "1"; input.placeholder = "请输入密码/密钥";
+      const toggleBtn = document.createElement("button"); toggleBtn.type = "button"; toggleBtn.className = "json-toolbar-btn"; toggleBtn.textContent = "显示";
+      toggleBtn.onclick = () => { input.type = input.type === "password" ? "text" : "password"; toggleBtn.textContent = input.type === "password" ? "显示" : "隐藏"; };
+      input.value = _cleanDefaultValue(param.default);
+      input.addEventListener("input", () => { state._testParamValues[param.name] = input.value; });
+      if (input.value) state._testParamValues[param.name] = input.value;
+      wrapper.appendChild(input); wrapper.appendChild(toggleBtn); container.appendChild(wrapper);
+    }
+
+    function initTestDivider() {
+      const divider = document.getElementById("testDivider");
+      const inputPanel = document.getElementById("testInputPanel");
+      const body = document.querySelector(".test-body");
+      if (!divider || !inputPanel || !body || divider.dataset.bound === "1") return;
+      divider.dataset.bound = "1";
+      let isDragging = false;
+      divider.addEventListener("mousedown", (e) => { isDragging = true; e.preventDefault(); document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none"; });
+      document.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        const rect = body.getBoundingClientRect();
+        let newWidth = e.clientX - rect.left;
+        newWidth = Math.max(280, Math.min(newWidth, rect.width * 0.8));
+        inputPanel.style.width = newWidth + "px";
+      });
+      document.addEventListener("mouseup", () => { if (isDragging) { isDragging = false; document.body.style.cursor = ""; document.body.style.userSelect = ""; } });
+    }
+
+    async function uploadFullTestTempFile(file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const headers = {};
+      const token = localStorage.getItem("algolib_token");
+      if (token) headers.Authorization = "Bearer " + token;
+      const resp = await fetch(BASE + "/api/v1/upload-temp", { method: "POST", body: formData, headers });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.detail || data.error || "上传失败");
+      return data.path;
+    }
+
+    function _csvToRows(text) {
+      const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean);
+      if (!lines.length) return [];
+      const headers = lines[0].split(",").map(x => x.trim());
+      return lines.slice(1).map(line => {
+        const cells = line.split(",").map(x => x.trim());
+        const row = {};
+        headers.forEach((h, i) => { row[h || `列${i + 1}`] = parseScalarToken(cells[i] ?? ""); });
+        return row;
+      });
+    }
+
+    function normalizeFullTestValue(param, value) {
+      const widget = param.widget_hint || inferParamWidget(param);
+      const type = String(param.type || param.annotation || "str");
+      if (value === undefined || value === null || value === "") return value;
+      if (["int", "float", "bool", "image", "images", "file", "audio", "video", "url", "datetime", "color", "password"].includes(widget)) return value;
+      if (["list", "dict", "json", "dataframe"].includes(widget)) {
+        if (typeof value !== "string") return value;
+        try { return JSON.parse(value); } catch (e) {
+          if (widget === "dataframe" && value.includes("\n") && value.includes(",")) return _csvToRows(value);
+          if (widget === "list") return value.split(/\r?\n|,/).map(x => parseScalarToken(x)).filter(x => x !== "");
+          return value;
+        }
+      }
+      return parseParamValueByType(type, value);
+    }
+
+    function collectFullTestParams() {
+      const algo = state._testAlgo;
+      const payload = {};
+      for (const param of (algo?.params || [])) {
+        const name = param.name;
+        const skip = document.querySelector(`[data-test-skip="${CSS.escape(name)}"]`);
+        if (skip?.checked) continue;
+        payload[name] = normalizeFullTestValue(param, state._testParamValues[name]);
+      }
+      return payload;
+    }
+
+    async function runFullTest() {
+      const btn = document.getElementById("testRunBtn");
+      const elapsedEl = document.getElementById("testElapsed");
+      const started = performance.now();
+      if (btn) { btn.disabled = true; btn.textContent = "运行中..."; }
+      if (elapsedEl) elapsedEl.textContent = "";
       try {
-        await api(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
-        showToast("用户已删除");
-        renderUsersPage();
-      } catch (err) { showToast(err.message); }
+        const algo = state._testAlgo;
+        if (!algo) throw new Error("未选择算法");
+        const kwargs = collectFullTestParams();
+        const status = algo.publishStatus || algo.status || "";
+        const body = {
+          namespace: algo.namespace,
+          function: algo.funcName || algo.name || "main",
+          params: kwargs
+        };
+        if (status !== "published") body.allow_unpublished = true;
+        const result = await api("/api/v1/run", { method: "POST", body: JSON.stringify(body) });
+        state._testResult = result;
+        const elapsed = result.elapsed_ms ?? Math.round(performance.now() - started);
+        if (elapsedEl) elapsedEl.textContent = "耗时：" + elapsed + " ms";
+        const hint = result.output_hint || inferOutputHintFromSample(result.result ?? result);
+        if (hint === "chart") switchOutputTab("chart");
+        else if (hint === "table") switchOutputTab("structured");
+        else switchOutputTab("output");
+      } catch (err) {
+        state._testResult = { success: false, error: err.message, output_hint: "error", result: null };
+        if (elapsedEl) elapsedEl.textContent = "运行失败：" + Math.round(performance.now() - started) + " ms";
+        switchOutputTab("output");
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "运行测试"; }
+      }
     }
 
-    // ── Component test modal (Req 5 / Req 3) ──────────────────────────
-    async function openComponentTestModalById(id) {
-      const allComps = [...(state.data.components || [])];
-      let algo = allComps.find(a => a.id === id);
-      if (!algo) { showToast("找不到该算法信息"); return; }
-      _openCompTestModal(algo, null);
+    function switchOutputTab(tab) {
+      state._testOutputTab = tab;
+      document.querySelectorAll("#outputTabs .output-tab").forEach(el => el.classList.toggle("active", el.dataset.tab === tab));
+      renderFullTestOutput();
     }
 
+    function renderFullTestOutput() {
+      const content = document.getElementById("outputContent");
+      if (!content) return;
+      const pack = state._testResult;
+      if (!pack) {
+        content.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>';
+        return;
+      }
+      const result = pack.result ?? pack;
+      const hint = pack.output_hint || inferOutputHintFromSample(result);
+      if (hint === "error" || pack.success === false) {
+        content.innerHTML = `<div class="output-error">${esc(pack.error || "执行失败")}</div>`;
+        return;
+      }
+      if (state._testOutputTab === "structured") {
+        if (hint === "table" || Array.isArray(result)) content.innerHTML = renderFullOutputTable(result);
+        else content.innerHTML = `<div class="output-json json-tree">${renderJsonTree(result)}</div>`;
+      } else if (state._testOutputTab === "chart") {
+        content.innerHTML = renderFullOutputChart(result, hint);
+      } else {
+        content.innerHTML = renderFullOutputRaw(result, hint);
+      }
+    }
+
+    function inferOutputHintFromSample(sample) {
+      if (sample === null || sample === undefined) return "error";
+      if (typeof sample === "string") {
+        if (_isBase64Image(sample)) return "image";
+        if (sample.trim().startsWith("<") && /<\/?[a-z][\s\S]*>/i.test(sample)) return "html";
+        return "text";
+      }
+      if (Array.isArray(sample)) {
+        if (sample.every(v => typeof v === "string" && _isBase64Image(v))) return "images";
+        if (sample.every(v => v && typeof v === "object" && !Array.isArray(v))) return "table";
+        if (sample.every(v => typeof v === "number")) return "chart";
+        return "json";
+      }
+      if (typeof sample === "object") {
+        if (sample.__output_type__ === "table") return "table";
+        if ("filename" in sample && ("content" in sample || "base64" in sample)) return "file";
+        if (["x", "y", "labels", "values"].some(k => k in sample)) return "chart";
+        return "json";
+      }
+      return "text";
+    }
+
+    function renderFullOutputRaw(result, hint) {
+      if (hint === "image") {
+        const src = String(result).startsWith("data:") ? result : "data:image/png;base64," + result;
+        return `<img class="output-image" src="${esc(src)}" alt="运行结果图片" onclick="window.showImageFullscreen('${esc(src)}')">`;
+      }
+      if (hint === "images" && Array.isArray(result)) {
+        return `<div class="output-images-grid">${result.map(src => {
+          const full = String(src).startsWith("data:") ? src : "data:image/png;base64," + src;
+          return `<img class="output-image" src="${esc(full)}" alt="运行结果图片" onclick="window.showImageFullscreen('${esc(full)}')">`;
+        }).join("")}</div>`;
+      }
+      if (hint === "html") return `<iframe style="width:100%;min-height:360px;border:1px solid var(--border);border-radius:6px;background:#fff" srcdoc="${esc(result)}"></iframe>`;
+      if (hint === "file" && result && typeof result === "object") return renderFullOutputFile(result);
+      if (typeof result === "string" || typeof result === "number" || typeof result === "boolean") return `<div class="output-text">${esc(String(result))}</div>`;
+      return `<pre class="output-json">${esc(JSON.stringify(result, null, 2))}</pre>`;
+    }
+
+    function renderFullOutputTable(result) {
+      const spec = _tableSpecFromResult(result);
+      if (!spec.columns.length) return '<div class="output-text">无法转换为表格</div>';
+      const thead = `<thead><tr>${spec.columns.map(col => `<th>${esc(col)}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${spec.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell === undefined || cell === null ? "" : String(cell))}</td>`).join("")}</tr>`).join("")}</tbody>`;
+      return `<div style="overflow:auto;max-height:70vh"><table class="output-table">${thead}${tbody}</table></div>`;
+    }
+
+    function renderFullOutputChart(result, hint) {
+      if (hint !== "chart") return '<div class="output-text">当前结果不适合转换为图表</div>';
+      if (Array.isArray(result)) {
+        const max = Math.max(...result.map(Number), 1);
+        return `<div>${result.map((v, i) => `<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="width:40px;color:var(--text-secondary)">${i + 1}</span><div style="height:18px;background:var(--primary);width:${Math.max(4, Number(v) / max * 80)}%;border-radius:3px"></div><span>${esc(v)}</span></div>`).join("")}</div>`;
+      }
+      const labels = result.labels || result.x || [];
+      const values = result.values || result.y || [];
+      const max = Math.max(...values.map(Number), 1);
+      return `<div>${values.map((v, i) => `<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="width:80px;color:var(--text-secondary)">${esc(labels[i] ?? i + 1)}</span><div style="height:18px;background:var(--accent);width:${Math.max(4, Number(v) / max * 80)}%;border-radius:3px"></div><span>${esc(v)}</span></div>`).join("")}</div>`;
+    }
+
+    function renderFullOutputFile(result) {
+      const filename = result.filename || "result.txt";
+      const content = result.content || result.base64 || "";
+      const href = result.base64 ? `data:application/octet-stream;base64,${result.base64}` : `data:text/plain;charset=utf-8,${encodeURIComponent(content)}`;
+      return `<div class="output-action-bar"><a class="output-download-btn" download="${esc(filename)}" href="${esc(href)}">下载文件</a></div><div class="output-text">${esc(filename)}</div>`;
+    }
+
+    function renderJsonTree(value) {
+      if (value === null) return '<span class="json-tree-null">null</span>';
+      if (typeof value === "string") return `<span class="json-tree-str">"${esc(value)}"</span>`;
+      if (typeof value === "number") return `<span class="json-tree-num">${esc(value)}</span>`;
+      if (typeof value === "boolean") return `<span class="json-tree-bool">${esc(value)}</span>`;
+      if (Array.isArray(value)) {
+        return `[<div class="json-tree-children">${value.map((item, i) => `<div><span class="json-tree-key">${i}</span>: ${renderJsonTree(item)}</div>`).join("")}</div>]`;
+      }
+      if (typeof value === "object") {
+        return `{<div class="json-tree-children">${Object.entries(value).map(([k, v]) => `<div><span class="json-tree-key">${esc(k)}</span>: ${renderJsonTree(v)}</div>`).join("")}</div>}`;
+      }
+      return esc(String(value));
+    }
+
+    function showImageFullscreen(src) {
+      const mask = document.createElement("div");
+      mask.className = "image-fullscreen-mask";
+      const img = document.createElement("img");
+      img.src = src;
+      mask.appendChild(img);
+      mask.onclick = () => mask.remove();
+      document.body.appendChild(mask);
+    }
+
+    // ── Right Test Panel (replaces modal, Req 5 / Req 3) ────────────────
     function openComponentTestModal() {
       if (!state.editing) return;
-      const content = state.models?.get(state.currentFile)?.getValue() || null;
-      _openCompTestModal(state.editing.algo, content);
+      openTestPage(state.editing.algo);
     }
 
-    function _openCompTestModal(algo, sourceContent) {
-      state.compTestMode = "params";
-      state.compTestFileUploads = {};
+    async function openComponentTestModalById(id, page) {
+      const allItems = [...(state.data.components || []), ...(state.data.templates || [])];
+      let algo = allItems.find(a => a.id === id);
+      if (!algo) { showToast("找不到该算法信息"); return; }
+      openTestPage(algo);
+    }
+
+    function openTestPanel(algo, sourceContent) {
       state._compTestAlgo = algo;
       state._compTestSource = sourceContent;
-      const hasExample = !!(algo?.inputExample);
-      qs("#modalRoot").classList.remove("hidden");
-      qs("#modalRoot").innerHTML = `
-        <div class="modal" style="max-width:680px;width:90vw">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <h3 style="margin:0">测试：${esc(algo?.zhName || algo?.funcName || algo?.name || "")}</h3>
-            <button onclick="window.closeModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-dim)">✕</button>
-          </div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
-            <button id="ctParamsBtn" class="primary" onclick="window.setCompTestMode('params')" style="font-size:12px;padding:4px 12px">普通参数模式</button>
-            <button id="ctFilesBtn" class="ghost" onclick="window.setCompTestMode('files')" style="font-size:12px;padding:4px 12px">外部文件模式</button>
-            ${hasExample ? `<button class="ghost" onclick="window.loadCompTestExample()" style="font-size:12px;padding:4px 12px">📋 填入示例</button>` : ""}
-          </div>
-          ${hasExample ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;padding:6px 8px;background:var(--bg-deep);border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">示例数据: ${esc((algo.inputExample || "").slice(0, 120))}</div>` : ""}
-          <div id="ctParams" class="param-grid" style="max-height:320px;overflow-y:auto"></div>
-          <div class="control-row" style="margin-top:8px;gap:8px">
-            <button class="primary" id="ctRunBtn" onclick="window.runCompTest()">▶ 运行</button>
-            <select id="ctTimeout" style="padding:4px 8px"><option value="5">5s</option><option value="30">30s</option><option value="60">60s</option></select>
-          </div>
-          <div id="ctStatus" style="margin-top:4px;font-size:12px;color:var(--text-dim)"></div>
-          <div id="ctOutput" style="margin-top:8px;background:var(--bg-deep);border-radius:6px;padding:10px;min-height:60px;max-height:240px;overflow:auto;font-size:13px"><pre style="margin:0;color:var(--text-dim)">等待运行</pre></div>
-        </div>
-      `;
-      renderCompTestParams();
-      // Auto-fill example data on open
-      if (hasExample) loadCompTestExample();
+      state.compTestFileUploads = {};
+      state._tpFileState = {};
+      state._tpResultTab = "output";
+      state._tpTableData = {};
+      state._tpLastResult = undefined;
+      state.testPanelOpen = true;
+      _renderOverlayTestPanel();
+      document.addEventListener("keydown", _testOverlayEscHandler);
     }
 
-    function loadCompTestExample() {
+    function closeTestPanel() {
+      state.testPanelOpen = false;
+      const mask = qs("#testOverlayMask");
+      const overlay = qs("#testOverlay");
+      if (mask) mask.classList.remove("visible");
+      if (overlay) overlay.classList.remove("open");
+      document.removeEventListener("keydown", _testOverlayEscHandler);
+    }
+
+    function _testOverlayEscHandler(e) {
+      if (e.key === "Escape") closeTestPanel();
+    }
+
+    function _renderOverlayTestPanel() {
+      const algo = state._compTestAlgo;
+      const name = algo?.zhName || algo?.funcName || algo?.name || "算法";
+      const hasExample = !!(algo?.inputExample);
+
+      // Title
+      const titleEl = qs("#testOverlayTitle");
+      if (titleEl) titleEl.textContent = `测试：${name}`;
+
+      // Toolbar: example + history buttons
+      const toolbar = qs("#testOverlayToolbar");
+      if (toolbar) toolbar.innerHTML = `
+        ${hasExample ? `<button class="ghost" style="font-size:12px;padding:2px 10px" onclick="window.fillTestExample()">📋 填入示例</button>` : ""}
+        <div style="position:relative;display:inline-block">
+          <button class="ghost" style="font-size:12px;padding:2px 10px" onclick="window.toggleTestHistory(this)">🕐 历史 ▾</button>
+          <div id="tpHistoryMenu" class="tp-history-menu hidden"></div>
+        </div>
+      `;
+
+      // Params area — give it the id tpParamsArea for compatibility
+      const paramsEl = qs("#testOverlayParams");
+      if (paramsEl) paramsEl.id = "tpParamsArea";
+
+      // Actions: run/debug/timeout
+      const actions = qs("#testOverlayActions");
+      if (actions) actions.innerHTML = `
+        <button class="primary" id="tpRunBtn" onclick="window.runTestPanel()">▶ 运行</button>
+        <button class="btn-debug" id="tpDebugBtn" onclick="window.debugFromTestPanel()">🐛 调试</button>
+        <select id="tpTimeout" style="font-size:12px;padding:2px 6px;flex-shrink:0">
+          <option value="5">5s</option><option value="30" selected>30s</option><option value="60">60s</option>
+        </select>
+        <span id="tpStatus" style="font-size:11px;color:var(--text-dim);margin-left:auto"></span>
+      `;
+
+      // Result tabs
+      const tabs = qs("#testOverlayResultTabs");
+      if (tabs) tabs.innerHTML = `
+        <button data-tp-tab="table" onclick="window.switchTestResultTab('table')">表格</button>
+        <button class="active" data-tp-tab="output" onclick="window.switchTestResultTab('output')">输出</button>
+        <button data-tp-tab="structured" onclick="window.switchTestResultTab('structured')">结构化</button>
+        <button data-tp-tab="chart" onclick="window.switchTestResultTab('chart')">图表</button>
+      `;
+
+      // Result content area — give it the id tpResultArea for compatibility
+      const resultContent = qs("#testOverlayResultContent");
+      if (resultContent) {
+        resultContent.id = "tpResultArea";
+        resultContent.innerHTML = `<pre style="margin:0;color:var(--text-dim)">等待运行…</pre>`;
+      }
+
+      // Show overlay
+      const mask = qs("#testOverlayMask");
+      const overlay = qs("#testOverlay");
+      if (mask) mask.classList.add("visible");
+      if (overlay) overlay.classList.add("open");
+
+      // Render params
+      _renderRightTestParams();
+      if (hasExample) fillTestExample();
+    }
+
+    function _renderRightTestParams(values = {}) {
+      const area = qs("#tpParamsArea");
+      if (!area) return;
+      const params = state._compTestAlgo?.params || [];
+      if (!params.length) {
+        const fallback = Object.keys(values).length ? JSON.stringify(values, null, 2) : "";
+        area.innerHTML = `
+          <div style="color:var(--text-dim);font-size:12px;margin-bottom:6px">无结构化参数，请直接输入 JSON</div>
+          <textarea id="tpJsonFallback" rows="6" style="width:100%;box-sizing:border-box;font-size:12px;resize:vertical" placeholder="{}">${esc(fallback)}</textarea>
+        `;
+        return;
+      }
+      area.innerHTML = params.map(p => _renderTPParamCard(p, values[p.name])).join("");
+    }
+
+    // ── Widget type inference ─────────────────────────────────────
+    function inferParamWidget(param, exampleValue) {
+      const name = (param.name || "").toLowerCase();
+      const type = String(param.type || param.annotation || "").toLowerCase();
+      // Priority 1: explicit type hints
+      if (/ndarray|np\.ndarray|image\.image|pil|cv2\.|opencv/.test(type)) return "image";
+      if (/bytes/.test(type) && /image|img|photo|pic|frame/.test(name)) return "image";
+      if (/literal\[/.test(type)) return "literal";
+      if (/datetime|date/.test(type)) return "datetime";
+      if (/bool/.test(type)) return "bool";
+      if (/int/.test(type)) return "int";
+      if (/float/.test(type)) return "float";
+      if (/list\[dict\]|dataframe/.test(type)) return "dataframe";
+      if (/list/.test(type)) {
+        const tokens2 = name.split(/[_\s]+/);
+        if (tokens2.some(t => ["images","imgs","photos","frames","pics"].includes(t))) return "images";
+        return "list";
+      }
+      if (/dict/.test(type)) return "dict";
+      // Priority 2: name-based keyword matching
+      const tokens = name.split(/[_\s]+/);
+      const hasToken = (...kw) => tokens.some(t => kw.includes(t));
+      if (hasToken("image","img","photo","picture","pic","frame")) return "image";
+      if (hasToken("images","imgs","photos","frames","pics")) return "images";
+      if (hasToken("audio","sound","wav","mp3")) return "audio";
+      if (hasToken("video","mp4","avi")) return "video";
+      if (hasToken("file","filepath","filename","csv","excel","xlsx","pdf","document")) return "file";
+      if (hasToken("url","link","href")) return "url";
+      if (hasToken("color","colour")) return "color";
+      if (hasToken("date","time","datetime")) return "datetime";
+      if (hasToken("password","secret","token")) return "password";
+      // Priority 3: example value type
+      if (exampleValue !== undefined) {
+        if (typeof exampleValue === "boolean") return "bool";
+        if (typeof exampleValue === "number") return Number.isInteger(exampleValue) ? "int" : "float";
+        if (Array.isArray(exampleValue)) return "list";
+        if (exampleValue && typeof exampleValue === "object") return "dict";
+      }
+      if (/str/.test(type) || type === "" || type === "any") return "str";
+      return "json";
+    }
+
+    // ── Image upload widget ───────────────────────────────────────
+    function _renderImageWidget(name, st) {
+      const mode = st.mode || "base64";
+      const modeSelector = `<div class="image-mode-selector">
+        <label><input type="radio" name="img-mode-${esc(name)}" value="base64" ${mode==="base64"?"checked":""} onchange="window._setImageMode('${esc(name)}','base64')"> base64</label>
+        <label><input type="radio" name="img-mode-${esc(name)}" value="path" ${mode==="path"?"checked":""} onchange="window._setImageMode('${esc(name)}','path')"> 服务器路径</label>
+        <label><input type="radio" name="img-mode-${esc(name)}" value="url" ${mode==="url"?"checked":""} onchange="window._setImageMode('${esc(name)}','url')"> URL</label>
+      </div>`;
+      let contentHtml = "";
+      if (st.preview) {
+        contentHtml = `<div class="image-preview">
+          <img class="preview-thumb" src="${esc(st.preview)}" alt="preview">
+          <div class="preview-info">
+            <span title="${esc(st.filename||"")}">${esc(st.filename||"")}</span>
+            <span>${st.width && st.height ? `${st.width}×${st.height}` : ""} ${st.size ? (_fmtBytes(st.size)) : ""}</span>
+          </div>
+          <button type="button" class="preview-remove" onclick="window._removeImageParam('${esc(name)}')">✕</button>
+        </div>`;
+      } else if (mode === "url") {
+        contentHtml = `<input class="image-url-input" data-tp-param="${esc(name)}" data-tp-type="str"
+          placeholder="https://..." value="${esc(st.url||"")}"
+          oninput="window._setImageUrl('${esc(name)}',this.value)">`;
+      } else if (mode === "path") {
+        contentHtml = st.path
+          ? `<div class="image-preview"><div class="preview-info"><span>${esc(st.path)}</span></div>
+              <button type="button" class="preview-remove" onclick="window._removeImageParam('${esc(name)}')">✕</button></div>`
+          : `<div style="font-size:11px;color:var(--text-dim)">上传后将显示路径</div>`;
+      }
+      const dz = `<div class="image-dropzone" id="img-dz-${esc(name)}"
+        onclick="qs('#img-file-${esc(name)}').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="event.preventDefault();this.classList.remove('drag-over');window._onImageDrop(event,'${esc(name)}')"
+        tabindex="0" onpaste="window._onImagePasteInDz(event,'${esc(name)}')">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 16V4m0 0L8 8m4-4l4 4"/>
+          <path d="M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/>
+        </svg>
+        <div class="dropzone-text">拖拽图片到此处，或 <span style="color:var(--primary);text-decoration:underline">点击选择文件</span></div>
+        <div class="dropzone-hint">支持 PNG / JPG / BMP / GIF / WebP，最大 10MB。也可直接 Ctrl+V 粘贴</div>
+        <input id="img-file-${esc(name)}" type="file" accept="image/*" style="display:none"
+          onchange="window._onImageFileChange(event,'${esc(name)}')">
+      </div>`;
+      return (st.preview || (mode==="path" && st.path) || (mode==="url" && st.url)) ? `${modeSelector}${contentHtml}` : `${modeSelector}${dz}`;
+    }
+
+    function _renderMultiImageWidget(name, st) {
+      const previews = st.previews || [];
+      const gridItems = previews.map((src, i) =>
+        `<div class="image-grid-item"><img src="${esc(src)}"><button type="button" class="grid-item-remove" onclick="window._removeImageAt('${esc(name)}',${i})">✕</button></div>`
+      ).join("");
+      return `<div class="image-grid" id="img-grid-${esc(name)}">
+        ${gridItems}
+        <div class="image-grid-add" onclick="qs('#imgs-file-${esc(name)}').click()">+
+          <input id="imgs-file-${esc(name)}" type="file" accept="image/*" multiple style="display:none"
+            onchange="window._onMultiImageFileChange(event,'${esc(name)}')">
+        </div>
+      </div>
+      <div class="multi-image-info">${previews.length ? `${previews.length} 张图片` : "点击 + 添加图片，或拖入"}</div>`;
+    }
+
+    function _renderFileWidget(name, st, accept, widgetType) {
+      const icons = { audio:"🎵", video:"🎬", file:"📄" };
+      const labels = { audio:"音频文件", video:"视频文件", file:"文件" };
+      const icon = icons[widgetType]||"📄";
+      const label = labels[widgetType]||"文件";
+      const modeSelector = `<div class="image-mode-selector">
+        <label><input type="radio" name="file-mode-${esc(name)}" value="base64" ${(st.mode||"base64")==="base64"?"checked":""} onchange="window._setFileMode('${esc(name)}','base64')"> base64</label>
+        <label><input type="radio" name="file-mode-${esc(name)}" value="path" ${st.mode==="path"?"checked":""} onchange="window._setFileMode('${esc(name)}','path')"> 服务器路径</label>
+      </div>`;
+      if (st.preview || st.path) {
+        let playerHtml = "";
+        if (st.preview) {
+          if (widgetType === "audio") playerHtml = `<audio class="audio-preview" controls src="${esc(st.preview)}"></audio>`;
+          else if (widgetType === "video") playerHtml = `<video class="video-preview" controls src="${esc(st.preview)}"></video>`;
+        }
+        return `${modeSelector}<div class="image-preview">
+          <div class="preview-info"><span>${esc(st.filename||"")}</span><span>${_fmtBytes(st.size||0)}</span></div>
+          <button type="button" class="preview-remove" onclick="window._removeFileParam('${esc(name)}')">✕</button>
+        </div>${playerHtml}`;
+      }
+      return `${modeSelector}<div class="image-dropzone" onclick="qs('#file-input-${esc(name)}').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="event.preventDefault();this.classList.remove('drag-over');window._onFileDrop(event,'${esc(name)}')">
+        <div><p>${icon} 点击或拖入${label}</p></div>
+        <input id="file-input-${esc(name)}" type="file" accept="${esc(accept)}" style="display:none"
+          onchange="window._onFileChange(event,'${esc(name)}')">
+      </div>`;
+    }
+
+    function _fmtBytes(n) {
+      if (!n) return "";
+      if (n < 1024) return `${n} B`;
+      if (n < 1048576) return `${(n/1024).toFixed(1)} KB`;
+      return `${(n/1048576).toFixed(1)} MB`;
+    }
+
+    // ── Param card renderer (upgraded) ───────────────────────────
+    function _renderTPParamCard(p, rawVal) {
+      const name = p.name;
+      const type = String(p.type || p.annotation || "str");
+      const valStr = rawVal !== undefined && rawVal !== null
+        ? (typeof rawVal === "object" ? JSON.stringify(rawVal, null, 2) : String(rawVal)) : "";
+      const widget = p.widget_hint || inferParamWidget(p, rawVal);
+
+      // Init file state if needed
+      state._tpFileState = state._tpFileState || {};
+      if (!state._tpFileState[name]) state._tpFileState[name] = { mode: "base64" };
+      const st = state._tpFileState[name];
+
+      let inputHtml = "";
+
+      if (widget === "image") {
+        inputHtml = _renderImageWidget(name, st);
+      } else if (widget === "images") {
+        inputHtml = _renderMultiImageWidget(name, st);
+      } else if (widget === "audio") {
+        inputHtml = _renderFileWidget(name, st, "audio/*", "audio");
+      } else if (widget === "video") {
+        inputHtml = _renderFileWidget(name, st, "video/*", "video");
+      } else if (widget === "file") {
+        inputHtml = _renderFileWidget(name, st, "*", "file");
+      } else if (widget === "bool") {
+        const isTrue = rawVal === true || rawVal === "true" || rawVal === 1;
+        inputHtml = `<div style="display:flex;gap:12px;margin-top:2px">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="tp-bool-${esc(name)}" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="true" ${isTrue ? "checked" : ""}>true
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="tp-bool-${esc(name)}" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="false" ${!isTrue ? "checked" : ""}>false
+          </label>
+        </div>`;
+      } else if (widget === "int") {
+        inputHtml = `<input type="number" step="1" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "float") {
+        inputHtml = `<input type="number" step="any" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "color") {
+        inputHtml = `<div style="display:flex;align-items:center;gap:6px">
+          <input type="color" class="tp-color-input" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr||"#000000")}">
+          <input type="text" data-tp-param="${esc(name)}-hex" placeholder="#rrggbb" value="${esc(valStr)}" style="width:80px;font-size:11px" oninput="qs('[data-tp-param=\\'${esc(name)}\\']').value=this.value">
+        </div>`;
+      } else if (widget === "password") {
+        inputHtml = `<input type="password" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "url") {
+        inputHtml = `<input type="url" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" placeholder="https://..." style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "literal") {
+        const opts = p.widget_options || [];
+        if (opts.length) {
+          const optHtml = opts.map(o => `<option value="${esc(o)}" ${valStr === o ? "selected" : ""}>${esc(o)}</option>`).join("");
+          inputHtml = `<select data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" style="width:100%">${optHtml}</select>`;
+        } else {
+          inputHtml = `<input data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+        }
+      } else if (widget === "datetime") {
+        inputHtml = `<input type="datetime-local" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "dataframe" || widget === "list" || widget === "dict" || widget === "json") {
+        let parsed = null;
+        try { if (rawVal !== undefined) parsed = (typeof rawVal === "object") ? rawVal : JSON.parse(valStr); } catch {}
+        const isListOfDicts = Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object" && !Array.isArray(parsed[0]);
+        const placeholder = widget === "dataframe" ? "粘贴 CSV 或 JSON" : "JSON";
+        const fileRow = `<div style="display:flex;gap:4px;margin-top:4px">
+          <label title="单文件" style="cursor:pointer;padding:1px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px">📄<input type="file" style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','single')"/></label>
+          <label title="多文件" style="cursor:pointer;padding:1px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px">📚<input type="file" multiple style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','multi')"/></label>
+          <label title="文件夹" style="cursor:pointer;padding:1px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px">📁<input type="file" webkitdirectory style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','folder')"/></label>
+        </div>`;
+        if (isListOfDicts) {
+          state._tpTableData = state._tpTableData || {};
+          state._tpTableData[name] = JSON.parse(JSON.stringify(parsed));
+          inputHtml = `<div class="tp-tab-bar" id="tp-tab-bar-${esc(name)}">
+            <button class="active" onclick="window.switchTPParamTab('${esc(name)}','table',this)">表格</button>
+            <button onclick="window.switchTPParamTab('${esc(name)}','json',this)">JSON</button>
+            <button onclick="window.switchTPParamTab('${esc(name)}','file',this)">文件</button>
+          </div>
+          <div id="tp-param-pane-${esc(name)}">${_renderTPEditableTable(name, parsed)}</div>`;
+        } else {
+          inputHtml = `<div class="tp-tab-bar" id="tp-tab-bar-${esc(name)}">
+            <button class="active" onclick="window.switchTPParamTab('${esc(name)}','json',this)">JSON</button>
+            <button onclick="window.switchTPParamTab('${esc(name)}','file',this)">文件</button>
+          </div>
+          <div id="tp-param-pane-${esc(name)}">
+            <textarea rows="3" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}"
+              style="width:100%;box-sizing:border-box;font-size:11px;resize:vertical"
+              placeholder="${esc(placeholder)}">${esc(valStr)}</textarea>
+          </div>`;
+        }
+        inputHtml += fileRow;
+      } else {
+        // str / generic
+        const isLong = valStr.includes("\n") || valStr.length > 60;
+        if (isLong) {
+          inputHtml = `<textarea rows="3" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}"
+            style="width:100%;box-sizing:border-box;font-size:12px;resize:vertical">${esc(valStr)}</textarea>`;
+        } else {
+          inputHtml = `<input data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+        }
+      }
+      return `<div class="tp-param-card" id="tp-card-${esc(name)}">
+        <div class="tp-param-head">
+          <span>
+            <span class="tp-param-name">${esc(name)}</span>
+            <span class="tp-param-type">${esc(type)}</span>
+            <span class="tp-type-hint">${esc(widget)}</span>
+          </span>
+          <label class="tp-skip-wrap">
+            <input type="checkbox" data-tp-skip="${esc(name)}" onchange="window.toggleTPParamSkip('${esc(name)}', this.checked)" style="margin:0">
+            <span>跳过</span>
+          </label>
+        </div>
+        <div class="tp-param-input-area" id="tp-input-${esc(name)}">${inputHtml}</div>
+      </div>`;
+    }
+
+    // ── Image/file interaction handlers ──────────────────────────
+    function _getFileState(name) {
+      state._tpFileState = state._tpFileState || {};
+      if (!state._tpFileState[name]) state._tpFileState[name] = { mode: "base64" };
+      return state._tpFileState[name];
+    }
+
+    function _rerenderParamCard(name) {
+      const algo = state._compTestAlgo;
+      if (!algo) return;
+      const p = (algo.params || []).find(x => x.name === name);
+      if (!p) return;
+      const card = qs(`#tp-input-${name}`);
+      if (!card) return;
+      const widget = p.widget_hint || inferParamWidget(p);
+      const st = _getFileState(name);
+      let html = "";
+      if (widget === "image") html = _renderImageWidget(name, st);
+      else if (widget === "images") html = _renderMultiImageWidget(name, st);
+      else if (["audio","video","file"].includes(widget)) {
+        const accepts = { audio:"audio/*", video:"video/*", file:"*" };
+        html = _renderFileWidget(name, st, accepts[widget], widget);
+      } else return;
+      card.innerHTML = html;
+    }
+
+    function _setImageMode(name, mode) {
+      const st = _getFileState(name);
+      st.mode = mode;
+      _rerenderParamCard(name);
+    }
+
+    function _setFileMode(name, mode) {
+      const st = _getFileState(name);
+      st.mode = mode;
+      _rerenderParamCard(name);
+    }
+
+    function _setImageUrl(name, url) {
+      const st = _getFileState(name);
+      st.url = url;
+    }
+
+    function _removeImageParam(name) {
+      const st = _getFileState(name);
+      if (st.preview) { URL.revokeObjectURL(st.preview); }
+      state._tpFileState[name] = { mode: st.mode || "base64" };
+      _rerenderParamCard(name);
+    }
+
+    function _removeFileParam(name) { _removeImageParam(name); }
+
+    function _removeImageAt(name, idx) {
+      const st = _getFileState(name);
+      if (st.previews?.[idx]) URL.revokeObjectURL(st.previews[idx]);
+      st.files = (st.files || []).filter((_, i) => i !== idx);
+      st.previews = (st.previews || []).filter((_, i) => i !== idx);
+      _rerenderParamCard(name);
+    }
+
+    function _onImageDrop(event, name) {
+      const file = event.dataTransfer?.files?.[0];
+      if (file && file.type.startsWith("image/")) _processImageFile(name, file);
+    }
+
+    function _onImageFileChange(event, name) {
+      const file = event.target.files?.[0];
+      if (file) _processImageFile(name, file);
+    }
+
+    function _onMultiImageFileChange(event, name) {
+      const files = Array.from(event.target.files || []);
+      if (!files.length) return;
+      const st = _getFileState(name);
+      st.files = st.files || [];
+      st.previews = st.previews || [];
+      files.forEach(f => {
+        const url = URL.createObjectURL(f);
+        st.files.push(f);
+        st.previews.push(url);
+      });
+      _rerenderParamCard(name);
+    }
+
+    function _onFileDrop(event, name) {
+      const file = event.dataTransfer?.files?.[0];
+      if (file) _processGenericFile(name, file);
+    }
+
+    function _onFileChange(event, name) {
+      const file = event.target.files?.[0];
+      if (file) _processGenericFile(name, file);
+    }
+
+    function _processImageFile(name, file) {
+      const st = _getFileState(name);
+      if (st.preview) URL.revokeObjectURL(st.preview);
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        st.width = img.naturalWidth;
+        st.height = img.naturalHeight;
+        _rerenderParamCard(name);
+      };
+      img.src = url;
+      st.file = file;
+      st.preview = url;
+      st.filename = file.name;
+      st.size = file.size;
+      st.base64 = null; // will be lazily computed at run time
+      if (st.mode === "path") {
+        _uploadTempFileAndSetPath(name, file);
+      }
+      _rerenderParamCard(name);
+    }
+
+    function _processGenericFile(name, file) {
+      const st = _getFileState(name);
+      if (st.preview) URL.revokeObjectURL(st.preview);
+      const url = URL.createObjectURL(file);
+      st.file = file;
+      st.preview = url;
+      st.filename = file.name;
+      st.size = file.size;
+      st.base64 = null;
+      if (st.mode === "path") {
+        _uploadTempFileAndSetPath(name, file);
+      }
+      _rerenderParamCard(name);
+    }
+
+    async function _uploadTempFileAndSetPath(name, file) {
+      const bar = qs(`#tp-input-${name} .bar`);
+      if (bar) bar.style.width = "30%";
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const resp = await fetch("/api/v1/upload-temp", { method: "POST", body: fd });
+        const data = await resp.json();
+        const st = _getFileState(name);
+        st.path = data.path;
+        if (bar) bar.style.width = "100%";
+        _rerenderParamCard(name);
+      } catch (e) {
+        showToast("文件上传失败: " + e.message);
+      }
+    }
+
+    /**
+     * 从 FileReader.readAsDataURL 的结果中提取纯 base64 字符串（去除 data:...;base64, 前缀）
+     * 并修复 padding，确保长度是 4 的倍数。
+     */
+    function extractPureBase64(dataUrl) {
+      if (!dataUrl || typeof dataUrl !== "string") return "";
+      let b64 = dataUrl;
+      const commaIdx = dataUrl.indexOf(",");
+      if (commaIdx !== -1 && dataUrl.startsWith("data:")) {
+        b64 = dataUrl.substring(commaIdx + 1);
+      }
+      b64 = b64.replace(/\s/g, "");
+      const rem = b64.length % 4;
+      if (rem === 1) b64 += "===";       // 理论上不应出现，容错处理
+      else if (rem === 2) b64 += "==";
+      else if (rem === 3) b64 += "=";
+      return b64;
+    }
+
+    async function _readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(extractPureBase64(r.result)); // 纯 base64，不含前缀
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+
+    function _onImagePasteInDz(event, name) {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) { _processImageFile(name, file); event.preventDefault(); }
+          break;
+        }
+      }
+    }
+
+    // Global paste: capture clipboard images into first empty image param
+    document.addEventListener("paste", function(e) {
+      if (!state.testPanelOpen) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          const params = state._compTestAlgo?.params || [];
+          for (const p of params) {
+            if ((p.widget_hint || inferParamWidget(p)) === "image") {
+              const st = _getFileState(p.name);
+              if (!st.file && !st.url && !st.path) {
+                _processImageFile(p.name, file);
+                e.preventDefault();
+                break;
+              }
+            }
+          }
+          break;
+        }
+      }
+    });
+
+    function toggleTPParamSkip(name, skipped) {
+      const card = qs(`#tp-card-${name}`);
+      if (card) card.classList.toggle("skipped", skipped);
+    }
+
+    function switchTPParamTab(name, tab, btn) {
+      const tabBar = btn?.closest?.(".tp-tab-bar") || qs(`#tp-tab-bar-${name}`);
+      if (tabBar) tabBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+      if (btn instanceof HTMLElement) btn.classList.add("active");
+      const pane = qs(`#tp-param-pane-${name}`);
+      if (!pane) return;
+      const typeEl = qs(`#tp-card-${name} [data-tp-param]`) || qs(`#tp-card-${name} [data-tp-type]`);
+      const type = typeEl?.dataset?.tpType || typeEl?.dataset?.type || "list";
+      if (tab === "json") {
+        const tableData = state._tpTableData?.[name];
+        const json = tableData ? JSON.stringify(tableData, null, 2) : "";
+        pane.innerHTML = `<textarea rows="3" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}"
+          style="width:100%;box-sizing:border-box;font-size:11px;resize:vertical"
+          placeholder="JSON">${esc(json)}</textarea>`;
+      } else if (tab === "table") {
+        const ta = pane.querySelector("[data-tp-param]");
+        if (ta) {
+          try {
+            const parsed = JSON.parse(ta.value);
+            if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
+              state._tpTableData = state._tpTableData || {};
+              state._tpTableData[name] = parsed;
+            }
+          } catch {}
+        }
+        pane.innerHTML = _renderTPEditableTable(name, state._tpTableData?.[name] || []);
+      } else if (tab === "file") {
+        pane.innerHTML = `<div style="display:flex;gap:4px">
+          <label style="cursor:pointer;padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px">📄 选择文件<input type="file" style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','single')"/></label>
+          <label style="cursor:pointer;padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px">📁 选择文件夹<input type="file" webkitdirectory style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','folder')"/></label>
+        </div>`;
+      }
+    }
+
+    function _renderTPEditableTable(paramName, data) {
+      if (!data || !data.length) {
+        return `<div style="color:var(--text-dim);font-size:11px">暂无数据</div>
+          <button type="button" onclick="window.addTPTableRow('${esc(paramName)}')" style="font-size:11px;margin-top:4px">+ 添加行</button>`;
+      }
+      const cols = [...new Set(data.flatMap(r => Object.keys(r)))];
+      return `<div style="overflow-x:auto">
+        <table class="tp-editable-table">
+          <thead><tr>
+            ${cols.map(c => `<th>${esc(c)}</th>`).join("")}
+            <th style="width:20px"></th>
+          </tr></thead>
+          <tbody id="tp-tbody-${esc(paramName)}">
+            ${data.map((row, ri) => `<tr>
+              ${cols.map(c => `<td><input value="${esc(String(row[c] ?? ""))}" onchange="window.updateTPTableCell('${esc(paramName)}',${ri},'${esc(c)}',this.value)"></td>`).join("")}
+              <td><button type="button" onclick="window.removeTPTableRow('${esc(paramName)}',${ri})"
+                style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:10px;padding:0">✕</button></td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <button type="button" onclick="window.addTPTableRow('${esc(paramName)}')" style="font-size:11px;margin-top:4px">+ 添加行</button>`;
+    }
+
+    function updateTPTableCell(paramName, rowIdx, col, value) {
+      const data = state._tpTableData?.[paramName];
+      if (!data || !data[rowIdx]) return;
+      const num = Number(value);
+      data[rowIdx][col] = (value !== "" && !isNaN(num)) ? num : value;
+    }
+
+    function addTPTableRow(paramName) {
+      const data = state._tpTableData?.[paramName];
+      if (!data) return;
+      const newRow = {};
+      if (data.length > 0) Object.keys(data[0]).forEach(c => { newRow[c] = ""; });
+      data.push(newRow);
+      const pane = qs(`#tp-param-pane-${paramName}`);
+      if (pane) pane.innerHTML = _renderTPEditableTable(paramName, data);
+    }
+
+    function removeTPTableRow(paramName, rowIdx) {
+      const data = state._tpTableData?.[paramName];
+      if (!data) return;
+      data.splice(rowIdx, 1);
+      const pane = qs(`#tp-param-pane-${paramName}`);
+      if (pane) pane.innerHTML = _renderTPEditableTable(paramName, data);
+    }
+
+    async function collectTestPanelParams() {
+      const params = state._compTestAlgo?.params || [];
+      if (!params.length) {
+        const ta = qs("#tpJsonFallback");
+        if (!ta) return {};
+        try { return JSON.parse(ta.value) || {}; } catch { return {}; }
+      }
+      const payload = {};
+      for (const p of params) {
+        const name = p.name;
+        const skipCb = qs(`[data-tp-skip="${name}"]`);
+        if (skipCb?.checked) continue;
+
+        // New file state handling
+        const fst = state._tpFileState?.[name];
+        if (fst) {
+          const widget = p.widget_hint || inferParamWidget(p);
+          if (["image","audio","video","file"].includes(widget)) {
+            const mode = fst.mode || "base64";
+            if (mode === "path" && fst.path) { payload[name] = fst.path; continue; }
+            if (mode === "url") { payload[name] = fst.url || ""; continue; }
+            if (mode === "base64" && fst.file) {
+              if (!fst.base64) fst.base64 = await _readFileAsBase64(fst.file);
+              payload[name] = fst.base64;
+              continue;
+            }
+            continue; // no file selected — skip
+          }
+          if (widget === "images") {
+            const files = fst.files || [];
+            const base64s = await Promise.all(files.map(f => _readFileAsBase64(f)));
+            payload[name] = base64s;
+            continue;
+          }
+        }
+
+        // Legacy upload
+        const upload = state.compTestFileUploads?.[name];
+        if (upload) { payload[name] = upload.multi ? upload.paths : upload.path; continue; }
+
+        const tableEl = qs(`#tp-param-pane-${name} table`);
+        if (tableEl && state._tpTableData?.[name]) { payload[name] = state._tpTableData[name]; continue; }
+        const type = String(p.type || p.annotation || "str");
+        if (/bool/i.test(type)) {
+          const checked = qs(`input[name="tp-bool-${name}"]:checked`);
+          payload[name] = checked ? checked.value === "true" : false;
+          continue;
+        }
+        const input = qs(`[data-tp-param="${name}"]`);
+        if (input) payload[name] = parseParamValueByType(type, input.value);
+      }
+      return payload;
+    }
+
+    function fillTestExample() {
       const algo = state._compTestAlgo;
       if (!algo?.inputExample) return;
       try {
         const parsed = JSON.parse(algo.inputExample);
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          renderCompTestParams(parsed);
+          _renderRightTestParams(parsed);
         } else {
           const params = algo?.params || [];
-          if (params.length > 0) renderCompTestParams({ [params[0].name]: parsed });
+          if (params.length > 0) _renderRightTestParams({ [params[0].name]: parsed });
         }
-      } catch { /* ignore invalid json */ }
+      } catch { /* ignore */ }
     }
 
-    function setCompTestMode(mode) {
-      state.compTestMode = mode;
-      qs("#ctParamsBtn")?.classList.toggle("primary", mode === "params");
-      qs("#ctParamsBtn")?.classList.toggle("ghost", mode !== "params");
-      qs("#ctFilesBtn")?.classList.toggle("primary", mode === "files");
-      qs("#ctFilesBtn")?.classList.toggle("ghost", mode !== "files");
-      renderCompTestParams();
-    }
-
-    function renderCompTestParams(values = {}) {
-      const container = qs("#ctParams");
-      if (!container) return;
-      const params = state._compTestAlgo?.params || [];
-      if (!params.length) { container.innerHTML = '<div class="empty">该函数无参数</div>'; return; }
-      if (state.compTestMode === "files") {
-        container.innerHTML = params.map(p => {
-          const uploaded = state.compTestFileUploads?.[p.name];
-          return `<div class="param-field">
-            <label>${esc(p.name)} · ${esc(String(p.type || p.annotation || "Any"))}</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <label class="ghost" style="cursor:pointer;padding:4px 12px;border:1px solid var(--border);border-radius:4px;font-size:12px">选择文件
-                <input type="file" style="display:none" onchange="window.onCompTestBinaryFileSelected(event,'${esc(p.name)}')" />
-              </label>
-              ${uploaded ? `<span style="color:var(--success,#3fb950);font-size:12px">✅ ${esc(uploaded.filename)}</span>` : `<span style="color:var(--text-dim);font-size:12px">未选择</span>`}
-            </div>
-          </div>`;
-        }).join("");
+    function toggleTestHistory(btn) {
+      const menu = qs("#tpHistoryMenu");
+      if (!menu) return;
+      if (!menu.classList.contains("hidden")) { menu.classList.add("hidden"); return; }
+      const key = _tpHistoryKey();
+      const items = JSON.parse(localStorage.getItem(key) || "[]");
+      if (!items.length) {
+        menu.innerHTML = `<div class="tp-hist-item" style="pointer-events:none">暂无历史记录</div>`;
       } else {
-        container.innerHTML = params.map(p => {
-          const type = String(p.type || p.annotation || "str");
-          const name = p.name;
-          const rawVal = values[name];
-          const valStr = rawVal !== undefined && rawVal !== null
-            ? (typeof rawVal === "object" ? JSON.stringify(rawVal) : String(rawVal))
-            : "";
-          if (/bool/i.test(type)) {
-            const isTrueSelected = rawVal === true || rawVal === "true" || rawVal === 1;
-            return `<div class="param-field"><label>${esc(name)} · ${esc(type)}</label><select data-ct-param="${esc(name)}" data-ct-type="${esc(type)}"><option value="false"${!isTrueSelected ? " selected" : ""}>false</option><option value="true"${isTrueSelected ? " selected" : ""}>true</option></select></div>`;
-          }
-          if (/list|dict|DataFrame|dataframe/i.test(type)) {
-            return `<div class="param-field"><label>${esc(name)} · ${esc(type)}</label><textarea rows="3" data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" placeholder="${/DataFrame|dataframe/.test(type) ? "粘贴 CSV" : "JSON"}">${esc(valStr)}</textarea></div>`;
-          }
-          if (/int|float|number/i.test(type)) {
-            return `<div class="param-field"><label>${esc(name)} · ${esc(type)}</label><input type="number" data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" value="${esc(valStr)}" /></div>`;
-          }
-          return `<div class="param-field"><label>${esc(name)} · ${esc(type)}</label><input data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" value="${esc(valStr)}" /></div>`;
+        menu.innerHTML = items.map((item, i) => {
+          const preview = Object.entries(item.params || {}).map(([k, v]) => `${k}=${JSON.stringify(v)?.slice(0, 12)}`).join(", ").slice(0, 55);
+          return `<div class="tp-hist-item" onclick="window.applyTestHistory(${i})">${esc(item.time?.slice(0, 16) || "")} · ${esc(preview)}</div>`;
         }).join("");
+      }
+      menu.classList.remove("hidden");
+      setTimeout(() => {
+        document.addEventListener("click", function closeMenu(e) {
+          if (!menu.contains(e.target) && e.target !== btn) {
+            menu.classList.add("hidden");
+            document.removeEventListener("click", closeMenu);
+          }
+        });
+      }, 0);
+    }
+
+    function applyTestHistory(index) {
+      const key = _tpHistoryKey();
+      const items = JSON.parse(localStorage.getItem(key) || "[]");
+      const entry = items[index];
+      if (!entry) return;
+      qs("#tpHistoryMenu")?.classList.add("hidden");
+      _renderRightTestParams(entry.params || {});
+    }
+
+    function _tpHistoryKey() {
+      const algo = state._compTestAlgo;
+      return `algolib_tph_${algo?.id || algo?.funcName || "unknown"}`;
+    }
+
+    function _saveTestHistory(params) {
+      const key = _tpHistoryKey();
+      // Strip large binary values (base64 images/files) before saving to localStorage
+      const sanitized = {};
+      for (const [k, v] of Object.entries(params || {})) {
+        if (typeof v === "string" && v.length > 512) {
+          sanitized[k] = "[binary data omitted]";
+        } else if (Array.isArray(v) && v.some(x => typeof x === "string" && x.length > 512)) {
+          sanitized[k] = v.map(x => (typeof x === "string" && x.length > 512) ? "[binary data omitted]" : x);
+        } else {
+          sanitized[k] = v;
+        }
+      }
+      try {
+        const items = JSON.parse(localStorage.getItem(key) || "[]");
+        items.unshift({ time: new Date().toISOString(), params: sanitized });
+        localStorage.setItem(key, JSON.stringify(items.slice(0, 10)));
+      } catch (e) {
+        // Quota exceeded or other storage error — silently ignore
       }
     }
 
-    async function onCompTestBinaryFileSelected(event, paramName) {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append("file", file);
-      try {
-        const result = await fetch("/api/v1/test/upload-temp", {
-          method: "POST",
-          headers: { Authorization: state.token ? `Bearer ${state.token}` : "" },
-          body: formData
-        }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(new Error(e.detail || "上传失败"))));
-        if (!state.compTestFileUploads) state.compTestFileUploads = {};
-        state.compTestFileUploads[paramName] = { path: result.path, filename: result.filename };
-        renderCompTestParams();
-      } catch (err) { showToast("文件上传失败: " + err.message); }
-    }
-
-    function collectCompTestParams() {
-      const payload = {};
-      qsa("[data-ct-param]").forEach(input => {
-        const name = input.dataset.ctParam;
-        const type = input.dataset.ctType || "";
-        payload[name] = parseParamValueByType(type, input.value);
-      });
-      return payload;
-    }
-
-    async function runCompTest() {
-      const btn = qs("#ctRunBtn");
-      const status = qs("#ctStatus");
-      const output = qs("#ctOutput");
+    async function runTestPanel() {
+      const btn = qs("#tpRunBtn");
+      const status = qs("#tpStatus");
       if (!btn) return;
       const started = performance.now();
       btn.disabled = true;
@@ -5082,17 +7827,9 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         const algo = state._compTestAlgo;
         const sourceContent = state._compTestSource;
         const fnName = algo?.funcName || algo?.name || "main";
-        const timeout = Number(qs("#ctTimeout")?.value || "5");
-        let kwargs;
-        if (state.compTestMode === "files") {
-          kwargs = {};
-          const params = algo?.params || [];
-          const missing = params.filter(p => !state.compTestFileUploads?.[p.name]).map(p => p.name);
-          if (missing.length > 0) { showToast(`请先为以下参数选择文件: ${missing.join(", ")}`); return; }
-          params.forEach(p => { kwargs[p.name] = state.compTestFileUploads[p.name].path; });
-        } else {
-          kwargs = collectCompTestParams();
-        }
+        const timeout = Number(qs("#tpTimeout")?.value || "5");
+        const kwargs = await collectTestPanelParams();
+        _saveTestHistory(kwargs);
         const algoStatus = algo?.publishStatus || algo?.status || "";
         const isPublished = algoStatus === "published";
         let body, url;
@@ -5104,20 +7841,254 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           body = isPublished
             ? { namespace: algo.namespace, function: fnName, params: kwargs }
             : { namespace: algo.namespace, function: fnName, params: kwargs, allow_unpublished: true };
-        } else {
-          showToast("无法确定运行方式"); return;
-        }
+        } else { showToast("无法确定运行方式"); return; }
         const result = await api(url, { method: "POST", body: JSON.stringify(body) });
         const elapsed = result.elapsed_ms ?? Math.round(performance.now() - started);
         if (status) status.textContent = `✅ ${elapsed} ms`;
-        if (output) output.innerHTML = `<pre style="margin:0">${esc(JSON.stringify(result.result ?? result, null, 2))}</pre>`;
+        _showTPResult(result.result ?? result);
       } catch (err) {
         if (status) status.textContent = `❌ ${Math.round(performance.now() - started)} ms`;
-        if (output) output.innerHTML = `<pre style="margin:0;color:var(--danger,#f85149)">${esc(err.message)}</pre>`;
+        _showTPResultError(err.message);
       } finally {
         if (btn) { btn.disabled = false; btn.textContent = "▶ 运行"; }
       }
     }
+
+    async function debugFromTestPanel() {
+      const params = await collectTestPanelParams();
+      state._pendingDebugParams = params;
+      closeTestPanel();
+      startDebug();
+    }
+
+    function switchTestResultTab(tab) {
+      state._tpResultTab = tab;
+      qs(".tp-result-tabs button.active")?.classList.remove("active");
+      qs(`.tp-result-tabs button[data-tp-tab="${tab}"]`)?.classList.add("active");
+      const area = qs("#tpResultArea");
+      if (!area) return;
+      const result = state._tpLastResult;
+      if (result === undefined) return;
+      if (tab === "output") {
+        area.style.background = "";
+        area.innerHTML = _renderResultValue(result);
+      } else if (tab === "structured") {
+        area.style.background = "";
+        _renderTPStructured(area, result);
+      } else if (tab === "table") {
+        area.style.background = "";
+        _renderTPTable(area, result);
+      } else if (tab === "chart") {
+        area.style.background = "";
+        _renderTPChart(area, result);
+      }
+    }
+
+    function _isBase64Image(v) {
+      if (typeof v !== "string") return false;
+      if (v.startsWith("data:image/")) return true;
+      // Raw base64 string that looks like image data (long, valid base64 chars)
+      if (v.length > 500 && /^[A-Za-z0-9+/]+=*$/.test(v.slice(0, 100))) return true;
+      return false;
+    }
+
+    function _renderResultValue(v) {
+      // Handle __output_type__ dicts (e.g. image_processor returns {__output_type__: "image", src: "data:..."})
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        const ot = v.__output_type__;
+        if (ot === "image" && v.src) {
+          const titleHtml = v.title ? `<div class="tp-result-title">${esc(v.title)}</div>` : "";
+          return `${titleHtml}<img class="tp-result-img" src="${esc(v.src)}" alt="${esc(v.alt || 'result')}">`;
+        }
+        if (ot === "text" && v.content) {
+          const titleHtml = v.title ? `<div class="tp-result-title">${esc(v.title)}</div>` : "";
+          return `${titleHtml}<pre style="margin:0;white-space:pre-wrap;word-break:break-all">${esc(v.content)}</pre>`;
+        }
+        if (ot === "table") {
+          return _renderTableHtml(v);
+        }
+        // Object with src/image/img key that is a data URI
+        const imgSrc = v.src || v.image || v.img;
+        if (!ot && imgSrc && _isBase64Image(imgSrc)) {
+          const src = imgSrc.startsWith("data:") ? imgSrc : `data:image/png;base64,${imgSrc}`;
+          return `<img class="tp-result-img" src="${esc(src)}" alt="result">`;
+        }
+      }
+      if (_isBase64Image(v)) {
+        const src = v.startsWith("data:") ? v : `data:image/png;base64,${v}`;
+        return `<img class="tp-result-img" src="${esc(src)}" alt="result">`;
+      }
+      if (typeof v === "string" && (v.startsWith("http://") || v.startsWith("https://")) && /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(v)) {
+        return `<img class="tp-result-img" src="${esc(v)}" alt="result">`;
+      }
+      return `<pre style="margin:0;white-space:pre-wrap;word-break:break-all">${esc(typeof v === "string" ? v : JSON.stringify(v, null, 2))}</pre>`;
+    }
+
+    function _tableSpecFromResult(result) {
+      let columns = [];
+      let rows = [];
+      let title = "";
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        title = result.title || "";
+        if (Array.isArray(result.columns)) columns = result.columns.map(String);
+        const rawRows = Array.isArray(result.rows) ? result.rows : (Array.isArray(result.data) ? result.data : []);
+        rows = rawRows;
+      } else if (Array.isArray(result)) {
+        rows = result;
+      }
+      if (!rows.length) return { title, columns, rows: [] };
+      if (!columns.length) {
+        if (rows.every(row => row && typeof row === "object" && !Array.isArray(row))) {
+          columns = [...new Set(rows.flatMap(row => Object.keys(row)))];
+        } else if (Array.isArray(rows[0])) {
+          columns = rows[0].map((_, index) => `列 ${index + 1}`);
+        } else {
+          columns = ["值"];
+        }
+      }
+      const normalizedRows = rows.map(row => {
+        if (Array.isArray(row)) return columns.map((_, index) => row[index]);
+        if (row && typeof row === "object") return columns.map(col => row[col]);
+        return [row];
+      });
+      return { title, columns, rows: normalizedRows };
+    }
+
+    function _renderTableHtml(result) {
+      const spec = _tableSpecFromResult(result);
+      if (!spec.columns.length) {
+        return `<pre style="color:var(--warning);margin:0">无法转换为表格</pre>`;
+      }
+      const title = spec.title ? `<div class="tp-result-title">${esc(spec.title)}</div>` : "";
+      const thead = `<thead><tr>${spec.columns.map(col => `<th>${esc(col)}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${spec.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell === undefined || cell === null ? "" : String(cell))}</td>`).join("")}</tr>`).join("")}</tbody>`;
+      return `${title}<div style="overflow:auto;max-height:100%"><table class="api-table" style="font-size:11px">${thead}${tbody}</table></div>`;
+    }
+
+    function _renderTPTable(area, result) {
+      area.innerHTML = _renderTableHtml(result);
+    }
+
+    function _showTPResult(result) {
+      state._tpLastResult = result;
+      const area = qs("#tpResultArea");
+      if (!area) return;
+      const preferredTab = result && typeof result === "object" && result.__output_type__ === "table" ? "table" : "output";
+      state._tpResultTab = preferredTab;
+      qs(".tp-result-tabs button.active")?.classList.remove("active");
+      qs(`.tp-result-tabs button[data-tp-tab="${preferredTab}"]`)?.classList.add("active");
+      area.style.background = "";
+      if (preferredTab === "table") _renderTPTable(area, result);
+      else area.innerHTML = _renderResultValue(result);
+    }
+
+    function _showTPResultError(msg) {
+      state._tpLastResult = null;
+      const area = qs("#tpResultArea");
+      if (!area) return;
+      area.style.background = "rgba(248,81,73,.08)";
+      area.innerHTML = `<pre style="margin:0;color:var(--danger,#f85149);white-space:pre-wrap">${esc(msg)}</pre>`;
+    }
+
+    function _renderTPStructured(area, result) {
+      if (result === null || result === undefined) { area.innerHTML = `<span style="color:var(--text-dim)">null</span>`; return; }
+      if (result && typeof result === "object" && result.__output_type__ === "table") {
+        _renderTPTable(area, result);
+        return;
+      }
+      if (Array.isArray(result) && result.length > 0 && typeof result[0] === "object" && result[0] !== null) {
+        const cols = [...new Set(result.flatMap(r => Object.keys(r)))];
+        const thead = `<thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead>`;
+        const tbody = `<tbody>${result.map(row => `<tr>${cols.map(c => `<td>${esc(String(row[c] ?? ""))}</td>`).join("")}</tr>`).join("")}</tbody>`;
+        area.innerHTML = `<div style="overflow:auto"><table class="api-table" style="font-size:11px">${thead}${tbody}</table></div>`;
+      } else if (result && typeof result === "object" && !Array.isArray(result)) {
+        const rows = Object.entries(result).map(([k, v]) => {
+          const vDisplay = _isBase64Image(v)
+            ? `<img class="tp-result-img" src="${v.startsWith("data:") ? esc(v) : `data:image/png;base64,${esc(v)}`}" alt="${esc(k)}">`
+            : `<span style="font-size:11px">${esc(typeof v === "object" ? JSON.stringify(v) : String(v))}</span>`;
+          return `<tr><td style="color:var(--text-dim);white-space:nowrap;padding-right:8px;font-size:11px">${esc(k)}</td><td>${vDisplay}</td></tr>`;
+        }).join("");
+        area.innerHTML = `<table style="width:100%;border-collapse:collapse"><tbody>${rows}</tbody></table>`;
+      } else {
+        area.innerHTML = `<pre style="margin:0;white-space:pre-wrap">${esc(JSON.stringify(result, null, 2))}</pre>`;
+      }
+    }
+
+    function _renderTPChart(area, result) {
+      if (!window.echarts) { area.innerHTML = `<span style="color:var(--warning)">ECharts 未加载</span>`; return; }
+      const option = _jsonToChartOption(result);
+      if (!option) { area.innerHTML = `<pre style="color:var(--warning);margin:0">无法转换为图表</pre>`; return; }
+      const host = document.createElement("div");
+      host.style.cssText = "width:100%;height:200px";
+      area.innerHTML = "";
+      area.appendChild(host);
+      try {
+        const chart = echarts.init(host, "dark");
+        chart.setOption(option);
+      } catch (e) { area.innerHTML = `<pre style="color:var(--danger);margin:0">${esc(e.message)}</pre>`; }
+    }
+
+    function startRightResize(event) {
+      event.preventDefault();
+      const main = qs("#editorMain");
+      if (!main) return;
+      const startX = event.clientX;
+      const startW = state.testPanelWidth || 420;
+      document.body.style.userSelect = "none";
+      function move(e) {
+        requestAnimationFrame(() => {
+          const newW = Math.max(320, Math.min(600, startW - (e.clientX - startX)));
+          state.testPanelWidth = newW;
+          main.style.setProperty("--rpanel-w", `${newW}px`);
+        });
+      }
+      function up() {
+        document.body.style.userSelect = "";
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+        _layoutAllEditors();
+      }
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    }
+
+    async function onCtFileUpload(event, paramName, mode) {
+      const files = event.target?.files;
+      if (!files || !files.length) return;
+      const isMulti = mode === "multi" || mode === "folder" || files.length > 1;
+      const statusEl = qs("#tpStatus");
+      if (statusEl) statusEl.textContent = `正在上传 ${files.length} 个文件...`;
+      try {
+        const results = await _uploadFilesHelper(files);
+        if (!state.compTestFileUploads) state.compTestFileUploads = {};
+        if (isMulti) {
+          state.compTestFileUploads[paramName] = { multi: true, paths: results.map(r => r.path), filenames: results.map(r => r.filename) };
+        } else {
+          state.compTestFileUploads[paramName] = { multi: false, path: results[0].path, filename: results[0].filename };
+        }
+        if (statusEl) statusEl.textContent = "";
+        showToast(`已上传 ${results.length} 个文件`);
+        const cur = collectTestPanelParams();
+        _renderRightTestParams(cur);
+      } catch (err) {
+        showToast("文件上传失败: " + err.message);
+        if (statusEl) statusEl.textContent = "";
+      }
+    }
+
+    function clearCtFileUpload(paramName) {
+      if (state.compTestFileUploads) delete state.compTestFileUploads[paramName];
+      const cur = collectTestPanelParams();
+      _renderRightTestParams(cur);
+    }
+
+    // Backward-compat aliases (used by tpl test and other code paths)
+    function renderCompTestParams(values = {}) { _renderRightTestParams(values); }
+    function collectCompTestParams() { return collectTestPanelParams(); }
+    function runCompTest() { return runTestPanel(); }
+    function setCompTestMode(_mode) { /* no-op */ }
+    function loadCompTestExample() { fillTestExample(); }
+    async function onCompTestBinaryFileSelected(event, paramName) { return onCtFileUpload(event, paramName); }
 
     // ── Fork view (Req 1 / Req 2) ─────────────────────────────────────
     async function openForkView(id, moduleKind) {
@@ -5222,6 +8193,605 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       }
     }
 
+    // ===== 任务 1：辅助函数 =====
+    function _isBase64Image(s) {
+      if (typeof s !== "string") return false;
+      if (s.startsWith("data:image")) return true;
+      const trimmed = s.replace(/\s/g, "").replace(/=+$/, "");
+      if (trimmed.length < 100) return false;
+      return /^(\/9j\/|iVBOR|R0lGOD|UklGR)/.test(trimmed);
+    }
+
+    function _ensureDataUrl(base64Str) {
+      if (typeof base64Str !== "string") return "";
+      if (base64Str.startsWith("data:image")) return base64Str;
+      const trimmed = base64Str.replace(/\s/g, "");
+      let mime = "image/png";
+      if (trimmed.startsWith("/9j/")) mime = "image/jpeg";
+      else if (trimmed.startsWith("R0lGOD")) mime = "image/gif";
+      else if (trimmed.startsWith("UklGR")) mime = "image/webp";
+      return "data:" + mime + ";base64," + trimmed;
+    }
+
+    function _escapeJsString(value) {
+      return String(value ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, "\\r")
+        .replace(/\n/g, "\\n");
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(String(text ?? ""))
+        .then(() => showToast("已复制到剪贴板"))
+        .catch(() => showToast("复制失败"));
+    }
+
+    function downloadBlob(data, filename, mimeType) {
+      const blob = (data instanceof Blob) ? data : new Blob([data], { type: mimeType || "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "download";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadBase64File(base64, filename, mimeType) {
+      let raw = String(base64 || "");
+      if (raw.startsWith("data:") && raw.includes(",")) raw = raw.split(",")[1] || "";
+      raw = raw.replace(/\s/g, "");
+      const padding = raw.length % 4;
+      if (padding) raw += "=".repeat(4 - padding);
+      const byteChars = atob(raw);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      downloadBlob(byteArr, filename || "download", mimeType || "application/octet-stream");
+    }
+
+    function showImageFullscreen(src) {
+      const mask = document.createElement("div");
+      mask.className = "image-fullscreen-mask";
+      const img = document.createElement("img");
+      img.src = src;
+      mask.appendChild(img);
+      mask.onclick = () => mask.remove();
+      document.body.appendChild(mask);
+    }
+
+    // ===== 任务 2：参数收集函数 =====
+    function collectTestParams() {
+      const algo = state._testAlgo;
+      if (!algo) return { args: [], kwargs: {} };
+      const kwargs = {};
+      for (const param of (algo.params || [])) {
+        const card = Array.from(document.querySelectorAll(".param-card"))
+          .find(el => el.dataset.paramName === param.name);
+        if (card) {
+          const skipCheckbox = card.querySelector(".param-skip-checkbox");
+          if (skipCheckbox && skipCheckbox.checked) continue;
+        }
+        let val = state._testParamValues[param.name];
+        if (val === undefined) continue;
+        const hint = param.widget_hint || inferParamWidget(param) || "str";
+        switch (hint) {
+          case "int":
+            val = (val === "" || val === null) ? null : parseInt(String(val), 10);
+            break;
+          case "float":
+            val = (val === "" || val === null) ? null : parseFloat(String(val));
+            break;
+          case "bool":
+            break;
+          case "list":
+          case "dict":
+          case "json":
+          case "dataframe":
+            if (typeof val === "string") {
+              try {
+                val = JSON.parse(val);
+              } catch (err) {
+                val = parseParamValueByType(param.type, val);
+              }
+            }
+            break;
+          case "image":
+          case "file":
+          case "audio":
+          case "video":
+            break;
+          case "images":
+            if (!Array.isArray(val)) val = [val];
+            break;
+          default:
+            val = String(val ?? "");
+            break;
+        }
+        kwargs[param.name] = val;
+      }
+      return { args: [], kwargs };
+    }
+
+    // ===== 任务 3：运行函数 =====
+    async function runFullTest() {
+      const algo = state._testAlgo;
+      if (!algo) {
+        showToast("未选择算法");
+        return;
+      }
+      const btn = document.getElementById("testRunBtn");
+      const elapsedEl = document.getElementById("testElapsed");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "运行中...";
+      }
+      if (elapsedEl) elapsedEl.textContent = "运行中...";
+      try {
+        const payload = collectTestParams();
+        const id = algo.id || algo.registryId;
+        const response = await api("/api/v1/algorithms/" + encodeURIComponent(id) + "/execute", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+        state._testResult = response;
+        if (elapsedEl) elapsedEl.textContent = "耗时 " + (response.elapsed_ms || 0).toFixed(1) + " ms";
+        renderTestOutput(response);
+      } catch (err) {
+        state._testResult = { success: false, error: err.message, result: null, output_hint: "error" };
+        if (elapsedEl) elapsedEl.textContent = "执行失败";
+        renderTestOutput(state._testResult);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "运行测试";
+        }
+      }
+    }
+
+    // ===== 任务 4：输出路由 =====
+    function renderTestOutput(response) {
+      const tab = state._testOutputTab || "output";
+      switchOutputTab(tab);
+    }
+
+    function switchOutputTab(tabName) {
+      state._testOutputTab = tabName;
+      document.querySelectorAll("#outputTabs .output-tab").forEach(el => {
+        el.classList.toggle("active", el.dataset.tab === tabName);
+      });
+      const response = state._testResult;
+      const content = document.getElementById("outputContent");
+      if (!content) return;
+      if (!response) {
+        content.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>';
+        return;
+      }
+      switch (tabName) {
+        case "output":
+          renderRawOutput(response);
+          break;
+        case "structured":
+          renderStructuredOutput(response);
+          break;
+        case "chart":
+          renderChartOutput(response);
+          break;
+        default:
+          renderRawOutput(response);
+          break;
+      }
+    }
+
+    // ===== 任务 5：原始输出渲染 =====
+    function renderRawOutput(response) {
+      const container = document.getElementById("outputContent");
+      if (!container) return;
+      let html = "";
+      if (response.stdout) {
+        html += '<div class="output-section-label">打印输出</div>';
+        html += '<div class="output-text">' + esc(response.stdout) + "</div>";
+      }
+      if (response.error) {
+        html += '<div class="output-section-label">错误信息</div>';
+        html += '<div class="output-error">' + esc(response.error) + "</div>";
+      }
+      if (response.result !== null && response.result !== undefined) {
+        html += '<div class="output-section-label">返回值</div>';
+        if (typeof response.result === "string") {
+          html += '<div class="output-text">' + esc(response.result) + "</div>";
+        } else {
+          html += '<div class="output-json">' + esc(JSON.stringify(response.result, null, 2)) + "</div>";
+        }
+        html += '<div class="output-action-bar"><button class="output-action-btn" onclick="copyToClipboard(JSON.stringify(state._testResult.result, null, 2))">复制返回值</button></div>';
+      }
+      if (!html) html = '<div style="color:var(--text-secondary);text-align:center;padding:40px">无输出</div>';
+      container.innerHTML = html;
+    }
+
+    // ===== 任务 6：结构化输出渲染 =====
+    function renderStructuredOutput(response) {
+      const container = document.getElementById("outputContent");
+      if (!container) return;
+      if (!response.success && response.error) {
+        container.innerHTML = '<div class="output-error">' + esc(response.error) + "</div>";
+        return;
+      }
+      const result = response.result;
+      const hint = response.output_hint || inferOutputHintFromSample(result) || "text";
+      switch (hint) {
+        case "text": renderOutputText(container, result); break;
+        case "json": renderOutputJson(container, result); break;
+        case "table": renderOutputTable(container, result); break;
+        case "image": renderOutputImage(container, result); break;
+        case "images": renderOutputImages(container, result); break;
+        case "chart": renderOutputChart(container, result); break;
+        case "html": renderOutputHtml(container, result); break;
+        case "file": renderOutputFile(container, result); break;
+        case "error": container.innerHTML = '<div class="output-error">' + esc(response.error || "执行出错") + "</div>"; break;
+        case "mixed": renderOutputMixed(container, result); break;
+        default: renderOutputJson(container, result); break;
+      }
+    }
+
+    function renderOutputText(container, result) {
+      const val = (result === null || result === undefined) ? "null" : String(result);
+      container.innerHTML = "";
+      const text = document.createElement("div");
+      text.style.fontSize = "24px";
+      text.style.fontWeight = "600";
+      text.style.padding = "20px 0";
+      text.style.color = "var(--text)";
+      text.textContent = val;
+      const bar = document.createElement("div");
+      bar.className = "output-action-bar";
+      const btn = document.createElement("button");
+      btn.className = "output-action-btn";
+      btn.textContent = "复制";
+      btn.onclick = () => copyToClipboard(val);
+      bar.appendChild(btn);
+      container.appendChild(text);
+      container.appendChild(bar);
+    }
+
+    function renderOutputJson(container, result) {
+      container.innerHTML = "";
+      const bar = document.createElement("div");
+      bar.className = "output-action-bar";
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "output-action-btn";
+      copyBtn.textContent = "复制JSON";
+      copyBtn.onclick = () => copyToClipboard(JSON.stringify(result, null, 2));
+      bar.appendChild(copyBtn);
+      container.appendChild(bar);
+      const tree = document.createElement("div");
+      tree.className = "json-tree";
+      tree.appendChild(renderJsonTree(result, 0));
+      container.appendChild(tree);
+    }
+
+    function renderJsonTree(value, depth) {
+      if (depth > 10) {
+        const s = document.createElement("span");
+        s.textContent = "...";
+        return s;
+      }
+      const frag = document.createDocumentFragment();
+      if (value === null || value === undefined) {
+        const s = document.createElement("span");
+        s.className = "json-tree-null";
+        s.textContent = "null";
+        frag.appendChild(s);
+        return frag;
+      }
+      if (typeof value === "boolean") {
+        const s = document.createElement("span");
+        s.className = "json-tree-bool";
+        s.textContent = String(value);
+        frag.appendChild(s);
+        return frag;
+      }
+      if (typeof value === "number") {
+        const s = document.createElement("span");
+        s.className = "json-tree-num";
+        s.textContent = String(value);
+        frag.appendChild(s);
+        return frag;
+      }
+      if (typeof value === "string") {
+        if (_isBase64Image(value)) {
+          const img = document.createElement("img");
+          img.src = _ensureDataUrl(value);
+          img.className = "output-image";
+          img.style.maxHeight = "120px";
+          img.onclick = () => showImageFullscreen(img.src);
+          frag.appendChild(img);
+          return frag;
+        }
+        const s = document.createElement("span");
+        s.className = "json-tree-str";
+        s.textContent = '"' + (value.length > 200 ? value.slice(0, 200) + "..." : value) + '"';
+        frag.appendChild(s);
+        return frag;
+      }
+      if (Array.isArray(value)) {
+        const toggle = document.createElement("span");
+        toggle.className = "json-tree-toggle";
+        toggle.textContent = "▼";
+        const label = document.createElement("span");
+        label.className = "json-tree-key";
+        label.textContent = "[" + value.length + " 项]";
+        const childDiv = document.createElement("div");
+        childDiv.className = "json-tree-children";
+        value.forEach((item, i) => {
+          const row = document.createElement("div");
+          const idx = document.createElement("span");
+          idx.className = "json-tree-key";
+          idx.textContent = i + ": ";
+          row.appendChild(idx);
+          row.appendChild(renderJsonTree(item, depth + 1));
+          childDiv.appendChild(row);
+        });
+        toggle.onclick = () => {
+          childDiv.classList.toggle("collapsed");
+          toggle.textContent = childDiv.classList.contains("collapsed") ? "▶" : "▼";
+        };
+        frag.appendChild(toggle);
+        frag.appendChild(label);
+        frag.appendChild(childDiv);
+        return frag;
+      }
+      if (typeof value === "object") {
+        const keys = Object.keys(value);
+        const toggle = document.createElement("span");
+        toggle.className = "json-tree-toggle";
+        toggle.textContent = "▼";
+        const label = document.createElement("span");
+        label.className = "json-tree-key";
+        label.textContent = "{" + keys.length + " 个字段}";
+        const childDiv = document.createElement("div");
+        childDiv.className = "json-tree-children";
+        keys.forEach(key => {
+          const row = document.createElement("div");
+          const k = document.createElement("span");
+          k.className = "json-tree-key";
+          k.textContent = key + ": ";
+          row.appendChild(k);
+          row.appendChild(renderJsonTree(value[key], depth + 1));
+          childDiv.appendChild(row);
+        });
+        toggle.onclick = () => {
+          childDiv.classList.toggle("collapsed");
+          toggle.textContent = childDiv.classList.contains("collapsed") ? "▶" : "▼";
+        };
+        frag.appendChild(toggle);
+        frag.appendChild(label);
+        frag.appendChild(childDiv);
+        return frag;
+      }
+      const s = document.createElement("span");
+      s.textContent = String(value);
+      frag.appendChild(s);
+      return frag;
+    }
+
+    function _normalizeOutputTableData(result) {
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        if (Array.isArray(result.rows)) {
+          const headers = Array.isArray(result.columns) ? result.columns : (result.rows[0] && typeof result.rows[0] === "object" && !Array.isArray(result.rows[0]) ? Object.keys(result.rows[0]) : []);
+          const rows = result.rows.map(row => Array.isArray(row) ? row : headers.map(h => row?.[h]));
+          return { headers, rows };
+        }
+        if (Array.isArray(result.data)) return _normalizeOutputTableData(result.data);
+      }
+      if (!Array.isArray(result) || !result.length) return null;
+      if (typeof result[0] === "object" && !Array.isArray(result[0])) {
+        const headers = Object.keys(result[0]);
+        const rows = result.map(r => headers.map(h => r[h]));
+        return { headers, rows };
+      }
+      if (Array.isArray(result[0])) {
+        let headers = result[0].map((_, i) => "列" + (i + 1));
+        let rows = result;
+        if (result.length > 1 && result[0].every(c => typeof c === "string" && isNaN(Number(c)))) {
+          headers = result[0];
+          rows = result.slice(1);
+        }
+        return { headers, rows };
+      }
+      return null;
+    }
+
+    function renderOutputTable(container, result) {
+      const spec = _normalizeOutputTableData(result);
+      if (!spec || !spec.headers.length) {
+        renderOutputJson(container, result);
+        return;
+      }
+      const headers = spec.headers;
+      const rows = spec.rows || [];
+      const maxShow = 100;
+      const truncated = rows.length > maxShow;
+      const showRows = truncated ? rows.slice(0, maxShow) : rows;
+      let html = '<div class="output-action-bar"><button class="output-action-btn" onclick="copyTableAsTsv()">复制表格</button><span style="font-size:12px;color:var(--text-secondary)">共 ' + rows.length + " 行</span></div>";
+      html += '<div style="max-height:500px;overflow:auto"><table class="output-table"><thead><tr>';
+      headers.forEach(h => { html += "<th>" + esc(h) + "</th>"; });
+      html += "</tr></thead><tbody>";
+      showRows.forEach(row => {
+        html += "<tr>";
+        row.forEach(cell => { html += "<td>" + esc(cell ?? "") + "</td>"; });
+        html += "</tr>";
+      });
+      html += "</tbody></table></div>";
+      if (truncated) {
+        html += '<div style="text-align:center;padding:8px"><button class="output-action-btn" onclick="this.parentElement.previousElementSibling.style.maxHeight=\'none\';this.remove()">显示全部（共 ' + rows.length + " 行）</button></div>";
+      }
+      container.innerHTML = html;
+      window._lastTableHeaders = headers;
+      window._lastTableRows = rows;
+    }
+
+    function copyTableAsTsv() {
+      if (!window._lastTableHeaders) return;
+      let tsv = window._lastTableHeaders.join("\t") + "\n";
+      window._lastTableRows.forEach(row => {
+        tsv += row.map(c => String(c ?? "")).join("\t") + "\n";
+      });
+      copyToClipboard(tsv);
+    }
+
+    function renderOutputImage(container, result) {
+      const raw = String(result ?? "");
+      const src = _ensureDataUrl(raw);
+      const downloadRaw = raw.startsWith("data:") ? (raw.split(",")[1] || raw) : raw;
+      container.innerHTML = '<div><img class="output-image" src="' + _escapeJsString(src).replace(/"/g, "&quot;") + '" onclick="showImageFullscreen(this.src)" /></div>' +
+        '<div class="output-action-bar"><button class="output-action-btn" onclick="downloadBase64File(\'' + _escapeJsString(downloadRaw) + "', 'output.png', 'image/png')\">下载图片</button></div>";
+    }
+
+    function renderOutputImages(container, result) {
+      if (!Array.isArray(result)) {
+        renderOutputImage(container, result);
+        return;
+      }
+      let html = '<div style="margin-bottom:8px;font-size:13px;color:var(--text-secondary)">共 ' + result.length + " 张图片</div>";
+      html += '<div class="output-images-grid">';
+      result.forEach(item => {
+        const src = _ensureDataUrl(String(item));
+        html += '<div style="cursor:pointer" onclick="showImageFullscreen(\'' + _escapeJsString(src) + '\')"><img src="' + _escapeJsString(src).replace(/"/g, "&quot;") + '" style="width:100%;border-radius:6px" /></div>';
+      });
+      html += "</div>";
+      container.innerHTML = html;
+    }
+
+    function renderOutputChart(container, result) {
+      if (typeof echarts === "undefined") {
+        container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">页面未加载 ECharts 库，无法绘制图表。<br>降级显示 JSON 数据：</div>';
+        const jsonDiv = document.createElement("div");
+        jsonDiv.className = "output-json";
+        jsonDiv.textContent = JSON.stringify(result, null, 2);
+        container.appendChild(jsonDiv);
+        return;
+      }
+      const chartDiv = document.createElement("div");
+      chartDiv.style.width = "100%";
+      chartDiv.style.height = "400px";
+      container.innerHTML = "";
+      container.appendChild(chartDiv);
+      const chart = echarts.init(chartDiv);
+      let option = {};
+      if (Array.isArray(result) && result.every(v => typeof v === "number")) {
+        option = { xAxis: { type: "category", data: result.map((_, i) => i) }, yAxis: { type: "value" }, series: [{ data: result, type: "line", smooth: true }], tooltip: { trigger: "axis" } };
+      } else if (result && typeof result === "object" && !Array.isArray(result)) {
+        if (result.labels && result.values) {
+          option = { tooltip: { trigger: "item" }, series: [{ type: "pie", data: result.labels.map((l, i) => ({ name: l, value: result.values[i] })) }] };
+        } else if (result.x && result.y) {
+          option = { xAxis: { type: "category", data: result.x }, yAxis: { type: "value" }, series: [{ data: result.y, type: "line", smooth: true }], tooltip: { trigger: "axis" } };
+        } else {
+          renderOutputJson(container, result);
+          return;
+        }
+      } else if (Array.isArray(result) && result.length && typeof result[0] === "object") {
+        const keys = Object.keys(result[0]).filter(k => typeof result[0][k] === "number");
+        const categories = result.map((_, i) => i);
+        option = { xAxis: { type: "category", data: categories }, yAxis: { type: "value" }, legend: { data: keys }, series: keys.map(k => ({ name: k, type: "bar", data: result.map(r => r[k]) })), tooltip: { trigger: "axis" } };
+      } else {
+        renderOutputJson(container, result);
+        return;
+      }
+      chart.setOption(option);
+      window.addEventListener("resize", () => chart.resize(), { passive: true });
+    }
+
+    function renderOutputHtml(container, result) {
+      const iframe = document.createElement("iframe");
+      iframe.sandbox = "allow-same-origin";
+      iframe.style.width = "100%";
+      iframe.style.border = "1px solid var(--border)";
+      iframe.style.borderRadius = "6px";
+      iframe.style.minHeight = "200px";
+      container.innerHTML = "";
+      container.appendChild(iframe);
+      iframe.srcdoc = String(result);
+      iframe.onload = () => {
+        try {
+          iframe.style.height = iframe.contentDocument.body.scrollHeight + 20 + "px";
+        } catch (err) {
+          iframe.style.height = "300px";
+        }
+      };
+    }
+
+    function renderOutputFile(container, result) {
+      if (result && typeof result === "object" && result.filename && (result.content || result.base64)) {
+        const b64 = result.base64 || btoa(result.content);
+        container.innerHTML = '<div style="padding:20px;text-align:center"><div style="font-size:16px;margin-bottom:12px">' + esc(result.filename) + "</div>" +
+          '<button class="output-download-btn" onclick="downloadBase64File(\'' + _escapeJsString(b64) + "', '" + _escapeJsString(result.filename) + "')\">下载文件</button></div>";
+      } else {
+        renderOutputJson(container, result);
+      }
+    }
+
+    function renderOutputMixed(container, result) {
+      container.innerHTML = "";
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        Object.entries(result).forEach(([key, val]) => {
+          const section = document.createElement("div");
+          section.style.marginBottom = "16px";
+          const label = document.createElement("div");
+          label.className = "output-section-label";
+          label.textContent = key;
+          section.appendChild(label);
+          const content = document.createElement("div");
+          if (_isBase64Image(val)) {
+            renderOutputImage(content, val);
+          } else if (Array.isArray(val) && val.length && typeof val[0] === "object") {
+            renderOutputTable(content, val);
+          } else if (typeof val === "object") {
+            content.className = "json-tree";
+            content.appendChild(renderJsonTree(val, 0));
+          } else {
+            const t = document.createElement("div");
+            t.className = "output-text";
+            t.textContent = String(val);
+            content.appendChild(t);
+          }
+          section.appendChild(content);
+          container.appendChild(section);
+        });
+      } else {
+        renderOutputJson(container, result);
+      }
+    }
+
+    // ===== 任务 7：图表 Tab =====
+    function renderChartOutput(response) {
+      const container = document.getElementById("outputContent");
+      if (!container) return;
+      if (!response || !response.result) {
+        container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">无数据</div>';
+        return;
+      }
+      const result = response.result;
+      const hint = response.output_hint;
+      if (hint === "chart") {
+        renderOutputChart(container, result);
+        return;
+      }
+      if (Array.isArray(result) && result.every(v => typeof v === "number")) {
+        renderOutputChart(container, result);
+        return;
+      }
+      if (Array.isArray(result) && result.length && typeof result[0] === "object") {
+        const numKeys = Object.keys(result[0]).filter(k => typeof result[0][k] === "number");
+        if (numKeys.length) {
+          renderOutputChart(container, result);
+          return;
+        }
+      }
+      container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">当前结果不适合绘制图表</div>';
+    }
+
     function init() {
       renderNav();
       bindGlobalKeys();
@@ -5259,7 +8829,20 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.closeEditor = closeEditor;
     window.saveAndCloseEditor = saveAndCloseEditor;
     window.initEditor = initEditor;
+    window.toggleBottomPanel = toggleBottomPanel;
+    window.switchBottomTab = switchBottomTab;
+    window.startPanelResize = startPanelResize;
+    window.openTerminalPanel = openTerminalPanel;
+    window.executeCurrentFile = executeCurrentFile;
+    window.runCodeViaWs = runCodeViaWs;
+    window.refreshProblemsPane = refreshProblemsPane;
     window.switchFile = switchFile;
+    window.startDebug = startDebug;
+    window.stopDebug = stopDebug;
+    window.sendDebugAction = sendDebugAction;
+    window._debugConsoleEval = _debugConsoleEval;
+    window._debugJumpFrame = _debugJumpFrame;
+    window.clearAllBreakpoints = clearAllBreakpoints;
     window.addSourceFile = addSourceFile;
     window.openSourceFileModal = openSourceFileModal;
     window.confirmSourceFileModal = confirmSourceFileModal;
@@ -5269,6 +8852,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.validateNamespace = validateNamespace;
     window.saveNamespace = saveNamespace;
     window.setTestHeight = setTestHeight;
+    window.toggleTestPanel = toggleTestPanel;
     window.startTestResize = startTestResize;
     window.startTreeResize = startTreeResize;
     window.renderParams = renderParams;
@@ -5304,11 +8888,86 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.openTplParamImport = openTplParamImport;
     window.onTplParamFileSelected = onTplParamFileSelected;
     window.setTplTestMode = setTplTestMode;
+    window.onTplUnifiedFileUpload = onTplUnifiedFileUpload;
+    window.clearTplFileUpload = clearTplFileUpload;
     window.openTplBinaryUpload = openTplBinaryUpload;
     window.onTplBinaryFileSelected = onTplBinaryFileSelected;
     window.runTplSourceTest = runTplSourceTest;
     window.openComponentTestModalById = openComponentTestModalById;
     window.openComponentTestModal = openComponentTestModal;
+    window.openTestPanel = openTestPanel;
+    window.closeTestPanel = closeTestPanel;
+    window.openTestPage = openTestPage;
+    window.closeTestPage = closeTestPage;
+    window.renderTestParamCards = renderTestParamCards;
+    window.renderOneParamCard = renderOneParamCard;
+    window.renderIntInput = renderIntInput;
+    window.renderFloatInput = renderFloatInput;
+    window.renderStrInput = renderStrInput;
+    window.renderTextInput = renderTextInput;
+    window.renderBoolInput = renderBoolInput;
+    window.renderJsonInput = renderJsonInput;
+    window.renderImageInput = renderImageInput;
+    window.renderImagesInput = renderImagesInput;
+    window.renderFileInput = renderFileInput;
+    window.renderLiteralInput = renderLiteralInput;
+    window.renderUrlInput = renderUrlInput;
+    window.renderDatetimeInput = renderDatetimeInput;
+    window.renderColorInput = renderColorInput;
+    window.renderPasswordInput = renderPasswordInput;
+    window.initTestDivider = initTestDivider;
+    window._isBase64Image = _isBase64Image;
+    window._ensureDataUrl = _ensureDataUrl;
+    window.copyToClipboard = copyToClipboard;
+    window.downloadBlob = downloadBlob;
+    window.downloadBase64File = downloadBase64File;
+    window.collectTestParams = collectTestParams;
+    window.runFullTest = runFullTest;
+    window.renderTestOutput = renderTestOutput;
+    window.switchOutputTab = switchOutputTab;
+    window.renderRawOutput = renderRawOutput;
+    window.renderStructuredOutput = renderStructuredOutput;
+    window.renderOutputText = renderOutputText;
+    window.renderOutputJson = renderOutputJson;
+    window.renderJsonTree = renderJsonTree;
+    window.renderOutputTable = renderOutputTable;
+    window.copyTableAsTsv = copyTableAsTsv;
+    window.renderOutputImage = renderOutputImage;
+    window.renderOutputImages = renderOutputImages;
+    window.renderOutputChart = renderOutputChart;
+    window.renderOutputHtml = renderOutputHtml;
+    window.renderOutputFile = renderOutputFile;
+    window.renderOutputMixed = renderOutputMixed;
+    window.renderChartOutput = renderChartOutput;
+    window.showImageFullscreen = showImageFullscreen;
+    window.fillTestExample = fillTestExample;
+    window.toggleTestHistory = toggleTestHistory;
+    window.applyTestHistory = applyTestHistory;
+    window.runTestPanel = runTestPanel;
+    window.debugFromTestPanel = debugFromTestPanel;
+    window.switchTestResultTab = switchTestResultTab;
+    window.toggleTPParamSkip = toggleTPParamSkip;
+    window.switchTPParamTab = switchTPParamTab;
+    window.updateTPTableCell = updateTPTableCell;
+    window.addTPTableRow = addTPTableRow;
+    window.removeTPTableRow = removeTPTableRow;
+    window.startRightResize = startRightResize;
+    window.onCtFileUpload = onCtFileUpload;
+    window.clearCtFileUpload = clearCtFileUpload;
+    // Image/file widget handlers
+    window._setImageMode = _setImageMode;
+    window._setFileMode = _setFileMode;
+    window._setImageUrl = _setImageUrl;
+    window._removeImageParam = _removeImageParam;
+    window._removeFileParam = _removeFileParam;
+    window._removeImageAt = _removeImageAt;
+    window._onImageDrop = _onImageDrop;
+    window._onImageFileChange = _onImageFileChange;
+    window._onMultiImageFileChange = _onMultiImageFileChange;
+    window._onFileDrop = _onFileDrop;
+    window._onFileChange = _onFileChange;
+    window._onImagePasteInDz = _onImagePasteInDz;
+    window.extractPureBase64 = extractPureBase64;
     window.setCompTestMode = setCompTestMode;
     window.renderCompTestParams = renderCompTestParams;
     window.loadCompTestExample = loadCompTestExample;
@@ -5398,6 +9057,482 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.doResetPassword = doResetPassword;
     window.toggleUserStatus = toggleUserStatus;
     window.deleteUser = deleteUser;
+
+    // ============================================================
+    // 模板分块编辑器 (Block Editor) JS
+    // ============================================================
+
+    function initBlockEditor(container, item) {
+      // 仅对 template 类型启用分块编辑
+      if (item.type !== "template" && item.moduleKind !== "template") return false;
+      state.blockEditor = {
+        container,
+        algorithmId: item.id,
+        blocks: [],
+        editors: new Map(),  // blockId -> monaco editor instance
+        viewMode: "blocks",  // "blocks" | "source"
+        designMode: false,   // false = Use Mode, true = Design Mode
+      };
+      // 判断当前用户是否可进入 Design Mode（admin 或 owner）
+      const isAdmin = state.currentUser?.role === "admin";
+      const isOwner = item.ownerId === state.currentUser?.id || item.owner_id === state.currentUser?.id;
+      state.blockEditor.canDesign = isAdmin || isOwner;
+      // 加载 blocks 数据后渲染
+      api(`/api/v1/templates/${item.id}/blocks`).then(resp => {
+        state.blockEditor.blocks = resp.blocks || [];
+        renderBlockEditorUI(container);
+      }).catch(err => {
+        container.innerHTML = `<div class="empty" style="padding:24px">加载模板分块失败：${esc(err.message)}</div>`;
+      });
+      // 确保算法补全数据已加载（供 Ctrl+Alt+I 面板使用）
+      if (!state.completionItems || state.completionItems.length === 0) {
+        registerCompletionProvider();
+      }
+      return true;
+    }
+
+    function disposeBlockEditors() {
+      if (!state.blockEditor) return;
+      state.blockEditor.editors.forEach(ed => {
+        try { ed.dispose(); } catch (_) {}
+      });
+      state.blockEditor.editors.clear();
+    }
+
+    function renderBlockEditorUI(container) {
+      if (!state.blockEditor) return;
+      const { blocks, viewMode, designMode, canDesign } = state.blockEditor;
+      const sorted = [...blocks].sort((a, b) => a.order - b.order);
+
+      // 将 Block 操作控件注入主工具栏的 #blockEditorControls 占位符
+      const ctrl = qs("#blockEditorControls");
+      if (ctrl) {
+        const addBtnHtml = designMode
+          ? `<button class="block-action" onclick="window.addNewBlock()">＋ 添加步骤</button>`
+          : "";
+        const designToggle = canDesign
+          ? `<button class="block-action ${designMode ? "active" : ""}" onclick="window.toggleDesignMode()">${designMode ? "退出设计" : "进入设计模式"}</button>`
+          : "";
+        ctrl.innerHTML = `
+          ${designToggle}
+          ${addBtnHtml}
+          <button class="block-action ${viewMode === "blocks" ? "active" : ""}" onclick="window.setBlockViewMode('blocks')">分块</button>
+          <button class="block-action ${viewMode === "source" ? "active" : ""}" onclick="window.setBlockViewMode('source')">源码</button>
+        `;
+      }
+
+      if (viewMode === "source") {
+        container.innerHTML = `<div id="blockSourceView" style="flex:1;min-height:0;height:100%;"></div>`;
+        const syncCodeToSourceView = () => {
+          syncEditorsToBlocks();
+          const full = [...state.blockEditor.blocks]
+            .sort((a, b) => a.order - b.order)
+            .map(b => b.code).join("");
+          return full;
+        };
+        loadMonaco().then(m => {
+          const host = qs("#blockSourceView");
+          if (!host) return;
+          const code = syncCodeToSourceView();
+          const ed = m.editor.create(host, {
+            value: code,
+            language: "python",
+            theme: "algolib-dark",
+            readOnly: !designMode,
+            automaticLayout: true,
+            fontSize: 13,
+            minimap: { enabled: false },
+          });
+          state.blockEditor.sourceEditor = ed;
+          // 装饰锁定行
+          _decorateLockedLines(m, ed, state.blockEditor.blocks);
+          ed.onDidFocusEditorWidget(() => { window._activeMonaco = ed; });
+          ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyI, () => openAlgoCallOverlay());
+          ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
+        });
+        return;
+      }
+
+      // Blocks view
+      const blocksHtml = sorted.map((block, idx) => {
+        const isLocked = block.locked;
+        const blockClass = isLocked ? "is-locked" : "is-editable";
+        const lockBadge = isLocked ? "🔒" : "✏️";
+        const designActions = designMode ? `
+          <span class="block-design-actions">
+            <button onclick="window.toggleBlockLock('${esc(block.id)}')" title="${isLocked ? '解锁' : '锁定'}">${isLocked ? "🔓" : "🔒"}</button>
+            <button onclick="window.moveBlockUp('${esc(block.id)}')" title="上移">↑</button>
+            <button onclick="window.moveBlockDown('${esc(block.id)}')" title="下移">↓</button>
+            <button class="danger" onclick="window.removeBlock('${esc(block.id)}')" title="删除">✕</button>
+          </span>
+        ` : "";
+        const titleEditable = designMode ? `contenteditable="true" onblur="window.updateBlockTitle('${esc(block.id)}', this.textContent)"` : "";
+        const descEditable = designMode ? `contenteditable="true" onblur="window.updateBlockDesc('${esc(block.id)}', this.textContent)"` : "";
+        const hintEditable = designMode ? `contenteditable="true" onblur="window.updateBlockHint('${esc(block.id)}', this.textContent)"` : "";
+
+        // 内联描述预览（最多40字符，折叠时显示在标题行）
+        const descPreview = block.description ? block.description.slice(0, 40) + (block.description.length > 40 ? "…" : "") : "";
+        const descPreviewHtml = descPreview && !designMode
+          ? `<span class="block-desc-preview" title="${esc(block.description)}">${esc(descPreview)}</span>`
+          : "";
+        // 展开/折叠按钮（desc/hint 存在时或设计模式下显示）
+        const hasExpandable = !!(block.description || block.hint || designMode);
+        const expandBtn = hasExpandable
+          ? `<button class="block-expand-btn" id="block-expand-${esc(block.id)}" onclick="window.toggleBlockMeta('${esc(block.id)}')" title="展开/折叠描述">▾</button>`
+          : "";
+
+        // meta 区：desc + hint；use mode 默认折叠
+        const metaCollapsed = designMode ? "" : "collapsed";
+        const hintHtml = (block.hint || designMode)
+          ? `<div class="block-hint" ${hintEditable} data-block-id="${esc(block.id)}" data-field="hint">💡 ${esc(block.hint || (designMode ? "（点击编辑提示信息）" : ""))}</div>`
+          : "";
+        const descHtml = (block.description || designMode)
+          ? `<div class="block-description" ${descEditable} data-block-id="${esc(block.id)}" data-field="desc">${esc(block.description || (designMode ? "（点击编辑步骤描述）" : ""))}</div>`
+          : "";
+        const metaHtml = (descHtml || hintHtml)
+          ? `<div class="block-meta ${metaCollapsed}" id="block-meta-${esc(block.id)}">${descHtml}${hintHtml}</div>`
+          : "";
+
+        // 插入区：hover 展开
+        const insertZoneHtml = designMode
+          ? `<div class="block-insert-zone"><div class="block-insert-btn" onclick="window.insertBlockAt(${block.order + 1})">＋ 在此处插入新步骤</div></div>`
+          : "";
+
+        return `
+          <div class="template-block ${blockClass}" id="block-wrap-${esc(block.id)}">
+            <div class="block-header">
+              <span class="block-step-num">${idx + 1}</span>
+              <span class="block-title-text" ${titleEditable} data-block-id="${esc(block.id)}">${esc(block.title || `步骤 ${idx + 1}`)}</span>
+              <span class="block-lock-badge">${lockBadge}</span>
+              ${descPreviewHtml}
+              ${expandBtn}
+              ${designActions}
+            </div>
+            ${metaHtml}
+            <div class="block-code-area" id="block-editor-${esc(block.id)}" style="height:${Math.max(120, (block.code.split('\n').length + 2) * 19)}px"></div>
+          </div>
+          ${insertZoneHtml}
+        `;
+      }).join("");
+
+      container.innerHTML = `<div class="block-editor-body">${blocksHtml}${designMode ? '<div class="block-add-row"><button onclick="window.addNewBlock()">＋ 添加新步骤</button></div>' : ""}</div>`;
+
+      // 创建各 block 的 Monaco 实例
+      loadMonaco().then(m => {
+        sorted.forEach(block => {
+          const host = qs(`#block-editor-${block.id}`);
+          if (!host) return;
+          const ed = m.editor.create(host, {
+            value: block.code,
+            language: "python",
+            theme: "algolib-dark",
+            readOnly: block.locked && !designMode,
+            automaticLayout: true,
+            fontSize: 13,
+            minimap: { enabled: false },
+            lineNumbers: "on",
+            glyphMargin: true,
+            scrollBeyondLastLine: false,
+            wordWrap: "on",
+            quickSuggestions: { other: true, comments: false, strings: false },
+            scrollbar: { alwaysConsumeMouseWheel: false, vertical: "auto", verticalScrollbarSize: 5 },
+          });
+          if (block.locked && !designMode) {
+            host.style.background = "rgba(106,138,176,.04)";
+            host.style.pointerEvents = "none";
+          }
+          ed.onDidFocusEditorWidget(() => { window._activeMonaco = ed; });
+          ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyI, () => openAlgoCallOverlay());
+          ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
+          initBlockDebugBreakpoints(ed, block.id, m);
+          state.blockEditor.editors.set(block.id, ed);
+        });
+      });
+    }
+
+    function _decorateLockedLines(m, editor, blocks) {
+      const sorted = [...blocks].sort((a, b) => a.order - b.order);
+      let lineOffset = 1;
+      const decorations = [];
+      sorted.forEach(block => {
+        const lineCount = block.code.split("\n").length;
+        if (block.locked) {
+          decorations.push({
+            range: new m.Range(lineOffset, 1, lineOffset + lineCount - 1, 1),
+            options: {
+              isWholeLine: true,
+              className: "locked-line-decoration",
+              glyphMarginClassName: "locked-glyph",
+            },
+          });
+        }
+        lineOffset += lineCount;
+      });
+      editor.createDecorationsCollection(decorations);
+    }
+
+    function syncEditorsToBlocks() {
+      if (!state.blockEditor) return;
+      state.blockEditor.editors.forEach((ed, blockId) => {
+        const block = state.blockEditor.blocks.find(b => b.id === blockId);
+        if (block) block.code = ed.getValue();
+      });
+    }
+
+    async function saveBlockEditor() {
+      if (!state.blockEditor) return;
+      syncEditorsToBlocks();
+      const { algorithmId, blocks, designMode } = state.blockEditor;
+      try {
+        if (designMode) {
+          await api(`/api/v1/templates/${algorithmId}/blocks`, {
+            method: "PUT",
+            body: JSON.stringify({ blocks }),
+          });
+        } else {
+          const editableUpdates = blocks
+            .filter(b => !b.locked)
+            .map(b => ({ id: b.id, code: b.code }));
+          await api(`/api/v1/templates/${algorithmId}/blocks/editable`, {
+            method: "PUT",
+            body: JSON.stringify({ blocks: editableUpdates }),
+          });
+        }
+        showToast("模板已保存");
+      } catch (err) {
+        showToast("保存失败: " + err.message);
+      }
+    }
+
+    function toggleDesignMode() {
+      if (!state.blockEditor) return;
+      syncEditorsToBlocks();
+      disposeBlockEditors();
+      state.blockEditor.designMode = !state.blockEditor.designMode;
+      renderBlockEditorUI(state.blockEditor.container);
+    }
+
+    function setBlockViewMode(mode) {
+      if (!state.blockEditor) return;
+      syncEditorsToBlocks();
+      disposeBlockEditors();
+      if (state.blockEditor.sourceEditor) {
+        try { state.blockEditor.sourceEditor.dispose(); } catch (_) {}
+        state.blockEditor.sourceEditor = null;
+      }
+      state.blockEditor.viewMode = mode;
+      renderBlockEditorUI(state.blockEditor.container);
+    }
+
+    function addNewBlock() {
+      if (!state.blockEditor) return;
+      syncEditorsToBlocks();
+      const blocks = state.blockEditor.blocks;
+      const maxOrder = blocks.reduce((m, b) => Math.max(m, b.order), 0);
+      const newId = "blk_" + Math.random().toString(36).slice(2, 8);
+      blocks.push({
+        id: newId,
+        order: maxOrder + 1,
+        title: "新步骤",
+        description: "",
+        code: "    # 在此编写代码\n    pass\n",
+        locked: false,
+        hint: "",
+      });
+      disposeBlockEditors();
+      renderBlockEditorUI(state.blockEditor.container);
+      scrollToBlock(newId);
+    }
+
+    function insertBlockAt(beforeOrder) {
+      if (!state.blockEditor) return;
+      syncEditorsToBlocks();
+      const blocks = state.blockEditor.blocks;
+      blocks.forEach(b => { if (b.order >= beforeOrder) b.order += 1; });
+      const newId = "blk_" + Math.random().toString(36).slice(2, 8);
+      blocks.push({
+        id: newId,
+        order: beforeOrder,
+        title: "新步骤",
+        description: "",
+        code: "    # 在此编写代码\n    pass\n",
+        locked: false,
+        hint: "",
+      });
+      disposeBlockEditors();
+      renderBlockEditorUI(state.blockEditor.container);
+      scrollToBlock(newId);
+    }
+
+    function removeBlock(blockId) {
+      if (!state.blockEditor) return;
+      syncEditorsToBlocks();
+      const block = state.blockEditor.blocks.find(b => b.id === blockId);
+      if (!block) { showToast('未找到该代码块'); return; }
+      if (block.locked) { showToast('锁定的代码块不能删除，请先解锁'); return; }
+      showConfirm('确定删除该步骤？此操作不可撤销。', () => {
+        // 先从 DOM 移除，避免全量重渲染导致滚动跳转
+        const blockEl = qs(`#block-wrap-${blockId}`);
+        if (blockEl) {
+          const next = blockEl.nextElementSibling;
+          if (next && next.classList.contains('block-insert-zone')) next.remove();
+          blockEl.remove();
+          // 同时删除 Monaco 实例
+          const ed = state.blockEditor.editors.get(blockId);
+          if (ed) { try { ed.dispose(); } catch (_) {} state.blockEditor.editors.delete(blockId); }
+        }
+        state.blockEditor.blocks = state.blockEditor.blocks.filter(b => b.id !== blockId);
+        state.blockEditor.blocks
+          .sort((a, b) => a.order - b.order)
+          .forEach((b, i) => { b.order = i + 1; });
+        // 重渲染以更新步骤序号，保持滚动位置
+        _renderBlocksPreserveScroll(null);
+      });
+    }
+
+    function toggleBlockLock(blockId) {
+      if (!state.blockEditor) return;
+      syncEditorsToBlocks();
+      const block = state.blockEditor.blocks.find(b => b.id === blockId);
+      if (block) block.locked = !block.locked;
+      _renderBlocksPreserveScroll(blockId);
+    }
+
+    function moveBlockUp(blockId) {
+      if (!state.blockEditor) return;
+      syncEditorsToBlocks();
+      const blocks = state.blockEditor.blocks.sort((a, b) => a.order - b.order);
+      const idx = blocks.findIndex(b => b.id === blockId);
+      if (idx <= 0) return;
+      [blocks[idx].order, blocks[idx - 1].order] = [blocks[idx - 1].order, blocks[idx].order];
+      _renderBlocksPreserveScroll(blockId);
+    }
+
+    function moveBlockDown(blockId) {
+      if (!state.blockEditor) return;
+      syncEditorsToBlocks();
+      const blocks = state.blockEditor.blocks.sort((a, b) => a.order - b.order);
+      const idx = blocks.findIndex(b => b.id === blockId);
+      if (idx < 0 || idx >= blocks.length - 1) return;
+      [blocks[idx].order, blocks[idx + 1].order] = [blocks[idx + 1].order, blocks[idx].order];
+      _renderBlocksPreserveScroll(blockId);
+    }
+
+    function _renderBlocksPreserveScroll(blockId) {
+      if (!state.blockEditor) return;
+      const body = state.blockEditor.container.querySelector('.block-editor-body');
+      const savedTop = body ? body.scrollTop : 0;
+      disposeBlockEditors();
+      renderBlockEditorUI(state.blockEditor.container);
+      const newBody = state.blockEditor.container.querySelector('.block-editor-body');
+      if (newBody && savedTop > 0) newBody.scrollTop = savedTop;
+      if (blockId) {
+        requestAnimationFrame(() => {
+          const el = qs(`#block-wrap-${blockId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            el.classList.add('block-flash');
+            setTimeout(() => el.classList.remove('block-flash'), 1200);
+          }
+        });
+      }
+    }
+
+    function scrollToBlock(blockId) {
+      requestAnimationFrame(() => {
+        const el = qs(`#block-wrap-${blockId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          el.classList.add('block-flash');
+          setTimeout(() => el.classList.remove('block-flash'), 1200);
+        }
+      });
+    }
+
+    function updateBlockTitle(blockId, newTitle) {
+      if (!state.blockEditor) return;
+      const block = state.blockEditor.blocks.find(b => b.id === blockId);
+      if (block) block.title = newTitle.trim();
+    }
+
+    function toggleBlockMeta(blockId) {
+      const meta = qs(`#block-meta-${blockId}`);
+      const btn = qs(`#block-expand-${blockId}`);
+      if (!meta) return;
+      const collapsed = meta.classList.toggle("collapsed");
+      if (btn) btn.classList.toggle("expanded", !collapsed);
+      // 描述展开/折叠时隐藏/显示内联描述预览
+      const wrap = qs(`#block-wrap-${blockId}`);
+      const preview = wrap?.querySelector(".block-desc-preview");
+      if (preview) preview.style.display = collapsed ? "" : "none";
+    }
+
+    function updateBlockDesc(blockId, newDesc) {
+      if (!state.blockEditor) return;
+      const block = state.blockEditor.blocks.find(b => b.id === blockId);
+      if (block) block.description = newDesc.trim();
+    }
+
+    function updateBlockHint(blockId, newHint) {
+      if (!state.blockEditor) return;
+      const block = state.blockEditor.blocks.find(b => b.id === blockId);
+      if (block) block.hint = newHint.replace(/^💡\s*/, "").trim();
+    }
+
+    function closePreviewModal() {
+      const modal = qs("#modalRoot");
+      modal.innerHTML = "";
+      modal.classList.add("hidden");
+    }
+
+    function cleanupBlockEditor() {
+      disposeBlockEditors();
+      if (state.blockEditor?.sourceEditor) {
+        try { state.blockEditor.sourceEditor.dispose(); } catch (_) {}
+      }
+      state.blockEditor = null;
+    }
+
+    // 注册 window exports
+    window.initBlockEditor = initBlockEditor;
+    window.saveBlockEditor = saveBlockEditor;
+    window.toggleDesignMode = toggleDesignMode;
+    window.setBlockViewMode = setBlockViewMode;
+    window.addNewBlock = addNewBlock;
+    window.insertBlockAt = insertBlockAt;
+    window.removeBlock = removeBlock;
+    window.toggleBlockLock = toggleBlockLock;
+    window.moveBlockUp = moveBlockUp;
+    window.moveBlockDown = moveBlockDown;
+    window.scrollToBlock = scrollToBlock;
+    window.updateBlockTitle = updateBlockTitle;
+    window.toggleBlockMeta = toggleBlockMeta;
+    window._toggleMoreMenu = function(btn) {
+      const menu = btn.nextElementSibling;
+      const willShow = menu.classList.contains('hidden');
+      document.querySelectorAll('.more-menu:not(.hidden)').forEach(m => m.classList.add('hidden'));
+      if (willShow) {
+        const rect = btn.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.top = (rect.bottom + 4) + 'px';
+        menu.style.left = rect.left + 'px';
+        menu.style.zIndex = '9999';
+        menu.classList.remove('hidden');
+        setTimeout(() => {
+          const close = (ev) => {
+            if (!menu.contains(ev.target) && ev.target !== btn) {
+              menu.classList.add('hidden');
+              document.removeEventListener('click', close);
+            }
+          };
+          document.addEventListener('click', close);
+        }, 0);
+      }
+    };
+    window.updateBlockDesc = updateBlockDesc;
+    window.updateBlockHint = updateBlockHint;
+    window.closePreviewModal = closePreviewModal;
+    window.cleanupBlockEditor = cleanupBlockEditor;
 
     (async function initWithAuth() {
       tickClock();
