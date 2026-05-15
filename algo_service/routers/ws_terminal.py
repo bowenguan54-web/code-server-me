@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 import tempfile
 import time
 import traceback
+from pathlib import Path
+
+# 项目根目录，供子进程设置 PYTHONPATH
+_PROJECT_ROOT = str(Path(__file__).parent.parent.parent)
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -26,6 +31,34 @@ def _validate_ws_token(token: str) -> dict | None:
         return find_user_by_id(user_id)
     except Exception:
         return None
+
+
+def _parse_traceback_errors(stderr: str, tmp_filename: str) -> list[dict]:
+    """从 stderr 解析 Python traceback，提取行号和错误信息。"""
+    errors: list[dict] = []
+    file_line_pattern = re.compile(r'File "([^"]*)",\s*line\s+(\d+)(?:,\s*in\s+\S+)?')
+
+    error_message = ""
+    for line in reversed(stderr.strip().splitlines()):
+        stripped = line.strip()
+        if stripped and not stripped.startswith("File ") and not stripped.startswith("^"):
+            error_message = stripped
+            break
+
+    for match in file_line_pattern.finditer(stderr):
+        filename = match.group(1)
+        line_num = int(match.group(2))
+        if tmp_filename in filename or filename == "<string>":
+            errors.append({"line": line_num, "column": 0, "message": error_message, "type": "error", "filename": filename})
+
+    syntax_match = re.search(r'^(\s*)\^', stderr, re.MULTILINE)
+    if syntax_match and errors:
+        errors[-1]["column"] = len(syntax_match.group(1))
+
+    if not errors and error_message:
+        errors.append({"line": 1, "column": 0, "message": error_message, "type": "error", "filename": ""})
+
+    return errors
 
 
 # ── /ws/terminal ─────────────────────────────────────────────────────────────
@@ -64,7 +97,8 @@ async def ws_terminal(websocket: WebSocket, token: str = "", cwd: str = "") -> N
         return
 
     work_dir: str | None = cwd if (cwd and os.path.isdir(cwd)) else None
-    env = {**os.environ, "TERM": "xterm-256color", "COLORTERM": "truecolor"}
+    _pp = _PROJECT_ROOT + (os.pathsep + os.environ["PYTHONPATH"] if os.environ.get("PYTHONPATH") else "")
+    env = {**os.environ, "TERM": "xterm-256color", "COLORTERM": "truecolor", "PYTHONPATH": _pp}
 
     master_fd, slave_fd = pty.openpty()
     try:
@@ -199,13 +233,19 @@ async def ws_execute(websocket: WebSocket, token: str = "") -> None:
                     tmp_path = fh.name
 
                 started = time.perf_counter()
+                _env = os.environ.copy()
+                _env["PYTHONPATH"] = _PROJECT_ROOT + (os.pathsep + _env["PYTHONPATH"] if _env.get("PYTHONPATH") else "")
                 proc = await asyncio.create_subprocess_exec(
                     sys.executable,
                     tmp_path,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    env=_env,
+                    cwd=_PROJECT_ROOT,
                 )
                 current_proc = proc
+
+                stderr_lines: list[str] = []
 
                 async def _stream_stdout() -> None:
                     assert proc.stdout is not None
@@ -223,8 +263,10 @@ async def ws_execute(websocket: WebSocket, token: str = "") -> None:
                         line = await proc.stderr.readline()
                         if not line:
                             break
+                        decoded = line.decode("utf-8", errors="replace")
+                        stderr_lines.append(decoded)
                         await websocket.send_json(
-                            {"type": "stderr", "data": line.decode("utf-8", errors="replace")}
+                            {"type": "stderr", "data": decoded}
                         )
 
                 try:
@@ -250,6 +292,8 @@ async def ws_execute(websocket: WebSocket, token: str = "") -> None:
 
                 await proc.wait()
                 elapsed = (time.perf_counter() - started) * 1000
+                stderr_text = "".join(stderr_lines)
+                parsed_errors = _parse_traceback_errors(stderr_text, tmp_path) if stderr_text else []
                 await websocket.send_json(
                     {
                         "type": "result",
@@ -257,6 +301,7 @@ async def ws_execute(websocket: WebSocket, token: str = "") -> None:
                         "exit_code": proc.returncode,
                         "elapsed_ms": round(elapsed, 1),
                         "result": None,
+                        "errors": parsed_errors,
                     }
                 )
 

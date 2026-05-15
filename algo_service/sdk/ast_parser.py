@@ -9,6 +9,8 @@ import re
 import logging
 from typing import Any
 
+from .param_inferrer import enrich_params
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,6 +61,7 @@ class AstParser:
         en_description = docstring.split("\n")[0].strip() if docstring else ""
         snippet_body = AstParser._get_source_segment(source, node)
         params = AstParser._extract_params(node, docstring)
+        params = enrich_params(params)
 
         return_type = "Any"
         if node.returns is not None:

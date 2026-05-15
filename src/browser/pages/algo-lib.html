@@ -539,7 +539,7 @@
       min-height: 0;
       height: 100%;
       display: grid;
-      grid-template-columns: var(--tree-width, 232px) 5px 1fr;
+      grid-template-columns: var(--tree-width, 232px) 5px 1fr var(--rpanel-bar, 0px) var(--rpanel-w, 0px);
     }
     .file-tree {
       min-width: 120px;
@@ -687,10 +687,58 @@
     .exec-output .ok { color: #4ade80; }
     .exec-output .err { color: #f87171; }
     .exec-output .info { color: #94a3b8; }
-    .panel-empty { color: var(--text-dim); font-size: 12px; }
+    /* ===== 调试功能样式 ===== */
+    .debug-toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: var(--surface); border-bottom: 1px solid var(--line); font-size: 12px; }
+    .debug-toolbar button { padding: 3px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; transition: background 0.15s; }
+    .debug-toolbar button:hover { background: var(--hover); }
+    .debug-toolbar button:disabled { opacity: 0.4; cursor: default; }
+    .debug-toolbar .debug-status { margin-left: auto; color: var(--text-dim); font-size: 11px; }
+    .debug-panel { display: flex; gap: 0; height: 100%; font-size: 12px; }
+    .debug-panel-section { flex: 1; border-right: 1px solid var(--line); overflow-y: auto; padding: 6px 8px; }
+    .debug-panel-section:last-child { border-right: none; }
+    .debug-panel-section h4 { margin: 0 0 6px; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+    .debug-var-item { padding: 2px 0; font-family: var(--mono); line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .debug-var-name { color: #9cdcfe; }
+    .debug-var-type { color: #4ec9b0; font-size: 11px; }
+    .debug-var-value { color: var(--text); }
+    .debug-stack-item { padding: 3px 6px; cursor: pointer; border-radius: 3px; font-family: var(--mono); line-height: 1.5; }
+    .debug-stack-item:hover { background: var(--hover); }
+    .debug-stack-item.active { background: rgba(255,255,0,.1); }
+    .debug-stack-func { color: #dcdcaa; }
+    .debug-stack-loc { color: var(--text-dim); font-size: 11px; }
+    .debug-console-output { flex: 1; overflow-y: auto; font-family: var(--mono); font-size: 12px; line-height: 1.6; padding-bottom: 4px; min-height: 0; }
+    .debug-console-input { display: flex; gap: 6px; border-top: 1px solid var(--line); padding: 4px 0 0; flex-shrink: 0; }
+    .debug-console-input input { flex: 1; font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 3px 8px; color: var(--text); }
+    .debug-console-entry { padding: 1px 0; }
+    .debug-console-entry.cmd { color: #569cd6; }
+    .debug-console-entry.result { color: var(--text); }
+    .debug-console-entry.error { color: #f44747; }
+    .btn-debug { background: #007acc !important; color: #fff !important; border-color: #007acc !important; }
+    .btn-debug-stop { background: #e51400 !important; color: #fff !important; border-color: #e51400 !important; animation: debugPulse 1.5s infinite; }
+    @keyframes debugPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     #xtermHost { width: 100%; height: 100%; }
-    .problem-row { padding: 2px 0; font-size: 12px; color: #f87171; }
-    .problem-row span { color: var(--text-dim); margin-right: 6px; }
+    .problem-row { display: flex; gap: 8px; align-items: flex-start; padding: 4px 6px; font-size: 12px; cursor: pointer; border-radius: 3px; border-bottom: 1px solid rgba(106,138,176,.1); }
+    .problem-row:hover { background: rgba(30,144,255,.08); }
+    .problem-row .psev-error { color: #f87171; flex-shrink: 0; }
+    .problem-row .psev-warn { color: #fbbf24; flex-shrink: 0; }
+    .problem-row .prob-pos { color: #60a5fa; text-decoration: underline; white-space: nowrap; }
+    .problem-row .prob-msg { flex: 1; color: var(--text, #cdd6f4); }
+    /* 问题条目跳转闪烁 */
+    .flash-highlight-line { background: rgba(30,144,255,.28) !important; animation: flashFade 1.2s ease-out forwards; }
+    @keyframes flashFade { 0% { background: rgba(30,144,255,.45) !important; } 100% { background: transparent !important; } }
+    /* 断点与执行行样式 */
+    .debug-breakpoint-glyph { background: #e51400; border-radius: 50%; width: 10px !important; height: 10px !important; margin: 3px 0 0 4px; cursor: pointer; }
+    /* 调试工具栏运行中状态：禁用所有按钮 */
+    .debug-toolbar.running > button { opacity: 0.45; pointer-events: none; cursor: not-allowed; }
+    .debug-running-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4ade80; margin-right: 6px; animation: debugPulse 0.8s infinite; }
+    /* 运行按钮 loading 状态 */
+    #runBtn.running { opacity: 0.65; cursor: not-allowed; }
+    #runBtn.running::before { content: ''; display: inline-block; width: 10px; height: 10px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 4px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .debug-breakpoint-line { background: rgba(229,20,0,.08); }
+    .debug-current-glyph::before { content: '▶'; color: #ffcc00; font-size: 12px; margin-left: 2px; }
+    .debug-current-line { background: rgba(255,255,0,.15); }
+    .panel-empty { color: var(--text-dim); font-size: 12px; }
     .test-panel {
       min-height: 0;
       overflow: auto;
@@ -698,6 +746,363 @@
       padding: 0;
     }
     .test-panel.open { padding: 12px; }
+    /* ── Right Test Panel ── */
+    .r-resize-bar {
+      width: 0;
+      cursor: ew-resize;
+      background: var(--line);
+      transition: background .15s;
+      overflow: hidden;
+    }
+    .r-resize-bar.visible { width: 5px; }
+    .r-resize-bar:hover { background: var(--accent, #58a6ff); }
+    .right-test-panel {
+      height: 100%;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-card);
+      border-left: 1px solid var(--line);
+      font-size: 13px;
+      min-width: 0;
+    }
+    .right-test-panel .tp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+      gap: 8px;
+    }
+    .right-test-panel .tp-title {
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 13px;
+      flex: 1;
+    }
+    .right-test-panel .tp-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--line);
+    }
+    .tp-params {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 8px 12px;
+      min-height: 80px;
+    }
+    /* ── Test panel two-section body ── */
+    .tp-body {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .tp-result-section {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      border-top: 2px solid var(--line);
+      min-height: 280px;
+      max-height: 52%;
+    }
+    .tp-param-card {
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      background: var(--bg-deep);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .tp-param-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      gap: 6px;
+    }
+    .tp-param-name { font-weight: 500; font-size: 12px; }
+    .tp-param-type { color: var(--text-dim); font-size: 11px; margin-left: 4px; }
+    .tp-skip-wrap {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      color: var(--text-dim);
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .tp-param-card.skipped .tp-param-input-area {
+      opacity: .4;
+      pointer-events: none;
+    }
+    .tp-tab-bar {
+      display: flex;
+      gap: 2px;
+      background: var(--bg-card);
+      padding: 2px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+    .tp-tab-bar button {
+      flex: 1;
+      font-size: 11px;
+      padding: 2px 5px;
+      border: none;
+      background: none;
+      color: var(--text-dim);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .tp-tab-bar button.active {
+      background: var(--bg-deep);
+      color: var(--text);
+    }
+    .tp-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      background: var(--bg-deep);
+    }
+    .tp-controls .primary { flex: 1 1 auto; min-width: 70px; font-size: 12px; }
+    .tp-controls .btn-debug { font-size: 12px; }
+    .tp-result-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 4px 12px 0;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .tp-result-tabs button {
+      font-size: 12px;
+      padding: 4px 10px;
+      border: none;
+      background: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+    }
+    .tp-result-tabs button.active {
+      color: var(--accent, #58a6ff);
+      border-bottom-color: var(--accent, #58a6ff);
+    }
+    .tp-result-area {
+      flex: 1 1 auto;
+      height: auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+    .tp-result-title {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+      font-style: italic;
+    }
+    .tp-history-menu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 200;
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      min-width: 220px;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 4px 16px rgba(0,0,0,.5);
+      padding: 4px 0;
+    }
+    .tp-hist-item {
+      padding: 6px 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tp-hist-item:hover { background: rgba(255,255,255,.06); color: var(--text); }
+    .tp-editable-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .tp-editable-table th, .tp-editable-table td {
+      border: 1px solid var(--line);
+      padding: 2px 4px;
+    }
+    .tp-editable-table th { background: var(--bg-card); font-weight: 500; }
+    .tp-editable-table input {
+      width: 100%;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 11px;
+      padding: 1px;
+    }
+    /* ── Image / file upload widgets ─────────────────────────────── */
+    .image-dropzone {
+      border: 2px dashed var(--border, #555);
+      border-radius: 8px;
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--text-dim, #888);
+      font-size: 13px;
+      background: transparent;
+    }
+    .image-dropzone.drag-over {
+      border-color: var(--primary, #4fc3f7);
+      background: rgba(79,195,247,.06);
+    }
+    .image-dropzone svg, .image-dropzone .dz-icon {
+      width:36px;height:36px;fill:var(--text-dim);opacity:.7;margin-bottom:4px;
+    }
+    .image-dropzone .dropzone-text { font-size:13px;line-height:1.5;color:var(--text-dim); }
+    .image-dropzone .dropzone-hint { font-size:11px;color:var(--text-dim);opacity:.7; }
+    .image-mode-selector {
+      display:flex;gap:10px;margin:6px 0 4px;font-size:11px;color:var(--text-dim);flex-wrap:wrap;
+    }
+    .image-mode-selector label { display:flex;align-items:center;gap:3px;cursor:pointer; }
+    .image-preview {
+      display:flex;align-items:center;gap:12px;padding:12px;
+      background:var(--bg-card);border-radius:8px;margin-top:6px;
+      border:1px solid var(--border);min-height:80px;
+    }
+    .preview-thumb {
+      max-width:160px;max-height:100px;border-radius:4px;
+      object-fit:contain;border:1px solid var(--border);flex-shrink:0;
+    }
+    .preview-info { flex:1;min-width:0;font-size:12px;color:var(--text-dim);line-height:1.6;display:flex;flex-direction:column;gap:2px; }
+    .preview-info span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .preview-remove {
+      width:28px;height:28px;border-radius:50%;border:1px solid var(--border);
+      background:transparent;color:var(--text-dim);
+      cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;
+      transition:all .2s;flex-shrink:0;
+    }
+    .preview-remove:hover { background:rgba(255,80,80,.2);border-color:#f44;color:#f44; }
+    .image-url-input { width:100%;box-sizing:border-box;margin-top:4px;font-size:11px; }
+    .image-grid {
+      display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;margin-top:6px;
+    }
+    .image-grid-item {
+      position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;
+      border:1px solid var(--border);
+    }
+    .image-grid-item img { width:100%;height:100%;object-fit:cover; }
+    .grid-item-remove {
+      position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;
+      background:rgba(0,0,0,.65);color:#fff;border:none;cursor:pointer;
+      font-size:12px;line-height:18px;text-align:center;padding:0;
+    }
+    .image-grid-add {
+      display:flex;align-items:center;justify-content:center;
+      border:2px dashed var(--border);border-radius:6px;cursor:pointer;
+      font-size:22px;color:var(--text-dim);aspect-ratio:1;
+    }
+    .multi-image-info { font-size:11px;color:var(--text-dim);margin-top:4px; }
+    .file-preview-wrap { margin-top:6px;font-size:11px; }
+    .file-preview-table { max-height:130px;overflow:auto;border:1px solid var(--border);border-radius:4px; }
+    .file-preview-table table { width:100%;border-collapse:collapse;font-size:11px; }
+    .file-preview-table th,.file-preview-table td { border:1px solid var(--line);padding:2px 4px; }
+    .file-preview-table th { background:var(--bg-card);font-weight:500; }
+    .audio-preview, .video-preview { width:100%;margin-top:6px;border-radius:6px; }
+    .tp-float-slider { width:100%;margin-top:4px;accent-color:var(--primary); }
+    .tp-color-input { width:40px;height:26px;padding:0;border:none;cursor:pointer;border-radius:4px; }
+    .tp-type-hint { font-size:10px;color:var(--text-dim);margin-left:4px; }
+    .tp-upload-progress {
+      height:4px;background:var(--bg-deep);border-radius:2px;margin-top:4px;overflow:hidden;
+    }
+    .tp-upload-progress .bar { height:100%;background:var(--primary);transition:width .15s; }
+    /* result image display */
+    .tp-result-img { max-width:100%;max-height:360px;border-radius:4px;margin-top:4px;display:block; }
+    .tp-result-audio, .tp-result-video { width:100%;margin-top:4px;border-radius:6px; }
+    /* ===== 测试面板 overlay ===== */
+    .test-overlay-mask {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 900;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .test-overlay-mask.visible { opacity: 1; pointer-events: auto; }
+    .test-overlay {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: 50%; min-width: 480px; max-width: 720px;
+      background: var(--bg-card);
+      border-left: 1px solid var(--border, #333);
+      z-index: 901;
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+      box-shadow: -8px 0 30px rgba(0,0,0,0.4);
+    }
+    .test-overlay.open { transform: translateX(0); }
+    .test-overlay-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; border-bottom: 1px solid var(--border,#333); flex-shrink: 0;
+    }
+    .test-overlay-header h3 { margin:0;font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .test-overlay-close {
+      width:30px;height:30px;border:none;background:transparent;color:var(--text-dim);
+      font-size:20px;cursor:pointer;border-radius:6px;
+      display:flex;align-items:center;justify-content:center;transition:background 0.15s;flex-shrink:0;
+    }
+    .test-overlay-close:hover { background:rgba(255,255,255,0.1);color:var(--text); }
+    .test-overlay-toolbar {
+      display:flex;align-items:center;gap:8px;padding:8px 20px;
+      border-bottom:1px solid var(--line,#222);flex-shrink:0;flex-wrap:wrap;
+    }
+    .test-overlay-params {
+      flex:1;min-height:0;overflow-y:auto;padding:12px 20px;
+    }
+    .test-overlay-actions {
+      display:flex;align-items:center;gap:8px;padding:10px 20px;
+      border-top:1px solid var(--border,#333);
+      border-bottom:1px solid var(--border,#333);flex-shrink:0;flex-wrap:wrap;
+    }
+    .test-overlay-result {
+      flex:0 0 auto;max-height:42%;min-height:120px;overflow-y:auto;
+      padding:0;border-top:1px solid var(--line,#222);display:flex;flex-direction:column;
+    }
+    .test-overlay-result-tabs {
+      display:flex;gap:2px;padding:4px 12px 0;flex-shrink:0;
+      border-bottom:1px solid var(--line);
+    }
+    .test-overlay-result-tabs button {
+      font-size:12px;padding:4px 10px;border:none;background:none;
+      color:var(--text-dim);cursor:pointer;
+      border-bottom:2px solid transparent;border-radius:0;
+    }
+    .test-overlay-result-tabs button.active {
+      color:var(--accent,#58a6ff);border-bottom-color:var(--accent,#58a6ff);
+    }
+    .test-overlay-result-content {
+      flex:1 1 auto;min-height:0;overflow-y:auto;padding:10px 20px;font-size:12px;
+    }
     .param-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -935,6 +1340,8 @@
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
   <script>
     const BASE = window._ALGO_BASE || "http://127.0.0.1:8000";
+    // 项目根目录，用于断点终端运行时设置 PYTHONPATH
+    const _PROJECT_ROOT_HINT = window._ALGO_PROJECT_ROOT || "/home/guan/code-server-me";
     window._activeMonaco = null;
 
     const state = {
@@ -942,6 +1349,8 @@
       data: { components: [], templates: [], snippets: [] },
       categories: { components: [], templates: [] },
       filters: {},
+      pageScroll: {},
+      pendingScrollRestore: "",
       editing: null,
       monacoReady: null,
       monaco: null,
@@ -973,6 +1382,12 @@
       compTestFileUploads: {},
       _compTestAlgo: null,
       _compTestSource: null,
+      testPanelOpen: false,
+      testPanelWidth: 420,
+      _pendingDebugParams: null,
+      _tpLastResult: undefined,
+      _tpResultTab: "output",
+      _tpTableData: {},
       tplEditor: null,
       tplModel: null,
       blockEditor: null,
@@ -983,7 +1398,10 @@
       executeWs: null,
       xterm: null,
       xtermFitAddon: null,
-      terminalInited: false
+      terminalInited: false,
+      // ── 调试 ──
+      debugBreakpoints: new Map(),   // filename → Set<lineNumber>
+      debugSession: null             // { ws, status, currentFile, currentLine, variables, stack, consoleLog, startMsg }
     };
 
     function qs(selector, root = document) { return root.querySelector(selector); }
@@ -1544,12 +1962,14 @@
         return acc;
       }, {});
       // 仅在查看全部分类时补入空分类（筛选了某个分类时不显示空分类）
-      if (!state.filter?.category) {
+      const selectedCategory = qs("#filterCategory")?.value || "";
+      if (!selectedCategory) {
         (state.categories[page] || []).forEach(cat => {
           if (!(cat.namespace in groups)) groups[cat.namespace] = [];
         });
       }
-      qs("#list").innerHTML = Object.keys(groups).sort().map(key => `
+      const groupKeys = Object.keys(groups).filter(key => !selectedCategory || groups[key].length > 0).sort();
+      qs("#list").innerHTML = groupKeys.map(key => `
         <section class="folder-section">
           <div class="folder-head">
             <button class="ghost folder-toggle" onclick="window.toggleFolder(this)">▾</button>
@@ -1563,6 +1983,10 @@
           <div class="folder-body">${groups[key].map(item => renderCard(item, page)).join("")}</div>
         </section>
       `).join("") || '<div class="empty">暂无数据</div>';
+      if (state.pendingScrollRestore === page) {
+        state.pendingScrollRestore = "";
+        restoreMainScroll(page);
+      }
     }
 
     function renderCard(item, page) {
@@ -1644,6 +2068,20 @@
     }
 
     function applyFilters() { state.selectedNavNs = ""; renderCards(state.page); }
+    function rememberMainScroll(page = state.page) {
+      const main = qs("#main");
+      if (!main || !page) return;
+      state.pageScroll[page] = main.scrollTop || 0;
+    }
+    function restoreMainScroll(page = state.page) {
+      const top = state.pageScroll?.[page] || 0;
+      const restore = () => {
+        const main = qs("#main");
+        if (main) main.scrollTop = top;
+      };
+      requestAnimationFrame(() => requestAnimationFrame(restore));
+      window.setTimeout(restore, 120);
+    }
     function scrollToSection(ns) {
       const sections = qsa(".folder-section");
       for (const sec of sections) {
@@ -2738,15 +3176,20 @@
     }
 
     async function openEditorById(id, page, expandTest = false) {
+      const returnPage = state.page || page;
+      rememberMainScroll(returnPage);
       const collection = state.data[page] || [];
       const item = collection.find(entry => entry.id === id) || { id };
       await openEditor(item, page, expandTest);
+      if (state.editing) state.editing.returnPage = returnPage;
     }
 
     async function openEditor(item, page, expandTest = false) {
+      const returnPage = state.page || page;
+      rememberMainScroll(returnPage);
       const source = await api(`/api/v1/algorithm-source/${safeId(item.id)}`);
       const algo = source.algorithm || item;
-      state.editing = { id: item.id, page, algo, source, package: null };
+      state.editing = { id: item.id, page, returnPage, algo, source, package: null };
       if (algo.packageId) {
         try {
           const packageData = await api(`/api/v1/packages/${safeId(algo.packageId)}`);
@@ -2798,7 +3241,8 @@
             </div>
             <div class="toolbar-divider"></div>
             <div id="blockEditorControls" style="display:contents"></div>
-            <button title="运行当前文件 (Ctrl+F5)" onclick="window.executeCurrentFile()">▶ 运行</button>
+            <button id="runBtn" title="运行当前文件 (Ctrl+F5)" onclick="window.executeCurrentFile()">▶ 运行</button>
+            <button id="debugBtn" class="btn-debug" title="启动调试" onclick="window.startDebug()">🔴 调试</button>
             <button title="打开终端 (Ctrl+\`)" onclick="window.openTerminalPanel()">⌗ 终端</button>
             <span class="spacer"></span>
             <button onclick="window.saveAndCloseEditor()">保存并退出</button>
@@ -2808,21 +3252,52 @@
             <aside class="file-tree" id="fileTree"></aside>
             <div class="tree-resize" onmousedown="window.startTreeResize(event)"></div>
             <div class="monaco-host" id="monacoHost"></div>
+            <div class="r-resize-bar" id="rResizeBar" onmousedown="window.startRightResize(event)"></div>
+            <div class="right-test-panel" id="rightTestPanel"></div>
           </div>
           <div class="v-resize-bar" id="vResizeBar" onmousedown="window.startTestResize(event)" ondblclick="window.toggleTestPanel()"></div>
           <div class="test-panel" id="testPanel"></div>
           <div class="panel-resize-bar" id="panelResizeBar" onmousedown="window.startPanelResize(event)"></div>
           <div class="bottom-panel" id="bottomPanel">
+            <div id="debugToolbar" class="debug-toolbar" style="display:none">
+              <button onclick="window.sendDebugAction('continue')" title="继续 (F5)">▶ 继续</button>
+              <button onclick="window.sendDebugAction('next')" title="下一步 (F10)">→ 下一步</button>
+              <button onclick="window.sendDebugAction('step')" title="进入 (F11)">↓ 进入</button>
+              <button onclick="window.sendDebugAction('return')" title="跳出 (Shift+F11)">↑ 跳出</button>
+              <button onclick="window.sendDebugAction('restart')" title="重启调试">↺ 重启</button>
+              <span id="debugStatusText" class="debug-status">调试中...</span>
+            </div>
             <div class="panel-tabs">
               <button class="panel-tab active" id="tab-output" onclick="window.switchBottomTab('output')">输出</button>
               <button class="panel-tab" id="tab-terminal" onclick="window.switchBottomTab('terminal')">终端</button>
               <button class="panel-tab" id="tab-problems" onclick="window.switchBottomTab('problems')">问题</button>
+              <button class="panel-tab" id="tab-debug" onclick="window.switchBottomTab('debug')">🔴 调试</button>
               <button class="panel-close-btn" onclick="window.toggleBottomPanel(false)">✕</button>
             </div>
             <div class="panel-content">
               <div class="panel-pane" id="outputPane"><div id="execOutput" class="exec-output"><span class="panel-empty">运行后输出将显示在这里</span></div></div>
               <div class="panel-pane hidden" id="terminalPane"><div id="xtermHost"></div></div>
               <div class="panel-pane hidden" id="problemsPane"><div id="problemsList"></div></div>
+              <div class="panel-pane hidden" id="debugPane">
+                <div class="debug-panel">
+                  <div class="debug-panel-section">
+                    <h4>变量</h4>
+                    <div id="debugVarsContent"><span class="panel-empty">等待调试启动...</span></div>
+                  </div>
+                  <div class="debug-panel-section">
+                    <h4>调用堆栈</h4>
+                    <div id="debugStackContent"><span class="panel-empty">等待调试启动...</span></div>
+                  </div>
+                  <div class="debug-panel-section" style="display:flex;flex-direction:column;min-height:0">
+                    <h4>调试控制台</h4>
+                    <div id="debugConsoleOutput" class="debug-console-output"></div>
+                    <div class="debug-console-input">
+                      <input id="debugConsoleInput" placeholder="输入 Python 表达式..." onkeydown="if(event.key==='Enter')window._debugConsoleEval()" />
+                      <button onclick="window._debugConsoleEval()">执行</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2964,6 +3439,7 @@
         tabSize: 4,
         autoIndent: "full",
         folding: true,
+        glyphMargin: true,
         bracketPairColorization: { enabled: true },
         quickSuggestions: { other: true, comments: false, strings: false },
         scrollbar: {
@@ -2976,6 +3452,13 @@
       state.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => saveCurrentFile());
       state.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
       state.editor.onDidChangeModelContent(() => runEditorLocalDiagnostics());
+      // >>> DEBUG INTEGRATION POINT: init breakpoints (replaces old initBreakpoints)
+      initDebugBreakpoints(state.editor);
+      // Debug keyboard shortcuts
+      state.editor.addAction({ id: "debug-continue", label: "继续", keybindings: [m.KeyCode.F5], run: () => sendDebugAction("continue") });
+      state.editor.addAction({ id: "debug-next", label: "下一步", keybindings: [m.KeyCode.F10], run: () => sendDebugAction("next") });
+      state.editor.addAction({ id: "debug-step", label: "进入", keybindings: [m.KeyCode.F11], run: () => sendDebugAction("step") });
+      state.editor.addAction({ id: "debug-stepout", label: "跳出", keybindings: [m.KeyMod.Shift | m.KeyCode.F11], run: () => sendDebugAction("return") });
       await registerCompletionProvider();
       runEditorLocalDiagnostics();
       renderTestPanel();
@@ -3113,6 +3596,11 @@
       state.editor.focus();
       renderFileTree();
       renderTestPanel();
+      // >>> DEBUG INTEGRATION POINT: sync breakpoint decorations to switched file
+      updateBreakpointDecorations();
+      if (state.debugSession?.currentFile === filename && state.debugSession?.currentLine) {
+        updateCurrentLineDecoration(state.debugSession.currentLine);
+      }
     }
 
     function openSourceFileModal(mode, oldName = "") {
@@ -3450,7 +3938,7 @@
     }
 
     function closeEditor() {
-      const page = state.editing?.page || state.page;
+      const page = state.editing?.returnPage || state.editing?.page || state.page;
       if (state.editor) {
         state.editor.dispose();
         state.editor = null;
@@ -3475,7 +3963,9 @@
       // 恢复 main 的 padding
       const main = qs("#main");
       if (main) main.classList.remove("editor-active");
+      state.pendingScrollRestore = page;
       switchPage(page);
+      restoreMainScroll(page);
     }
 
     async function saveAndCloseEditor() {
@@ -5947,7 +6437,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
 
     function switchBottomTab(tab) {
       state.bottomTab = tab;
-      ["output", "terminal", "problems"].forEach(t => {
+      ["output", "terminal", "problems", "debug"].forEach(t => {
         const btn = qs(`#tab-${t}`);
         if (btn) btn.classList.toggle("active", t === tab);
         const pane = qs(`#${t}Pane`);
@@ -6027,15 +6517,29 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const token = state.token || localStorage.getItem("algolib_token") || "";
       const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
       const host = new URL(BASE).host;
-      const ws = new WebSocket(`${wsProto}//${host}/ws/terminal?token=${encodeURIComponent(token)}`);
-      ws.onopen = () => { if (state.xterm) state.xterm.writeln("\x1b[32m[终端已连接]\x1b[0m"); };
+      // 传入算法文件所在目录作为终端 cwd
+      const sourceFile = state.editing?.algo?.sourceFile || "";
+      const cwdParam = sourceFile ? encodeURIComponent(sourceFile.replace(/\/[^\/]+$/, "")) : "";
+      const wsUrl = `${wsProto}//${host}/ws/terminal?token=${encodeURIComponent(token)}${cwdParam ? `&cwd=${cwdParam}` : ""}`;
+      const ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        if (state.xterm) state.xterm.writeln("\x1b[32m[终端已连接]\x1b[0m");
+        if (sourceFile && state.xterm) {
+          state.xterm.writeln(`\x1b[33m📄 ${sourceFile}\x1b[0m`);
+          state.xterm.writeln(`\x1b[2m# 运行: python3 ${sourceFile}\x1b[0m`);
+        }
+        if (state.xterm) {
+          const rows = state.xterm.rows || 24, cols = state.xterm.cols || 80;
+          ws.send(JSON.stringify({ type: "resize", rows, cols }));
+        }
+      };
       ws.onmessage = ev => {
         try {
           const msg = JSON.parse(ev.data);
           if (msg.type === "output" && state.xterm) state.xterm.write(msg.data);
         } catch { if (state.xterm) state.xterm.write(ev.data); }
       };
-      ws.onclose = () => { if (state.xterm) state.xterm.writeln("\r\n\x1b[33m[连接已断开]\x1b[0m"); };
+      ws.onclose = () => { if (state.xterm) state.xterm.writeln("\r\n\x1b[33m[连接已断开]\x1b[0m"); state.terminalWs = null; };
       ws.onerror = () => { if (state.xterm) state.xterm.writeln("\r\n\x1b[31m[连接错误]\x1b[0m"); };
       state.terminalWs = ws;
     }
@@ -6047,20 +6551,515 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       else if (!state.terminalWs || state.terminalWs.readyState !== WebSocket.OPEN) connectWsTerminal();
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // 断点 & 调试系统
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── 断点管理 ──────────────────────────────────────────────────────────────
+    let _dbgBpDecIds = [];
+    let _dbgCurDecIds = [];
+
+    function initDebugBreakpoints(editor) {
+      // >>> DEBUG INTEGRATION POINT: called after Monaco editor is created
+      editor.onMouseDown(e => {
+        const { type } = e.target;
+        const monaco = state.monaco;
+        if (!monaco) return;
+        if (
+          type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+          type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
+        ) {
+          const line = e.target.position?.lineNumber;
+          if (!line || !state.currentFile) return;
+          if (!state.debugBreakpoints.has(state.currentFile)) {
+            state.debugBreakpoints.set(state.currentFile, new Set());
+          }
+          const bps = state.debugBreakpoints.get(state.currentFile);
+          if (bps.has(line)) bps.delete(line);
+          else bps.add(line);
+          updateBreakpointDecorations();
+        }
+      });
+    }
+
+    function updateBreakpointDecorations() {
+      // >>> DEBUG INTEGRATION POINT: called from switchFile and initDebugBreakpoints
+      const editor = state.editor;
+      const monaco = state.monaco;
+      if (!editor || !monaco) return;
+      const bps = state.debugBreakpoints.get(state.currentFile) || new Set();
+      _dbgBpDecIds = editor.deltaDecorations(
+        _dbgBpDecIds,
+        Array.from(bps).map(line => ({
+          range: new monaco.Range(line, 1, line, 1),
+          options: {
+            isWholeLine: true,
+            className: "debug-breakpoint-line",
+            glyphMarginClassName: "debug-breakpoint-glyph",
+            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+          },
+        }))
+      );
+    }
+
+    function updateCurrentLineDecoration(line) {
+      const editor = state.editor;
+      const monaco = state.monaco;
+      if (!editor || !monaco) return;
+      _dbgCurDecIds = editor.deltaDecorations(
+        _dbgCurDecIds,
+        line
+          ? [
+              {
+                range: new monaco.Range(line, 1, line, 1),
+                options: {
+                  isWholeLine: true,
+                  className: "debug-current-line",
+                  glyphMarginClassName: "debug-current-glyph",
+                },
+              },
+            ]
+          : []
+      );
+    }
+
+    function clearAllBreakpoints() {
+      state.debugBreakpoints.clear();
+      updateBreakpointDecorations();
+      updateBlockBreakpointDecorations();
+    }
+
+    // ── 分块编辑器断点支持 ────────────────────────────────────────────────────
+
+    /** 分块模式下使用的虚拟文件名（与后端保持一致） */
+    function getBlockFileName() {
+      const funcName = state.editing?.algo?.funcName;
+      return funcName ? `${funcName}.py` : "__template__.py";
+    }
+
+    /** 计算 blockId 对应块在合并文件中的行偏移量（0-based） */
+    function getBlockLineOffset(blockId) {
+      if (!state.blockEditor) return 0;
+      const sorted = [...state.blockEditor.blocks].sort((a, b) => a.order - b.order);
+      let offset = 0;
+      for (const block of sorted) {
+        if (block.id === blockId) return offset;
+        offset += block.code.split('\n').length;
+      }
+      return offset;
+    }
+
+    /** 为单个分块 Monaco 实例绑定断点点击事件 */
+    function initBlockDebugBreakpoints(editor, blockId, monaco) {
+      editor.onMouseDown(e => {
+        const { type } = e.target;
+        if (
+          type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+          type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
+        ) {
+          const localLine = e.target.position?.lineNumber;
+          if (!localLine) return;
+          syncEditorsToBlocks();
+          const filename = getBlockFileName();
+          const globalLine = getBlockLineOffset(blockId) + localLine;
+          if (!state.debugBreakpoints.has(filename)) {
+            state.debugBreakpoints.set(filename, new Set());
+          }
+          const bps = state.debugBreakpoints.get(filename);
+          if (bps.has(globalLine)) bps.delete(globalLine);
+          else bps.add(globalLine);
+          updateBlockBreakpointDecorations();
+        }
+      });
+    }
+
+    /** 刷新所有分块编辑器的断点装饰 */
+    function updateBlockBreakpointDecorations() {
+      if (!state.blockEditor) return;
+      const monaco = state.monaco;
+      if (!monaco) return;
+      syncEditorsToBlocks();
+      const filename = getBlockFileName();
+      const bps = state.debugBreakpoints.get(filename) || new Set();
+      if (!state.blockEditor._bpDecIds) state.blockEditor._bpDecIds = new Map();
+      state.blockEditor.editors.forEach((ed, blockId) => {
+        const offset = getBlockLineOffset(blockId);
+        const block = state.blockEditor.blocks.find(b => b.id === blockId);
+        const lineCount = block ? block.code.split('\n').length : 0;
+        const localBps = Array.from(bps).filter(g => g > offset && g <= offset + lineCount);
+        const prevIds = state.blockEditor._bpDecIds.get(blockId) || [];
+        const newIds = ed.deltaDecorations(
+          prevIds,
+          localBps.map(g => ({
+            range: new monaco.Range(g - offset, 1, g - offset, 1),
+            options: {
+              isWholeLine: true,
+              className: "debug-breakpoint-line",
+              glyphMarginClassName: "debug-breakpoint-glyph",
+              stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+            },
+          }))
+        );
+        state.blockEditor._bpDecIds.set(blockId, newIds);
+      });
+    }
+
+    /** 在正确的分块编辑器上显示当前调试行（globalLine 为合并文件中的行号） */
+    function updateBlockCurrentLineDecoration(globalLine) {
+      if (!state.blockEditor) return;
+      const monaco = state.monaco;
+      if (!monaco) return;
+      syncEditorsToBlocks();
+      if (!state.blockEditor._curDecIds) state.blockEditor._curDecIds = new Map();
+      state.blockEditor.editors.forEach((ed, blockId) => {
+        const offset = getBlockLineOffset(blockId);
+        const block = state.blockEditor.blocks.find(b => b.id === blockId);
+        const lineCount = block ? block.code.split('\n').length : 0;
+        const localLine = (globalLine && globalLine > offset && globalLine <= offset + lineCount)
+          ? globalLine - offset : null;
+        const prevIds = state.blockEditor._curDecIds.get(blockId) || [];
+        const newIds = ed.deltaDecorations(
+          prevIds,
+          localLine ? [{
+            range: new monaco.Range(localLine, 1, localLine, 1),
+            options: {
+              isWholeLine: true,
+              className: "debug-current-line",
+              glyphMarginClassName: "debug-current-glyph",
+            },
+          }] : []
+        );
+        state.blockEditor._curDecIds.set(blockId, newIds);
+        if (localLine) ed.revealLineInCenter(localLine);
+      });
+    }
+
+    // ── 调试会话 ──────────────────────────────────────────────────────────────
+
+    function updateDebugStatus(html) {
+      const el = qs("#debugStatusText");
+      if (el) el.innerHTML = html;
+    }
+
+    function startDebug() {
+      if (state.debugSession) {
+        stopDebug();
+        return;
+      }
+
+      // Collect all file contents
+      let files = [];
+      if (state.blockEditor) {
+        // 分块编辑器模式：将所有 block 合并为一个文件
+        syncEditorsToBlocks();
+        const sorted = [...state.blockEditor.blocks].sort((a, b) => a.order - b.order);
+        const mergedContent = sorted.map(b => b.code).join("");
+        const blockFileName = getBlockFileName();
+        files = [{ filename: blockFileName, content: mergedContent }];
+      } else {
+        state.models.forEach((model, filename) => {
+          files.push({ filename, content: model.getValue() });
+        });
+      }
+      if (files.length === 0) { showToast("没有可调试的文件"); return; }
+
+      // Find entry file (is_entry flag) and function name
+      let entry_file = null;
+      if (state.blockEditor) {
+        entry_file = getBlockFileName();
+      } else {
+        state.fileMeta.forEach((meta, filename) => {
+          if (meta.is_entry) entry_file = filename;
+        });
+        if (!entry_file) entry_file = state.currentFile || files[0].filename;
+      }
+      const entry_func = state.editing?.algo?.funcName || "main";
+
+      // Collect breakpoints
+      const breakpoints = {};
+      state.debugBreakpoints.forEach((bpSet, filename) => {
+        if (bpSet.size > 0) breakpoints[filename] = Array.from(bpSet);
+      });
+
+      // Collect test params
+      let params = {};
+      try {
+        const page = state.editing?.page || "";
+        if (page === "component" || page === "components") {
+          params = state._pendingDebugParams ?? collectCompTestParams();
+          state._pendingDebugParams = null;
+        } else if (page === "templates" || page === "template") {
+          // 读取模板页面「输入示例 JSON」字段（与「运行」按钮行为一致）
+          const raw = qs("#tplInputExample")?.value || "{}";
+          let parsed = {};
+          try { parsed = JSON.parse(raw); } catch (_e) {}
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) parsed = {};
+          params = parsed;
+        }
+      } catch (_e) {}
+
+      // Set editor read-only during debug
+      if (state.blockEditor) {
+        state.blockEditor.editors.forEach(ed => ed.updateOptions({ readOnly: true }));
+      } else {
+        state.editor?.updateOptions({ readOnly: true });
+      }
+
+      const token = state.token || localStorage.getItem("algolib_token") || "";
+      const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+      const host = new URL(BASE).host;
+      const wsUrl = `${wsProto}//${host}/ws/debug?token=${encodeURIComponent(token)}`;
+      const ws = new WebSocket(wsUrl);
+
+      const startMsg = { action: "start", files, entry_file, entry_func, params, breakpoints };
+      state.debugSession = {
+        ws,
+        status: "connecting",
+        currentFile: null,
+        currentLine: null,
+        variables: [],
+        stack: [],
+        consoleLog: [],
+        startMsg,
+      };
+
+      ws.onopen = () => ws.send(JSON.stringify(startMsg));
+      ws.onmessage = ev => {
+        try { handleDebugMessage(JSON.parse(ev.data)); } catch (_e) {}
+      };
+      ws.onclose = () => cleanupDebug();
+      ws.onerror = () => { showToast("调试连接失败"); cleanupDebug(); };
+
+      // Update toolbar button to "stop"
+      const btn = qs("#debugBtn");
+      if (btn) {
+        btn.textContent = "⏹ 停止";
+        btn.className = "btn-debug-stop";
+        btn.onclick = () => window.stopDebug();
+      }
+    }
+
+    function stopDebug() {
+      if (!state.debugSession) return;
+      try { state.debugSession.ws.send(JSON.stringify({ action: "quit" })); } catch (_e) {}
+      setTimeout(() => { try { state.debugSession?.ws.close(); } catch (_e) {} }, 200);
+      cleanupDebug();
+    }
+
+    function cleanupDebug() {
+      if (state.blockEditor) {
+        // 恢复分块编辑器可写状态，清除当前行装饰
+        state.blockEditor.editors.forEach((ed, blockId) => {
+          const block = state.blockEditor.blocks.find(b => b.id === blockId);
+          ed.updateOptions({ readOnly: !!(block?.locked && !state.blockEditor.designMode) });
+        });
+        updateBlockCurrentLineDecoration(null);
+      } else {
+        state.editor?.updateOptions({ readOnly: false });
+        updateCurrentLineDecoration(null);
+      }
+      state.debugSession = null;
+      const toolbar = qs("#debugToolbar");
+      if (toolbar) toolbar.style.display = "none";
+      const btn = qs("#debugBtn");
+      if (btn) {
+        btn.textContent = "🔴 调试";
+        btn.className = "btn-debug";
+        btn.onclick = () => window.startDebug();
+      }
+    }
+
+    function handleDebugMessage(msg) {
+      if (!state.debugSession) return;
+
+      switch (msg.type) {
+        case "started":
+          state.debugSession.status = "running";
+          const toolbar = qs("#debugToolbar");
+          if (toolbar) toolbar.style.display = "flex";
+          toggleBottomPanel(true);
+          switchBottomTab("debug");
+          showToast("调试已启动");
+          break;
+
+        case "stopped":
+          state.debugSession.status = "paused";
+          state.debugSession.currentFile = msg.file;
+          state.debugSession.currentLine = msg.line;
+          // Clear running state — we're paused at a breakpoint
+          const toolbar2 = qs("#debugToolbar");
+          if (toolbar2) toolbar2.classList.remove("running");
+          if (state.blockEditor) {
+            updateBlockCurrentLineDecoration(msg.line);
+          } else {
+            if (msg.file && msg.file !== state.currentFile && state.models.has(msg.file)) {
+              switchFile(msg.file);
+            }
+            updateCurrentLineDecoration(msg.line);
+            state.editor?.revealLineInCenter(msg.line);
+          }
+          updateDebugStatus(`暂停于 ${msg.func}() 第 ${msg.line} 行`);
+          break;
+
+        case "locals":
+          state.debugSession.variables = msg.variables || [];
+          renderDebugVariables();
+          break;
+
+        case "stack":
+          state.debugSession.stack = msg.frames || [];
+          renderDebugStack();
+          break;
+
+        case "eval_result":
+          appendDebugConsole("cmd", `>>> ${msg.expression}`);
+          if (msg.error) appendDebugConsole("error", msg.error);
+          else appendDebugConsole("result", msg.result || "");
+          break;
+
+        case "output":
+          appendDebugConsole(msg.stream === "stderr" ? "error" : "result", msg.data);
+          break;
+
+        case "ended": {
+          const reason = msg.reason || "completed";
+          const ms = (msg.elapsed_ms || 0).toFixed(0);
+          showToast(`调试结束：${reason}（耗时 ${ms}ms）`);
+          cleanupDebug();
+          break;
+        }
+
+        case "error":
+          appendDebugConsole("error", msg.message || "未知错误");
+          break;
+      }
+    }
+
+    function sendDebugAction(action, extra) {
+      if (!state.debugSession?.ws) { showToast("调试会话未启动"); return; }
+      const msg = { action };
+      if (action === "eval" && extra) msg.expression = extra;
+      if (action === "restart" && state.debugSession.startMsg) {
+        state.debugSession.ws.send(JSON.stringify(state.debugSession.startMsg));
+        return;
+      }
+      // Show "running" state while executing between breakpoints
+      if (["continue", "next", "step", "return"].includes(action)) {
+        const toolbar = qs("#debugToolbar");
+        if (toolbar) toolbar.classList.add("running");
+        updateDebugStatus('<span class="debug-running-dot"></span>执行中...');
+      }
+      state.debugSession.ws.send(JSON.stringify(msg));
+    }
+
+    function _debugConsoleEval() {
+      const input = qs("#debugConsoleInput");
+      const expr = input?.value?.trim();
+      if (!expr) return;
+      sendDebugAction("eval", expr);
+      if (input) input.value = "";
+    }
+
+    // ── UI 渲染 ────────────────────────────────────────────────────────────────
+
+    function renderDebugVariables() {
+      const el = qs("#debugVarsContent");
+      if (!el) return;
+      const vars = state.debugSession?.variables || [];
+      if (!vars.length) {
+        el.innerHTML = '<span class="panel-empty">无局部变量</span>';
+        return;
+      }
+      el.innerHTML = vars.map(v =>
+        `<div class="debug-var-item"><span class="debug-var-name">${esc(v.name)}</span>` +
+        `<span class="debug-var-type"> :${esc(v.type)}</span>` +
+        ` = <span class="debug-var-value">${esc(v.repr)}</span></div>`
+      ).join("");
+    }
+
+    function renderDebugStack() {
+      const el = qs("#debugStackContent");
+      if (!el) return;
+      const frames = state.debugSession?.stack || [];
+      if (!frames.length) {
+        el.innerHTML = '<span class="panel-empty">无堆栈信息</span>';
+        return;
+      }
+      el.innerHTML = frames.map((f, i) =>
+        `<div class="debug-stack-item${i === 0 ? " active" : ""}" onclick="window._debugJumpFrame(${i})">` +
+        `<span class="debug-stack-func">${esc(f.func)}</span> ` +
+        `<span class="debug-stack-loc">(${esc(f.file)}:${f.line})</span></div>`
+      ).join("");
+    }
+
+    function appendDebugConsole(type, text) {
+      if (!state.debugSession) return;
+      state.debugSession.consoleLog.push({ type, text });
+      const el = qs("#debugConsoleOutput");
+      if (!el) return;
+      const entry = document.createElement("div");
+      entry.className = `debug-console-entry ${type}`;
+      entry.textContent = text;
+      el.appendChild(entry);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function _debugJumpFrame(idx) {
+      const frame = state.debugSession?.stack?.[idx];
+      if (!frame) return;
+      if (frame.file && state.models.has(frame.file)) {
+        if (frame.file !== state.currentFile) switchFile(frame.file);
+        state.editor?.revealLineInCenter(frame.line);
+      }
+    }
+
+    window.clearAllBreakpoints = clearAllBreakpoints;
+    window.startDebug = startDebug;
+    window.stopDebug = stopDebug;
+    window.sendDebugAction = sendDebugAction;
+    window._debugConsoleEval = _debugConsoleEval;
+    window._debugJumpFrame = _debugJumpFrame;
+
+    // ▶ 运行：直接执行当前代码
     function executeCurrentFile() {
       const model = state.editor?.getModel();
       if (!model) { showToast("编辑器未就绪"); return; }
-      const code = model.getValue();
       toggleBottomPanel(true);
       switchBottomTab("output");
-      runCodeViaWs(code);
+      runCodeViaWs(model.getValue());
+    }
+
+    function _setRunBtnRunning(running) {
+      const btn = qs("#runBtn");
+      if (!btn) return;
+      if (running) {
+        btn.classList.add("running");
+        btn.disabled = true;
+        btn.dataset.origText = btn.textContent;
+        btn.textContent = "运行中...";
+      } else {
+        btn.classList.remove("running");
+        btn.disabled = false;
+        btn.textContent = btn.dataset.origText || "▶ 运行";
+      }
     }
 
     function runCodeViaWs(code) {
       const out = qs("#execOutput");
       if (out) out.innerHTML = '<span class="info">正在运行…</span>';
+      _setRunBtnRunning(true);
+      const _onResult = () => _setRunBtnRunning(false);
       if (state.executeWs && state.executeWs.readyState === WebSocket.OPEN) {
         state.executeWs.send(JSON.stringify({ action: "run", code }));
+        // Patch result handler to also reset button for existing ws
+        const origMsg = state.executeWs.onmessage;
+        state.executeWs.onmessage = ev => {
+          if (origMsg) origMsg.call(state.executeWs, ev);
+          try {
+            const m = JSON.parse(ev.data);
+            if (m.type === "result") _setRunBtnRunning(false);
+          } catch {}
+        };
         return;
       }
       const token = state.token || localStorage.getItem("algolib_token") || "";
@@ -6078,6 +7077,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           else if (msg.type === "result") {
             const cls = msg.success ? "ok" : "err";
             outEl.innerHTML += `<span class="${cls}">── 退出码 ${msg.exit_code}，耗时 ${Math.round(msg.elapsed_ms)}ms ──</span>`;
+            _setRunBtnRunning(false);
           }
           outEl.scrollTop = outEl.scrollHeight;
         } catch { /* ignore */ }
@@ -6085,6 +7085,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       ws.onerror = () => {
         const outEl = qs("#execOutput");
         if (outEl) outEl.innerHTML += '<span class="err">WebSocket 连接失败</span>';
+        _setRunBtnRunning(false);
       };
       state.executeWs = ws;
     }
@@ -6097,10 +7098,34 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       if (!model) { list.innerHTML = '<span class="panel-empty">暂无问题</span>'; return; }
       const markers = state.monaco.editor.getModelMarkers({ resource: model.uri });
       if (!markers.length) { list.innerHTML = '<span class="panel-empty">✔ 没有检测到问题</span>'; return; }
-      list.innerHTML = markers.map(mk =>
-        `<div class="problem-row"><span>${esc((mk.resource?.path || "").split("/").pop())}:${mk.startLineNumber}</span>${esc(mk.message)}</div>`
-      ).join("");
+      list.innerHTML = markers.map(mk => {
+        const sevClass = mk.severity >= 8 ? "psev-error" : "psev-warn";
+        const sevLabel = mk.severity >= 8 ? "错误" : "警告";
+        const ln = mk.startLineNumber, col = mk.startColumn;
+        return `<div class="problem-row" onclick="jumpToLine(${ln},${col})" title="跳转到第 ${ln} 行">
+          <span class="${sevClass}">${sevLabel}</span>
+          <span class="prob-pos">行 ${ln}</span>
+          <span class="prob-msg">${esc(mk.message)}</span>
+        </div>`;
+      }).join("");
     }
+
+    // 问题条目跳转
+    let _flashDecIds = [];
+    function jumpToLine(line, col) {
+      const editor = window._activeMonaco, monaco = state.monaco;
+      if (!editor || !monaco) return;
+      editor.revealLineInCenter(line);
+      editor.setPosition({ lineNumber: line, column: Math.max(1, col || 1) });
+      editor.focus();
+      if (_flashDecIds.length) _flashDecIds = editor.deltaDecorations(_flashDecIds, []);
+      _flashDecIds = editor.deltaDecorations([], [{
+        range: new monaco.Range(line, 1, line, 1),
+        options: { isWholeLine: true, className: "flash-highlight-line" }
+      }]);
+      setTimeout(() => { _flashDecIds = editor.deltaDecorations(_flashDecIds, []); }, 1200);
+    }
+    window.jumpToLine = jumpToLine;
 
     function bindGlobalKeys() {
       document.addEventListener("keydown", event => {
@@ -6610,159 +7635,814 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       });
     }
 
-    // ── Component test modal (Req 5 / Req 3) ──────────────────────────
-    async function openComponentTestModalById(id) {
-      const allComps = [...(state.data.components || [])];
-      let algo = allComps.find(a => a.id === id);
-      if (!algo) { showToast("找不到该算法信息"); return; }
-      _openCompTestModal(algo, null);
-    }
-
+    // ── Right Test Panel (replaces modal, Req 5 / Req 3) ────────────────
     function openComponentTestModal() {
       if (!state.editing) return;
       const content = state.models?.get(state.currentFile)?.getValue() || null;
-      _openCompTestModal(state.editing.algo, content);
+      openTestPanel(state.editing.algo, content);
     }
 
-    function _openCompTestModal(algo, sourceContent) {
-      state.compTestMode = "params";
-      state.compTestFileUploads = {};
+    async function openComponentTestModalById(id) {
+      const allItems = [...(state.data.components || []), ...(state.data.templates || [])];
+      let algo = allItems.find(a => a.id === id);
+      if (!algo) { showToast("找不到该算法信息"); return; }
+      // If no editor open, open it first then show panel
+      if (!state.editing) {
+        await openEditorById(id, algo.moduleKind === "template" ? "templates" : "components");
+      }
+      openTestPanel(algo, null);
+    }
+
+    function openTestPanel(algo, sourceContent) {
       state._compTestAlgo = algo;
       state._compTestSource = sourceContent;
-      const hasExample = !!(algo?.inputExample);
-      qs("#modalRoot").classList.remove("hidden");
-      qs("#modalRoot").innerHTML = `
-        <div class="modal" style="max-width:680px;width:90vw">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <h3 style="margin:0">测试：${esc(algo?.zhName || algo?.funcName || algo?.name || "")}</h3>
-            <button onclick="window.closeModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-dim)">✕</button>
-          </div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
-            ${hasExample ? `<button class="ghost" onclick="window.loadCompTestExample()" style="font-size:12px;padding:4px 12px">📋 填入示例</button>` : ""}
-            <span style="font-size:11px;color:var(--text-dim)">可直接输入值，或点参数右侧 📎 上传文件</span>
-          </div>
-          ${hasExample ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;padding:6px 8px;background:var(--bg-deep);border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">示例数据: ${esc((algo.inputExample || "").slice(0, 120))}</div>` : ""}
-          <div id="ctParams" class="param-grid" style="max-height:320px;overflow-y:auto"></div>
-          <div class="control-row" style="margin-top:8px;gap:8px">
-            <button class="primary" id="ctRunBtn" onclick="window.runCompTest()">▶ 运行</button>
-            <select id="ctTimeout" style="padding:4px 8px"><option value="5">5s</option><option value="30">30s</option><option value="60">60s</option></select>
-          </div>
-          <div id="ctStatus" style="margin-top:4px;font-size:12px;color:var(--text-dim)"></div>
-          <div id="ctOutput" class="output" style="margin-top:8px;min-height:60px"><pre style="margin:0;color:var(--text-dim)">等待运行</pre></div>
-        </div>
-      `;
-      renderCompTestParams();
-      // Auto-fill example data on open
-      if (hasExample) loadCompTestExample();
+      state.compTestFileUploads = {};
+      state._tpFileState = {};
+      state._tpResultTab = "output";
+      state._tpTableData = {};
+      state._tpLastResult = undefined;
+      state.testPanelOpen = true;
+      _renderOverlayTestPanel();
+      document.addEventListener("keydown", _testOverlayEscHandler);
     }
 
-    function loadCompTestExample() {
+    function closeTestPanel() {
+      state.testPanelOpen = false;
+      const mask = qs("#testOverlayMask");
+      const overlay = qs("#testOverlay");
+      if (mask) mask.classList.remove("visible");
+      if (overlay) overlay.classList.remove("open");
+      document.removeEventListener("keydown", _testOverlayEscHandler);
+    }
+
+    function _testOverlayEscHandler(e) {
+      if (e.key === "Escape") closeTestPanel();
+    }
+
+    function _renderOverlayTestPanel() {
+      const algo = state._compTestAlgo;
+      const name = algo?.zhName || algo?.funcName || algo?.name || "算法";
+      const hasExample = !!(algo?.inputExample);
+
+      // Title
+      const titleEl = qs("#testOverlayTitle");
+      if (titleEl) titleEl.textContent = `测试：${name}`;
+
+      // Toolbar: example + history buttons
+      const toolbar = qs("#testOverlayToolbar");
+      if (toolbar) toolbar.innerHTML = `
+        ${hasExample ? `<button class="ghost" style="font-size:12px;padding:2px 10px" onclick="window.fillTestExample()">📋 填入示例</button>` : ""}
+        <div style="position:relative;display:inline-block">
+          <button class="ghost" style="font-size:12px;padding:2px 10px" onclick="window.toggleTestHistory(this)">🕐 历史 ▾</button>
+          <div id="tpHistoryMenu" class="tp-history-menu hidden"></div>
+        </div>
+      `;
+
+      // Params area — give it the id tpParamsArea for compatibility
+      const paramsEl = qs("#testOverlayParams");
+      if (paramsEl) paramsEl.id = "tpParamsArea";
+
+      // Actions: run/debug/timeout
+      const actions = qs("#testOverlayActions");
+      if (actions) actions.innerHTML = `
+        <button class="primary" id="tpRunBtn" onclick="window.runTestPanel()">▶ 运行</button>
+        <button class="btn-debug" id="tpDebugBtn" onclick="window.debugFromTestPanel()">🐛 调试</button>
+        <select id="tpTimeout" style="font-size:12px;padding:2px 6px;flex-shrink:0">
+          <option value="5">5s</option><option value="30" selected>30s</option><option value="60">60s</option>
+        </select>
+        <span id="tpStatus" style="font-size:11px;color:var(--text-dim);margin-left:auto"></span>
+      `;
+
+      // Result tabs
+      const tabs = qs("#testOverlayResultTabs");
+      if (tabs) tabs.innerHTML = `
+        <button data-tp-tab="table" onclick="window.switchTestResultTab('table')">表格</button>
+        <button class="active" data-tp-tab="output" onclick="window.switchTestResultTab('output')">输出</button>
+        <button data-tp-tab="structured" onclick="window.switchTestResultTab('structured')">结构化</button>
+        <button data-tp-tab="chart" onclick="window.switchTestResultTab('chart')">图表</button>
+      `;
+
+      // Result content area — give it the id tpResultArea for compatibility
+      const resultContent = qs("#testOverlayResultContent");
+      if (resultContent) {
+        resultContent.id = "tpResultArea";
+        resultContent.innerHTML = `<pre style="margin:0;color:var(--text-dim)">等待运行…</pre>`;
+      }
+
+      // Show overlay
+      const mask = qs("#testOverlayMask");
+      const overlay = qs("#testOverlay");
+      if (mask) mask.classList.add("visible");
+      if (overlay) overlay.classList.add("open");
+
+      // Render params
+      _renderRightTestParams();
+      if (hasExample) fillTestExample();
+    }
+
+    function _renderRightTestParams(values = {}) {
+      const area = qs("#tpParamsArea");
+      if (!area) return;
+      const params = state._compTestAlgo?.params || [];
+      if (!params.length) {
+        const fallback = Object.keys(values).length ? JSON.stringify(values, null, 2) : "";
+        area.innerHTML = `
+          <div style="color:var(--text-dim);font-size:12px;margin-bottom:6px">无结构化参数，请直接输入 JSON</div>
+          <textarea id="tpJsonFallback" rows="6" style="width:100%;box-sizing:border-box;font-size:12px;resize:vertical" placeholder="{}">${esc(fallback)}</textarea>
+        `;
+        return;
+      }
+      area.innerHTML = params.map(p => _renderTPParamCard(p, values[p.name])).join("");
+    }
+
+    // ── Widget type inference ─────────────────────────────────────
+    function inferParamWidget(param, exampleValue) {
+      const name = (param.name || "").toLowerCase();
+      const type = String(param.type || param.annotation || "").toLowerCase();
+      // Priority 1: explicit type hints
+      if (/ndarray|np\.ndarray|image\.image|pil|cv2\.|opencv/.test(type)) return "image";
+      if (/bytes/.test(type) && /image|img|photo|pic|frame/.test(name)) return "image";
+      if (/literal\[/.test(type)) return "literal";
+      if (/datetime|date/.test(type)) return "datetime";
+      if (/bool/.test(type)) return "bool";
+      if (/int/.test(type)) return "int";
+      if (/float/.test(type)) return "float";
+      if (/list\[dict\]|dataframe/.test(type)) return "dataframe";
+      if (/list/.test(type)) {
+        const tokens2 = name.split(/[_\s]+/);
+        if (tokens2.some(t => ["images","imgs","photos","frames","pics"].includes(t))) return "images";
+        return "list";
+      }
+      if (/dict/.test(type)) return "dict";
+      // Priority 2: name-based keyword matching
+      const tokens = name.split(/[_\s]+/);
+      const hasToken = (...kw) => tokens.some(t => kw.includes(t));
+      if (hasToken("image","img","photo","picture","pic","frame")) return "image";
+      if (hasToken("images","imgs","photos","frames","pics")) return "images";
+      if (hasToken("audio","sound","wav","mp3")) return "audio";
+      if (hasToken("video","mp4","avi")) return "video";
+      if (hasToken("file","filepath","filename","csv","excel","xlsx","pdf","document")) return "file";
+      if (hasToken("url","link","href")) return "url";
+      if (hasToken("color","colour")) return "color";
+      if (hasToken("date","time","datetime")) return "datetime";
+      if (hasToken("password","secret","token")) return "password";
+      // Priority 3: example value type
+      if (exampleValue !== undefined) {
+        if (typeof exampleValue === "boolean") return "bool";
+        if (typeof exampleValue === "number") return Number.isInteger(exampleValue) ? "int" : "float";
+        if (Array.isArray(exampleValue)) return "list";
+        if (exampleValue && typeof exampleValue === "object") return "dict";
+      }
+      if (/str/.test(type) || type === "" || type === "any") return "str";
+      return "json";
+    }
+
+    // ── Image upload widget ───────────────────────────────────────
+    function _renderImageWidget(name, st) {
+      const mode = st.mode || "base64";
+      const modeSelector = `<div class="image-mode-selector">
+        <label><input type="radio" name="img-mode-${esc(name)}" value="base64" ${mode==="base64"?"checked":""} onchange="window._setImageMode('${esc(name)}','base64')"> base64</label>
+        <label><input type="radio" name="img-mode-${esc(name)}" value="path" ${mode==="path"?"checked":""} onchange="window._setImageMode('${esc(name)}','path')"> 服务器路径</label>
+        <label><input type="radio" name="img-mode-${esc(name)}" value="url" ${mode==="url"?"checked":""} onchange="window._setImageMode('${esc(name)}','url')"> URL</label>
+      </div>`;
+      let contentHtml = "";
+      if (st.preview) {
+        contentHtml = `<div class="image-preview">
+          <img class="preview-thumb" src="${esc(st.preview)}" alt="preview">
+          <div class="preview-info">
+            <span title="${esc(st.filename||"")}">${esc(st.filename||"")}</span>
+            <span>${st.width && st.height ? `${st.width}×${st.height}` : ""} ${st.size ? (_fmtBytes(st.size)) : ""}</span>
+          </div>
+          <button type="button" class="preview-remove" onclick="window._removeImageParam('${esc(name)}')">✕</button>
+        </div>`;
+      } else if (mode === "url") {
+        contentHtml = `<input class="image-url-input" data-tp-param="${esc(name)}" data-tp-type="str"
+          placeholder="https://..." value="${esc(st.url||"")}"
+          oninput="window._setImageUrl('${esc(name)}',this.value)">`;
+      } else if (mode === "path") {
+        contentHtml = st.path
+          ? `<div class="image-preview"><div class="preview-info"><span>${esc(st.path)}</span></div>
+              <button type="button" class="preview-remove" onclick="window._removeImageParam('${esc(name)}')">✕</button></div>`
+          : `<div style="font-size:11px;color:var(--text-dim)">上传后将显示路径</div>`;
+      }
+      const dz = `<div class="image-dropzone" id="img-dz-${esc(name)}"
+        onclick="qs('#img-file-${esc(name)}').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="event.preventDefault();this.classList.remove('drag-over');window._onImageDrop(event,'${esc(name)}')"
+        tabindex="0" onpaste="window._onImagePasteInDz(event,'${esc(name)}')">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 16V4m0 0L8 8m4-4l4 4"/>
+          <path d="M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/>
+        </svg>
+        <div class="dropzone-text">拖拽图片到此处，或 <span style="color:var(--primary);text-decoration:underline">点击选择文件</span></div>
+        <div class="dropzone-hint">支持 PNG / JPG / BMP / GIF / WebP，最大 10MB。也可直接 Ctrl+V 粘贴</div>
+        <input id="img-file-${esc(name)}" type="file" accept="image/*" style="display:none"
+          onchange="window._onImageFileChange(event,'${esc(name)}')">
+      </div>`;
+      return (st.preview || (mode==="path" && st.path) || (mode==="url" && st.url)) ? `${modeSelector}${contentHtml}` : `${modeSelector}${dz}`;
+    }
+
+    function _renderMultiImageWidget(name, st) {
+      const previews = st.previews || [];
+      const gridItems = previews.map((src, i) =>
+        `<div class="image-grid-item"><img src="${esc(src)}"><button type="button" class="grid-item-remove" onclick="window._removeImageAt('${esc(name)}',${i})">✕</button></div>`
+      ).join("");
+      return `<div class="image-grid" id="img-grid-${esc(name)}">
+        ${gridItems}
+        <div class="image-grid-add" onclick="qs('#imgs-file-${esc(name)}').click()">+
+          <input id="imgs-file-${esc(name)}" type="file" accept="image/*" multiple style="display:none"
+            onchange="window._onMultiImageFileChange(event,'${esc(name)}')">
+        </div>
+      </div>
+      <div class="multi-image-info">${previews.length ? `${previews.length} 张图片` : "点击 + 添加图片，或拖入"}</div>`;
+    }
+
+    function _renderFileWidget(name, st, accept, widgetType) {
+      const icons = { audio:"🎵", video:"🎬", file:"📄" };
+      const labels = { audio:"音频文件", video:"视频文件", file:"文件" };
+      const icon = icons[widgetType]||"📄";
+      const label = labels[widgetType]||"文件";
+      const modeSelector = `<div class="image-mode-selector">
+        <label><input type="radio" name="file-mode-${esc(name)}" value="base64" ${(st.mode||"base64")==="base64"?"checked":""} onchange="window._setFileMode('${esc(name)}','base64')"> base64</label>
+        <label><input type="radio" name="file-mode-${esc(name)}" value="path" ${st.mode==="path"?"checked":""} onchange="window._setFileMode('${esc(name)}','path')"> 服务器路径</label>
+      </div>`;
+      if (st.preview || st.path) {
+        let playerHtml = "";
+        if (st.preview) {
+          if (widgetType === "audio") playerHtml = `<audio class="audio-preview" controls src="${esc(st.preview)}"></audio>`;
+          else if (widgetType === "video") playerHtml = `<video class="video-preview" controls src="${esc(st.preview)}"></video>`;
+        }
+        return `${modeSelector}<div class="image-preview">
+          <div class="preview-info"><span>${esc(st.filename||"")}</span><span>${_fmtBytes(st.size||0)}</span></div>
+          <button type="button" class="preview-remove" onclick="window._removeFileParam('${esc(name)}')">✕</button>
+        </div>${playerHtml}`;
+      }
+      return `${modeSelector}<div class="image-dropzone" onclick="qs('#file-input-${esc(name)}').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="event.preventDefault();this.classList.remove('drag-over');window._onFileDrop(event,'${esc(name)}')">
+        <div><p>${icon} 点击或拖入${label}</p></div>
+        <input id="file-input-${esc(name)}" type="file" accept="${esc(accept)}" style="display:none"
+          onchange="window._onFileChange(event,'${esc(name)}')">
+      </div>`;
+    }
+
+    function _fmtBytes(n) {
+      if (!n) return "";
+      if (n < 1024) return `${n} B`;
+      if (n < 1048576) return `${(n/1024).toFixed(1)} KB`;
+      return `${(n/1048576).toFixed(1)} MB`;
+    }
+
+    // ── Param card renderer (upgraded) ───────────────────────────
+    function _renderTPParamCard(p, rawVal) {
+      const name = p.name;
+      const type = String(p.type || p.annotation || "str");
+      const valStr = rawVal !== undefined && rawVal !== null
+        ? (typeof rawVal === "object" ? JSON.stringify(rawVal, null, 2) : String(rawVal)) : "";
+      const widget = p.widget_hint || inferParamWidget(p, rawVal);
+
+      // Init file state if needed
+      state._tpFileState = state._tpFileState || {};
+      if (!state._tpFileState[name]) state._tpFileState[name] = { mode: "base64" };
+      const st = state._tpFileState[name];
+
+      let inputHtml = "";
+
+      if (widget === "image") {
+        inputHtml = _renderImageWidget(name, st);
+      } else if (widget === "images") {
+        inputHtml = _renderMultiImageWidget(name, st);
+      } else if (widget === "audio") {
+        inputHtml = _renderFileWidget(name, st, "audio/*", "audio");
+      } else if (widget === "video") {
+        inputHtml = _renderFileWidget(name, st, "video/*", "video");
+      } else if (widget === "file") {
+        inputHtml = _renderFileWidget(name, st, "*", "file");
+      } else if (widget === "bool") {
+        const isTrue = rawVal === true || rawVal === "true" || rawVal === 1;
+        inputHtml = `<div style="display:flex;gap:12px;margin-top:2px">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="tp-bool-${esc(name)}" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="true" ${isTrue ? "checked" : ""}>true
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="tp-bool-${esc(name)}" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="false" ${!isTrue ? "checked" : ""}>false
+          </label>
+        </div>`;
+      } else if (widget === "int") {
+        inputHtml = `<input type="number" step="1" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "float") {
+        inputHtml = `<input type="number" step="any" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "color") {
+        inputHtml = `<div style="display:flex;align-items:center;gap:6px">
+          <input type="color" class="tp-color-input" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr||"#000000")}">
+          <input type="text" data-tp-param="${esc(name)}-hex" placeholder="#rrggbb" value="${esc(valStr)}" style="width:80px;font-size:11px" oninput="qs('[data-tp-param=\\'${esc(name)}\\']').value=this.value">
+        </div>`;
+      } else if (widget === "password") {
+        inputHtml = `<input type="password" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "url") {
+        inputHtml = `<input type="url" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" placeholder="https://..." style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "literal") {
+        const opts = p.widget_options || [];
+        if (opts.length) {
+          const optHtml = opts.map(o => `<option value="${esc(o)}" ${valStr === o ? "selected" : ""}>${esc(o)}</option>`).join("");
+          inputHtml = `<select data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" style="width:100%">${optHtml}</select>`;
+        } else {
+          inputHtml = `<input data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+        }
+      } else if (widget === "datetime") {
+        inputHtml = `<input type="datetime-local" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+      } else if (widget === "dataframe" || widget === "list" || widget === "dict" || widget === "json") {
+        let parsed = null;
+        try { if (rawVal !== undefined) parsed = (typeof rawVal === "object") ? rawVal : JSON.parse(valStr); } catch {}
+        const isListOfDicts = Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object" && !Array.isArray(parsed[0]);
+        const placeholder = widget === "dataframe" ? "粘贴 CSV 或 JSON" : "JSON";
+        const fileRow = `<div style="display:flex;gap:4px;margin-top:4px">
+          <label title="单文件" style="cursor:pointer;padding:1px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px">📄<input type="file" style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','single')"/></label>
+          <label title="多文件" style="cursor:pointer;padding:1px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px">📚<input type="file" multiple style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','multi')"/></label>
+          <label title="文件夹" style="cursor:pointer;padding:1px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px">📁<input type="file" webkitdirectory style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','folder')"/></label>
+        </div>`;
+        if (isListOfDicts) {
+          state._tpTableData = state._tpTableData || {};
+          state._tpTableData[name] = JSON.parse(JSON.stringify(parsed));
+          inputHtml = `<div class="tp-tab-bar" id="tp-tab-bar-${esc(name)}">
+            <button class="active" onclick="window.switchTPParamTab('${esc(name)}','table',this)">表格</button>
+            <button onclick="window.switchTPParamTab('${esc(name)}','json',this)">JSON</button>
+            <button onclick="window.switchTPParamTab('${esc(name)}','file',this)">文件</button>
+          </div>
+          <div id="tp-param-pane-${esc(name)}">${_renderTPEditableTable(name, parsed)}</div>`;
+        } else {
+          inputHtml = `<div class="tp-tab-bar" id="tp-tab-bar-${esc(name)}">
+            <button class="active" onclick="window.switchTPParamTab('${esc(name)}','json',this)">JSON</button>
+            <button onclick="window.switchTPParamTab('${esc(name)}','file',this)">文件</button>
+          </div>
+          <div id="tp-param-pane-${esc(name)}">
+            <textarea rows="3" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}"
+              style="width:100%;box-sizing:border-box;font-size:11px;resize:vertical"
+              placeholder="${esc(placeholder)}">${esc(valStr)}</textarea>
+          </div>`;
+        }
+        inputHtml += fileRow;
+      } else {
+        // str / generic
+        const isLong = valStr.includes("\n") || valStr.length > 60;
+        if (isLong) {
+          inputHtml = `<textarea rows="3" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}"
+            style="width:100%;box-sizing:border-box;font-size:12px;resize:vertical">${esc(valStr)}</textarea>`;
+        } else {
+          inputHtml = `<input data-tp-param="${esc(name)}" data-tp-type="${esc(type)}" value="${esc(valStr)}" style="width:100%;box-sizing:border-box">`;
+        }
+      }
+      return `<div class="tp-param-card" id="tp-card-${esc(name)}">
+        <div class="tp-param-head">
+          <span>
+            <span class="tp-param-name">${esc(name)}</span>
+            <span class="tp-param-type">${esc(type)}</span>
+            <span class="tp-type-hint">${esc(widget)}</span>
+          </span>
+          <label class="tp-skip-wrap">
+            <input type="checkbox" data-tp-skip="${esc(name)}" onchange="window.toggleTPParamSkip('${esc(name)}', this.checked)" style="margin:0">
+            <span>跳过</span>
+          </label>
+        </div>
+        <div class="tp-param-input-area" id="tp-input-${esc(name)}">${inputHtml}</div>
+      </div>`;
+    }
+
+    // ── Image/file interaction handlers ──────────────────────────
+    function _getFileState(name) {
+      state._tpFileState = state._tpFileState || {};
+      if (!state._tpFileState[name]) state._tpFileState[name] = { mode: "base64" };
+      return state._tpFileState[name];
+    }
+
+    function _rerenderParamCard(name) {
+      const algo = state._compTestAlgo;
+      if (!algo) return;
+      const p = (algo.params || []).find(x => x.name === name);
+      if (!p) return;
+      const card = qs(`#tp-input-${name}`);
+      if (!card) return;
+      const widget = p.widget_hint || inferParamWidget(p);
+      const st = _getFileState(name);
+      let html = "";
+      if (widget === "image") html = _renderImageWidget(name, st);
+      else if (widget === "images") html = _renderMultiImageWidget(name, st);
+      else if (["audio","video","file"].includes(widget)) {
+        const accepts = { audio:"audio/*", video:"video/*", file:"*" };
+        html = _renderFileWidget(name, st, accepts[widget], widget);
+      } else return;
+      card.innerHTML = html;
+    }
+
+    function _setImageMode(name, mode) {
+      const st = _getFileState(name);
+      st.mode = mode;
+      _rerenderParamCard(name);
+    }
+
+    function _setFileMode(name, mode) {
+      const st = _getFileState(name);
+      st.mode = mode;
+      _rerenderParamCard(name);
+    }
+
+    function _setImageUrl(name, url) {
+      const st = _getFileState(name);
+      st.url = url;
+    }
+
+    function _removeImageParam(name) {
+      const st = _getFileState(name);
+      if (st.preview) { URL.revokeObjectURL(st.preview); }
+      state._tpFileState[name] = { mode: st.mode || "base64" };
+      _rerenderParamCard(name);
+    }
+
+    function _removeFileParam(name) { _removeImageParam(name); }
+
+    function _removeImageAt(name, idx) {
+      const st = _getFileState(name);
+      if (st.previews?.[idx]) URL.revokeObjectURL(st.previews[idx]);
+      st.files = (st.files || []).filter((_, i) => i !== idx);
+      st.previews = (st.previews || []).filter((_, i) => i !== idx);
+      _rerenderParamCard(name);
+    }
+
+    function _onImageDrop(event, name) {
+      const file = event.dataTransfer?.files?.[0];
+      if (file && file.type.startsWith("image/")) _processImageFile(name, file);
+    }
+
+    function _onImageFileChange(event, name) {
+      const file = event.target.files?.[0];
+      if (file) _processImageFile(name, file);
+    }
+
+    function _onMultiImageFileChange(event, name) {
+      const files = Array.from(event.target.files || []);
+      if (!files.length) return;
+      const st = _getFileState(name);
+      st.files = st.files || [];
+      st.previews = st.previews || [];
+      files.forEach(f => {
+        const url = URL.createObjectURL(f);
+        st.files.push(f);
+        st.previews.push(url);
+      });
+      _rerenderParamCard(name);
+    }
+
+    function _onFileDrop(event, name) {
+      const file = event.dataTransfer?.files?.[0];
+      if (file) _processGenericFile(name, file);
+    }
+
+    function _onFileChange(event, name) {
+      const file = event.target.files?.[0];
+      if (file) _processGenericFile(name, file);
+    }
+
+    function _processImageFile(name, file) {
+      const st = _getFileState(name);
+      if (st.preview) URL.revokeObjectURL(st.preview);
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        st.width = img.naturalWidth;
+        st.height = img.naturalHeight;
+        _rerenderParamCard(name);
+      };
+      img.src = url;
+      st.file = file;
+      st.preview = url;
+      st.filename = file.name;
+      st.size = file.size;
+      st.base64 = null; // will be lazily computed at run time
+      if (st.mode === "path") {
+        _uploadTempFileAndSetPath(name, file);
+      }
+      _rerenderParamCard(name);
+    }
+
+    function _processGenericFile(name, file) {
+      const st = _getFileState(name);
+      if (st.preview) URL.revokeObjectURL(st.preview);
+      const url = URL.createObjectURL(file);
+      st.file = file;
+      st.preview = url;
+      st.filename = file.name;
+      st.size = file.size;
+      st.base64 = null;
+      if (st.mode === "path") {
+        _uploadTempFileAndSetPath(name, file);
+      }
+      _rerenderParamCard(name);
+    }
+
+    async function _uploadTempFileAndSetPath(name, file) {
+      const bar = qs(`#tp-input-${name} .bar`);
+      if (bar) bar.style.width = "30%";
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const resp = await fetch("/api/v1/upload-temp", { method: "POST", body: fd });
+        const data = await resp.json();
+        const st = _getFileState(name);
+        st.path = data.path;
+        if (bar) bar.style.width = "100%";
+        _rerenderParamCard(name);
+      } catch (e) {
+        showToast("文件上传失败: " + e.message);
+      }
+    }
+
+    /**
+     * 从 FileReader.readAsDataURL 的结果中提取纯 base64 字符串（去除 data:...;base64, 前缀）
+     * 并修复 padding，确保长度是 4 的倍数。
+     */
+    function extractPureBase64(dataUrl) {
+      if (!dataUrl || typeof dataUrl !== "string") return "";
+      let b64 = dataUrl;
+      const commaIdx = dataUrl.indexOf(",");
+      if (commaIdx !== -1 && dataUrl.startsWith("data:")) {
+        b64 = dataUrl.substring(commaIdx + 1);
+      }
+      b64 = b64.replace(/\s/g, "");
+      const rem = b64.length % 4;
+      if (rem === 1) b64 += "===";       // 理论上不应出现，容错处理
+      else if (rem === 2) b64 += "==";
+      else if (rem === 3) b64 += "=";
+      return b64;
+    }
+
+    async function _readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(extractPureBase64(r.result)); // 纯 base64，不含前缀
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+
+    function _onImagePasteInDz(event, name) {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) { _processImageFile(name, file); event.preventDefault(); }
+          break;
+        }
+      }
+    }
+
+    // Global paste: capture clipboard images into first empty image param
+    document.addEventListener("paste", function(e) {
+      if (!state.testPanelOpen) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          const params = state._compTestAlgo?.params || [];
+          for (const p of params) {
+            if ((p.widget_hint || inferParamWidget(p)) === "image") {
+              const st = _getFileState(p.name);
+              if (!st.file && !st.url && !st.path) {
+                _processImageFile(p.name, file);
+                e.preventDefault();
+                break;
+              }
+            }
+          }
+          break;
+        }
+      }
+    });
+
+    function toggleTPParamSkip(name, skipped) {
+      const card = qs(`#tp-card-${name}`);
+      if (card) card.classList.toggle("skipped", skipped);
+    }
+
+    function switchTPParamTab(name, tab, btn) {
+      const tabBar = btn?.closest?.(".tp-tab-bar") || qs(`#tp-tab-bar-${name}`);
+      if (tabBar) tabBar.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+      if (btn instanceof HTMLElement) btn.classList.add("active");
+      const pane = qs(`#tp-param-pane-${name}`);
+      if (!pane) return;
+      const typeEl = qs(`#tp-card-${name} [data-tp-param]`) || qs(`#tp-card-${name} [data-tp-type]`);
+      const type = typeEl?.dataset?.tpType || typeEl?.dataset?.type || "list";
+      if (tab === "json") {
+        const tableData = state._tpTableData?.[name];
+        const json = tableData ? JSON.stringify(tableData, null, 2) : "";
+        pane.innerHTML = `<textarea rows="3" data-tp-param="${esc(name)}" data-tp-type="${esc(type)}"
+          style="width:100%;box-sizing:border-box;font-size:11px;resize:vertical"
+          placeholder="JSON">${esc(json)}</textarea>`;
+      } else if (tab === "table") {
+        const ta = pane.querySelector("[data-tp-param]");
+        if (ta) {
+          try {
+            const parsed = JSON.parse(ta.value);
+            if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === "object") {
+              state._tpTableData = state._tpTableData || {};
+              state._tpTableData[name] = parsed;
+            }
+          } catch {}
+        }
+        pane.innerHTML = _renderTPEditableTable(name, state._tpTableData?.[name] || []);
+      } else if (tab === "file") {
+        pane.innerHTML = `<div style="display:flex;gap:4px">
+          <label style="cursor:pointer;padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px">📄 选择文件<input type="file" style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','single')"/></label>
+          <label style="cursor:pointer;padding:2px 8px;font-size:11px;border:1px solid var(--border);border-radius:4px">📁 选择文件夹<input type="file" webkitdirectory style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','folder')"/></label>
+        </div>`;
+      }
+    }
+
+    function _renderTPEditableTable(paramName, data) {
+      if (!data || !data.length) {
+        return `<div style="color:var(--text-dim);font-size:11px">暂无数据</div>
+          <button type="button" onclick="window.addTPTableRow('${esc(paramName)}')" style="font-size:11px;margin-top:4px">+ 添加行</button>`;
+      }
+      const cols = [...new Set(data.flatMap(r => Object.keys(r)))];
+      return `<div style="overflow-x:auto">
+        <table class="tp-editable-table">
+          <thead><tr>
+            ${cols.map(c => `<th>${esc(c)}</th>`).join("")}
+            <th style="width:20px"></th>
+          </tr></thead>
+          <tbody id="tp-tbody-${esc(paramName)}">
+            ${data.map((row, ri) => `<tr>
+              ${cols.map(c => `<td><input value="${esc(String(row[c] ?? ""))}" onchange="window.updateTPTableCell('${esc(paramName)}',${ri},'${esc(c)}',this.value)"></td>`).join("")}
+              <td><button type="button" onclick="window.removeTPTableRow('${esc(paramName)}',${ri})"
+                style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:10px;padding:0">✕</button></td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <button type="button" onclick="window.addTPTableRow('${esc(paramName)}')" style="font-size:11px;margin-top:4px">+ 添加行</button>`;
+    }
+
+    function updateTPTableCell(paramName, rowIdx, col, value) {
+      const data = state._tpTableData?.[paramName];
+      if (!data || !data[rowIdx]) return;
+      const num = Number(value);
+      data[rowIdx][col] = (value !== "" && !isNaN(num)) ? num : value;
+    }
+
+    function addTPTableRow(paramName) {
+      const data = state._tpTableData?.[paramName];
+      if (!data) return;
+      const newRow = {};
+      if (data.length > 0) Object.keys(data[0]).forEach(c => { newRow[c] = ""; });
+      data.push(newRow);
+      const pane = qs(`#tp-param-pane-${paramName}`);
+      if (pane) pane.innerHTML = _renderTPEditableTable(paramName, data);
+    }
+
+    function removeTPTableRow(paramName, rowIdx) {
+      const data = state._tpTableData?.[paramName];
+      if (!data) return;
+      data.splice(rowIdx, 1);
+      const pane = qs(`#tp-param-pane-${paramName}`);
+      if (pane) pane.innerHTML = _renderTPEditableTable(paramName, data);
+    }
+
+    async function collectTestPanelParams() {
+      const params = state._compTestAlgo?.params || [];
+      if (!params.length) {
+        const ta = qs("#tpJsonFallback");
+        if (!ta) return {};
+        try { return JSON.parse(ta.value) || {}; } catch { return {}; }
+      }
+      const payload = {};
+      for (const p of params) {
+        const name = p.name;
+        const skipCb = qs(`[data-tp-skip="${name}"]`);
+        if (skipCb?.checked) continue;
+
+        // New file state handling
+        const fst = state._tpFileState?.[name];
+        if (fst) {
+          const widget = p.widget_hint || inferParamWidget(p);
+          if (["image","audio","video","file"].includes(widget)) {
+            const mode = fst.mode || "base64";
+            if (mode === "path" && fst.path) { payload[name] = fst.path; continue; }
+            if (mode === "url") { payload[name] = fst.url || ""; continue; }
+            if (mode === "base64" && fst.file) {
+              if (!fst.base64) fst.base64 = await _readFileAsBase64(fst.file);
+              payload[name] = fst.base64;
+              continue;
+            }
+            continue; // no file selected — skip
+          }
+          if (widget === "images") {
+            const files = fst.files || [];
+            const base64s = await Promise.all(files.map(f => _readFileAsBase64(f)));
+            payload[name] = base64s;
+            continue;
+          }
+        }
+
+        // Legacy upload
+        const upload = state.compTestFileUploads?.[name];
+        if (upload) { payload[name] = upload.multi ? upload.paths : upload.path; continue; }
+
+        const tableEl = qs(`#tp-param-pane-${name} table`);
+        if (tableEl && state._tpTableData?.[name]) { payload[name] = state._tpTableData[name]; continue; }
+        const type = String(p.type || p.annotation || "str");
+        if (/bool/i.test(type)) {
+          const checked = qs(`input[name="tp-bool-${name}"]:checked`);
+          payload[name] = checked ? checked.value === "true" : false;
+          continue;
+        }
+        const input = qs(`[data-tp-param="${name}"]`);
+        if (input) payload[name] = parseParamValueByType(type, input.value);
+      }
+      return payload;
+    }
+
+    function fillTestExample() {
       const algo = state._compTestAlgo;
       if (!algo?.inputExample) return;
       try {
         const parsed = JSON.parse(algo.inputExample);
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          renderCompTestParams(parsed);
+          _renderRightTestParams(parsed);
         } else {
           const params = algo?.params || [];
-          if (params.length > 0) renderCompTestParams({ [params[0].name]: parsed });
+          if (params.length > 0) _renderRightTestParams({ [params[0].name]: parsed });
         }
-      } catch { /* ignore invalid json */ }
+      } catch { /* ignore */ }
     }
 
-    function setCompTestMode(_mode) { /* unified mode — no-op */ }
-
-    function renderCompTestParams(values = {}) {
-      const container = qs("#ctParams");
-      if (!container) return;
-      const params = state._compTestAlgo?.params || [];
-      if (!params.length) { container.innerHTML = '<div class="empty">该函数无参数</div>'; return; }
-      container.innerHTML = params.map(p => {
-        const type = String(p.type || p.annotation || "str");
-        const name = p.name;
-        const rawVal = values[name];
-        const upload = state.compTestFileUploads?.[name];
-        const valStr = rawVal !== undefined && rawVal !== null
-          ? (typeof rawVal === "object" ? JSON.stringify(rawVal) : String(rawVal))
-          : "";
-        const uploadLabel = upload
-          ? (upload.multi ? `✅ ${upload.paths.length} 个文件` : `✅ ${esc(upload.filename)}`)
-          : null;
-        const uploadRow = upload
-          ? `<span style="font-size:11px;color:var(--success,#3fb950)">${uploadLabel}</span>
-             <button type="button" onclick="window.clearCtFileUpload('${esc(name)}')" style="background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:11px;padding:0 2px" title="移除">✕</button>`
-          : `<label title="单文件" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📄<input type="file" style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','single')"/></label>
-             <label title="多张图片" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📚<input type="file" multiple style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','multi')"/></label>
-             <label title="整个文件夹" style="cursor:pointer;padding:1px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px">📁<input type="file" webkitdirectory style="display:none" onchange="window.onCtFileUpload(event,'${esc(name)}','folder')"/></label>`;
-        const head = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><label style="margin:0">${esc(name)} · <span style="color:var(--text-dim);font-weight:normal">${esc(type)}</span></label><div style="display:flex;gap:3px;align-items:center">${uploadRow}</div></div>`;
-        if (upload) {
-          const pathInfo = upload.multi
-            ? upload.paths.map(p => `<div style="font-size:11px;color:var(--text-dim)">${esc(p)}</div>`).join("")
-            : `<div style="padding:4px 8px;background:var(--bg-deep);border-radius:4px;font-size:12px;color:var(--text-dim)">${esc(upload.path)}</div>`;
-          return `<div class="param-field">${head}${pathInfo}</div>`;
-        }
-        if (/bool/i.test(type)) {
-          const isTrueSelected = rawVal === true || rawVal === "true" || rawVal === 1;
-          return `<div class="param-field">${head}<select data-ct-param="${esc(name)}" data-ct-type="${esc(type)}"><option value="false"${!isTrueSelected ? " selected" : ""}>false</option><option value="true"${isTrueSelected ? " selected" : ""}>true</option></select></div>`;
-        }
-        if (/list|dict|DataFrame|dataframe/i.test(type)) {
-          return `<div class="param-field">${head}<textarea rows="3" data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" placeholder="${/DataFrame|dataframe/.test(type) ? "粘贴 CSV" : "JSON"}">${esc(valStr)}</textarea></div>`;
-        }
-        if (/int|float|number/i.test(type)) {
-          return `<div class="param-field">${head}<input type="number" data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" value="${esc(valStr)}" /></div>`;
-        }
-        return `<div class="param-field">${head}<input data-ct-param="${esc(name)}" data-ct-type="${esc(type)}" value="${esc(valStr)}" /></div>`;
-      }).join("");
+    function toggleTestHistory(btn) {
+      const menu = qs("#tpHistoryMenu");
+      if (!menu) return;
+      if (!menu.classList.contains("hidden")) { menu.classList.add("hidden"); return; }
+      const key = _tpHistoryKey();
+      const items = JSON.parse(localStorage.getItem(key) || "[]");
+      if (!items.length) {
+        menu.innerHTML = `<div class="tp-hist-item" style="pointer-events:none">暂无历史记录</div>`;
+      } else {
+        menu.innerHTML = items.map((item, i) => {
+          const preview = Object.entries(item.params || {}).map(([k, v]) => `${k}=${JSON.stringify(v)?.slice(0, 12)}`).join(", ").slice(0, 55);
+          return `<div class="tp-hist-item" onclick="window.applyTestHistory(${i})">${esc(item.time?.slice(0, 16) || "")} · ${esc(preview)}</div>`;
+        }).join("");
+      }
+      menu.classList.remove("hidden");
+      setTimeout(() => {
+        document.addEventListener("click", function closeMenu(e) {
+          if (!menu.contains(e.target) && e.target !== btn) {
+            menu.classList.add("hidden");
+            document.removeEventListener("click", closeMenu);
+          }
+        });
+      }, 0);
     }
 
-    async function onCtFileUpload(event, paramName, mode) {
-      const files = event.target?.files;
-      if (!files || !files.length) return;
-      const isMulti = mode === "multi" || mode === "folder" || files.length > 1;
-      const statusEl = qs("#ctStatus");
-      if (statusEl) statusEl.textContent = `正在上传 ${files.length} 个文件...`;
-      try {
-        const results = await _uploadFilesHelper(files);
-        if (!state.compTestFileUploads) state.compTestFileUploads = {};
-        if (isMulti) {
-          state.compTestFileUploads[paramName] = { multi: true, paths: results.map(r => r.path), filenames: results.map(r => r.filename) };
+    function applyTestHistory(index) {
+      const key = _tpHistoryKey();
+      const items = JSON.parse(localStorage.getItem(key) || "[]");
+      const entry = items[index];
+      if (!entry) return;
+      qs("#tpHistoryMenu")?.classList.add("hidden");
+      _renderRightTestParams(entry.params || {});
+    }
+
+    function _tpHistoryKey() {
+      const algo = state._compTestAlgo;
+      return `algolib_tph_${algo?.id || algo?.funcName || "unknown"}`;
+    }
+
+    function _saveTestHistory(params) {
+      const key = _tpHistoryKey();
+      // Strip large binary values (base64 images/files) before saving to localStorage
+      const sanitized = {};
+      for (const [k, v] of Object.entries(params || {})) {
+        if (typeof v === "string" && v.length > 512) {
+          sanitized[k] = "[binary data omitted]";
+        } else if (Array.isArray(v) && v.some(x => typeof x === "string" && x.length > 512)) {
+          sanitized[k] = v.map(x => (typeof x === "string" && x.length > 512) ? "[binary data omitted]" : x);
         } else {
-          state.compTestFileUploads[paramName] = { multi: false, path: results[0].path, filename: results[0].filename };
+          sanitized[k] = v;
         }
-        if (statusEl) statusEl.textContent = "";
-        showToast(`已上传 ${results.length} 个文件`);
-        const cur = collectCompTestParams();
-        renderCompTestParams(cur);
-      } catch (err) {
-        showToast("文件上传失败: " + err.message);
-        if (statusEl) statusEl.textContent = "";
+      }
+      try {
+        const items = JSON.parse(localStorage.getItem(key) || "[]");
+        items.unshift({ time: new Date().toISOString(), params: sanitized });
+        localStorage.setItem(key, JSON.stringify(items.slice(0, 10)));
+      } catch (e) {
+        // Quota exceeded or other storage error — silently ignore
       }
     }
 
-    function clearCtFileUpload(paramName) {
-      if (state.compTestFileUploads) delete state.compTestFileUploads[paramName];
-      const cur = collectCompTestParams();
-      renderCompTestParams(cur);
-    }
-
-    async function onCompTestBinaryFileSelected(event, paramName) {
-      return onCtFileUpload(event, paramName);
-    }
-
-    function collectCompTestParams() {
-      const payload = {};
-      qsa("[data-ct-param]").forEach(input => {
-        const name = input.dataset.ctParam;
-        const type = input.dataset.ctType || "";
-        payload[name] = parseParamValueByType(type, input.value);
-      });
-      return payload;
-    }
-
-    async function runCompTest() {
-      const btn = qs("#ctRunBtn");
-      const status = qs("#ctStatus");
-      const output = qs("#ctOutput");
+    async function runTestPanel() {
+      const btn = qs("#tpRunBtn");
+      const status = qs("#tpStatus");
       if (!btn) return;
       const started = performance.now();
       btn.disabled = true;
@@ -6772,10 +8452,9 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         const algo = state._compTestAlgo;
         const sourceContent = state._compTestSource;
         const fnName = algo?.funcName || algo?.name || "main";
-        const timeout = Number(qs("#ctTimeout")?.value || "5");
-        let kwargs = collectCompTestParams();
-        // Override with uploaded file paths where applicable
-        Object.entries(state.compTestFileUploads || {}).forEach(([n, info]) => { kwargs[n] = info.multi ? info.paths : info.path; });
+        const timeout = Number(qs("#tpTimeout")?.value || "5");
+        const kwargs = await collectTestPanelParams();
+        _saveTestHistory(kwargs);
         const algoStatus = algo?.publishStatus || algo?.status || "";
         const isPublished = algoStatus === "published";
         let body, url;
@@ -6787,20 +8466,254 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           body = isPublished
             ? { namespace: algo.namespace, function: fnName, params: kwargs }
             : { namespace: algo.namespace, function: fnName, params: kwargs, allow_unpublished: true };
-        } else {
-          showToast("无法确定运行方式"); return;
-        }
+        } else { showToast("无法确定运行方式"); return; }
         const result = await api(url, { method: "POST", body: JSON.stringify(body) });
         const elapsed = result.elapsed_ms ?? Math.round(performance.now() - started);
         if (status) status.textContent = `✅ ${elapsed} ms`;
-        if (output) showResultWithRenderBtn(output, result.result ?? result);
+        _showTPResult(result.result ?? result);
       } catch (err) {
         if (status) status.textContent = `❌ ${Math.round(performance.now() - started)} ms`;
-        if (output) output.innerHTML = `<pre style="margin:0;color:var(--danger,#f85149)">${esc(err.message)}</pre>`;
+        _showTPResultError(err.message);
       } finally {
         if (btn) { btn.disabled = false; btn.textContent = "▶ 运行"; }
       }
     }
+
+    async function debugFromTestPanel() {
+      const params = await collectTestPanelParams();
+      state._pendingDebugParams = params;
+      closeTestPanel();
+      startDebug();
+    }
+
+    function switchTestResultTab(tab) {
+      state._tpResultTab = tab;
+      qs(".tp-result-tabs button.active")?.classList.remove("active");
+      qs(`.tp-result-tabs button[data-tp-tab="${tab}"]`)?.classList.add("active");
+      const area = qs("#tpResultArea");
+      if (!area) return;
+      const result = state._tpLastResult;
+      if (result === undefined) return;
+      if (tab === "output") {
+        area.style.background = "";
+        area.innerHTML = _renderResultValue(result);
+      } else if (tab === "structured") {
+        area.style.background = "";
+        _renderTPStructured(area, result);
+      } else if (tab === "table") {
+        area.style.background = "";
+        _renderTPTable(area, result);
+      } else if (tab === "chart") {
+        area.style.background = "";
+        _renderTPChart(area, result);
+      }
+    }
+
+    function _isBase64Image(v) {
+      if (typeof v !== "string") return false;
+      if (v.startsWith("data:image/")) return true;
+      // Raw base64 string that looks like image data (long, valid base64 chars)
+      if (v.length > 500 && /^[A-Za-z0-9+/]+=*$/.test(v.slice(0, 100))) return true;
+      return false;
+    }
+
+    function _renderResultValue(v) {
+      // Handle __output_type__ dicts (e.g. image_processor returns {__output_type__: "image", src: "data:..."})
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        const ot = v.__output_type__;
+        if (ot === "image" && v.src) {
+          const titleHtml = v.title ? `<div class="tp-result-title">${esc(v.title)}</div>` : "";
+          return `${titleHtml}<img class="tp-result-img" src="${esc(v.src)}" alt="${esc(v.alt || 'result')}">`;
+        }
+        if (ot === "text" && v.content) {
+          const titleHtml = v.title ? `<div class="tp-result-title">${esc(v.title)}</div>` : "";
+          return `${titleHtml}<pre style="margin:0;white-space:pre-wrap;word-break:break-all">${esc(v.content)}</pre>`;
+        }
+        if (ot === "table") {
+          return _renderTableHtml(v);
+        }
+        // Object with src/image/img key that is a data URI
+        const imgSrc = v.src || v.image || v.img;
+        if (!ot && imgSrc && _isBase64Image(imgSrc)) {
+          const src = imgSrc.startsWith("data:") ? imgSrc : `data:image/png;base64,${imgSrc}`;
+          return `<img class="tp-result-img" src="${esc(src)}" alt="result">`;
+        }
+      }
+      if (_isBase64Image(v)) {
+        const src = v.startsWith("data:") ? v : `data:image/png;base64,${v}`;
+        return `<img class="tp-result-img" src="${esc(src)}" alt="result">`;
+      }
+      if (typeof v === "string" && (v.startsWith("http://") || v.startsWith("https://")) && /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(v)) {
+        return `<img class="tp-result-img" src="${esc(v)}" alt="result">`;
+      }
+      return `<pre style="margin:0;white-space:pre-wrap;word-break:break-all">${esc(typeof v === "string" ? v : JSON.stringify(v, null, 2))}</pre>`;
+    }
+
+    function _tableSpecFromResult(result) {
+      let columns = [];
+      let rows = [];
+      let title = "";
+      if (result && typeof result === "object" && !Array.isArray(result)) {
+        title = result.title || "";
+        if (Array.isArray(result.columns)) columns = result.columns.map(String);
+        const rawRows = Array.isArray(result.rows) ? result.rows : (Array.isArray(result.data) ? result.data : []);
+        rows = rawRows;
+      } else if (Array.isArray(result)) {
+        rows = result;
+      }
+      if (!rows.length) return { title, columns, rows: [] };
+      if (!columns.length) {
+        if (rows.every(row => row && typeof row === "object" && !Array.isArray(row))) {
+          columns = [...new Set(rows.flatMap(row => Object.keys(row)))];
+        } else if (Array.isArray(rows[0])) {
+          columns = rows[0].map((_, index) => `列 ${index + 1}`);
+        } else {
+          columns = ["值"];
+        }
+      }
+      const normalizedRows = rows.map(row => {
+        if (Array.isArray(row)) return columns.map((_, index) => row[index]);
+        if (row && typeof row === "object") return columns.map(col => row[col]);
+        return [row];
+      });
+      return { title, columns, rows: normalizedRows };
+    }
+
+    function _renderTableHtml(result) {
+      const spec = _tableSpecFromResult(result);
+      if (!spec.columns.length) {
+        return `<pre style="color:var(--warning);margin:0">无法转换为表格</pre>`;
+      }
+      const title = spec.title ? `<div class="tp-result-title">${esc(spec.title)}</div>` : "";
+      const thead = `<thead><tr>${spec.columns.map(col => `<th>${esc(col)}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${spec.rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell === undefined || cell === null ? "" : String(cell))}</td>`).join("")}</tr>`).join("")}</tbody>`;
+      return `${title}<div style="overflow:auto;max-height:100%"><table class="api-table" style="font-size:11px">${thead}${tbody}</table></div>`;
+    }
+
+    function _renderTPTable(area, result) {
+      area.innerHTML = _renderTableHtml(result);
+    }
+
+    function _showTPResult(result) {
+      state._tpLastResult = result;
+      const area = qs("#tpResultArea");
+      if (!area) return;
+      const preferredTab = result && typeof result === "object" && result.__output_type__ === "table" ? "table" : "output";
+      state._tpResultTab = preferredTab;
+      qs(".tp-result-tabs button.active")?.classList.remove("active");
+      qs(`.tp-result-tabs button[data-tp-tab="${preferredTab}"]`)?.classList.add("active");
+      area.style.background = "";
+      if (preferredTab === "table") _renderTPTable(area, result);
+      else area.innerHTML = _renderResultValue(result);
+    }
+
+    function _showTPResultError(msg) {
+      state._tpLastResult = null;
+      const area = qs("#tpResultArea");
+      if (!area) return;
+      area.style.background = "rgba(248,81,73,.08)";
+      area.innerHTML = `<pre style="margin:0;color:var(--danger,#f85149);white-space:pre-wrap">${esc(msg)}</pre>`;
+    }
+
+    function _renderTPStructured(area, result) {
+      if (result === null || result === undefined) { area.innerHTML = `<span style="color:var(--text-dim)">null</span>`; return; }
+      if (result && typeof result === "object" && result.__output_type__ === "table") {
+        _renderTPTable(area, result);
+        return;
+      }
+      if (Array.isArray(result) && result.length > 0 && typeof result[0] === "object" && result[0] !== null) {
+        const cols = [...new Set(result.flatMap(r => Object.keys(r)))];
+        const thead = `<thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead>`;
+        const tbody = `<tbody>${result.map(row => `<tr>${cols.map(c => `<td>${esc(String(row[c] ?? ""))}</td>`).join("")}</tr>`).join("")}</tbody>`;
+        area.innerHTML = `<div style="overflow:auto"><table class="api-table" style="font-size:11px">${thead}${tbody}</table></div>`;
+      } else if (result && typeof result === "object" && !Array.isArray(result)) {
+        const rows = Object.entries(result).map(([k, v]) => {
+          const vDisplay = _isBase64Image(v)
+            ? `<img class="tp-result-img" src="${v.startsWith("data:") ? esc(v) : `data:image/png;base64,${esc(v)}`}" alt="${esc(k)}">`
+            : `<span style="font-size:11px">${esc(typeof v === "object" ? JSON.stringify(v) : String(v))}</span>`;
+          return `<tr><td style="color:var(--text-dim);white-space:nowrap;padding-right:8px;font-size:11px">${esc(k)}</td><td>${vDisplay}</td></tr>`;
+        }).join("");
+        area.innerHTML = `<table style="width:100%;border-collapse:collapse"><tbody>${rows}</tbody></table>`;
+      } else {
+        area.innerHTML = `<pre style="margin:0;white-space:pre-wrap">${esc(JSON.stringify(result, null, 2))}</pre>`;
+      }
+    }
+
+    function _renderTPChart(area, result) {
+      if (!window.echarts) { area.innerHTML = `<span style="color:var(--warning)">ECharts 未加载</span>`; return; }
+      const option = _jsonToChartOption(result);
+      if (!option) { area.innerHTML = `<pre style="color:var(--warning);margin:0">无法转换为图表</pre>`; return; }
+      const host = document.createElement("div");
+      host.style.cssText = "width:100%;height:200px";
+      area.innerHTML = "";
+      area.appendChild(host);
+      try {
+        const chart = echarts.init(host, "dark");
+        chart.setOption(option);
+      } catch (e) { area.innerHTML = `<pre style="color:var(--danger);margin:0">${esc(e.message)}</pre>`; }
+    }
+
+    function startRightResize(event) {
+      event.preventDefault();
+      const main = qs("#editorMain");
+      if (!main) return;
+      const startX = event.clientX;
+      const startW = state.testPanelWidth || 420;
+      document.body.style.userSelect = "none";
+      function move(e) {
+        requestAnimationFrame(() => {
+          const newW = Math.max(320, Math.min(600, startW - (e.clientX - startX)));
+          state.testPanelWidth = newW;
+          main.style.setProperty("--rpanel-w", `${newW}px`);
+        });
+      }
+      function up() {
+        document.body.style.userSelect = "";
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+        _layoutAllEditors();
+      }
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    }
+
+    async function onCtFileUpload(event, paramName, mode) {
+      const files = event.target?.files;
+      if (!files || !files.length) return;
+      const isMulti = mode === "multi" || mode === "folder" || files.length > 1;
+      const statusEl = qs("#tpStatus");
+      if (statusEl) statusEl.textContent = `正在上传 ${files.length} 个文件...`;
+      try {
+        const results = await _uploadFilesHelper(files);
+        if (!state.compTestFileUploads) state.compTestFileUploads = {};
+        if (isMulti) {
+          state.compTestFileUploads[paramName] = { multi: true, paths: results.map(r => r.path), filenames: results.map(r => r.filename) };
+        } else {
+          state.compTestFileUploads[paramName] = { multi: false, path: results[0].path, filename: results[0].filename };
+        }
+        if (statusEl) statusEl.textContent = "";
+        showToast(`已上传 ${results.length} 个文件`);
+        const cur = collectTestPanelParams();
+        _renderRightTestParams(cur);
+      } catch (err) {
+        showToast("文件上传失败: " + err.message);
+        if (statusEl) statusEl.textContent = "";
+      }
+    }
+
+    function clearCtFileUpload(paramName) {
+      if (state.compTestFileUploads) delete state.compTestFileUploads[paramName];
+      const cur = collectTestPanelParams();
+      _renderRightTestParams(cur);
+    }
+
+    // Backward-compat aliases (used by tpl test and other code paths)
+    function renderCompTestParams(values = {}) { _renderRightTestParams(values); }
+    function collectCompTestParams() { return collectTestPanelParams(); }
+    function runCompTest() { return runTestPanel(); }
+    function setCompTestMode(_mode) { /* no-op */ }
+    function loadCompTestExample() { fillTestExample(); }
+    async function onCompTestBinaryFileSelected(event, paramName) { return onCtFileUpload(event, paramName); }
 
     // ── Fork view (Req 1 / Req 2) ─────────────────────────────────────
     async function openForkView(id, moduleKind) {
@@ -6950,6 +8863,12 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.runCodeViaWs = runCodeViaWs;
     window.refreshProblemsPane = refreshProblemsPane;
     window.switchFile = switchFile;
+    window.startDebug = startDebug;
+    window.stopDebug = stopDebug;
+    window.sendDebugAction = sendDebugAction;
+    window._debugConsoleEval = _debugConsoleEval;
+    window._debugJumpFrame = _debugJumpFrame;
+    window.clearAllBreakpoints = clearAllBreakpoints;
     window.addSourceFile = addSourceFile;
     window.openSourceFileModal = openSourceFileModal;
     window.confirmSourceFileModal = confirmSourceFileModal;
@@ -7002,12 +8921,40 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.runTplSourceTest = runTplSourceTest;
     window.openComponentTestModalById = openComponentTestModalById;
     window.openComponentTestModal = openComponentTestModal;
+    window.openTestPanel = openTestPanel;
+    window.closeTestPanel = closeTestPanel;
+    window.fillTestExample = fillTestExample;
+    window.toggleTestHistory = toggleTestHistory;
+    window.applyTestHistory = applyTestHistory;
+    window.runTestPanel = runTestPanel;
+    window.debugFromTestPanel = debugFromTestPanel;
+    window.switchTestResultTab = switchTestResultTab;
+    window.toggleTPParamSkip = toggleTPParamSkip;
+    window.switchTPParamTab = switchTPParamTab;
+    window.updateTPTableCell = updateTPTableCell;
+    window.addTPTableRow = addTPTableRow;
+    window.removeTPTableRow = removeTPTableRow;
+    window.startRightResize = startRightResize;
+    window.onCtFileUpload = onCtFileUpload;
+    window.clearCtFileUpload = clearCtFileUpload;
+    // Image/file widget handlers
+    window._setImageMode = _setImageMode;
+    window._setFileMode = _setFileMode;
+    window._setImageUrl = _setImageUrl;
+    window._removeImageParam = _removeImageParam;
+    window._removeFileParam = _removeFileParam;
+    window._removeImageAt = _removeImageAt;
+    window._onImageDrop = _onImageDrop;
+    window._onImageFileChange = _onImageFileChange;
+    window._onMultiImageFileChange = _onMultiImageFileChange;
+    window._onFileDrop = _onFileDrop;
+    window._onFileChange = _onFileChange;
+    window._onImagePasteInDz = _onImagePasteInDz;
+    window.extractPureBase64 = extractPureBase64;
     window.setCompTestMode = setCompTestMode;
     window.renderCompTestParams = renderCompTestParams;
     window.loadCompTestExample = loadCompTestExample;
     window.onCompTestBinaryFileSelected = onCompTestBinaryFileSelected;
-    window.onCtFileUpload = onCtFileUpload;
-    window.clearCtFileUpload = clearCtFileUpload;
     window.runCompTest = runCompTest;
     window.openForkTemplateView = openForkTemplateView;
     window.openForkComponentView = openForkComponentView;
@@ -7267,6 +9214,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
             fontSize: 13,
             minimap: { enabled: false },
             lineNumbers: "on",
+            glyphMargin: true,
             scrollBeyondLastLine: false,
             wordWrap: "on",
             quickSuggestions: { other: true, comments: false, strings: false },
@@ -7279,6 +9227,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           ed.onDidFocusEditorWidget(() => { window._activeMonaco = ed; });
           ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyI, () => openAlgoCallOverlay());
           ed.addCommand(m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyS, () => openSnippetOverlay());
+          initBlockDebugBreakpoints(ed, block.id, m);
           state.blockEditor.editors.set(block.id, ed);
         });
       });
@@ -7594,6 +9543,29 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       showLoginPage();
     })();
   </script>
+  <!-- 测试面板遮罩 -->
+  <div class="test-overlay-mask" id="testOverlayMask" onclick="window.closeTestPanel()"></div>
+  <!-- 测试面板 overlay -->
+  <div class="test-overlay" id="testOverlay">
+    <div class="test-overlay-header">
+      <h3 id="testOverlayTitle">测试</h3>
+      <button class="test-overlay-close" onclick="window.closeTestPanel()" title="关闭">&#215;</button>
+    </div>
+    <div class="test-overlay-toolbar" id="testOverlayToolbar"></div>
+    <div class="test-overlay-params" id="testOverlayParams"></div>
+    <div class="test-overlay-actions" id="testOverlayActions"></div>
+    <div class="test-overlay-result" id="testOverlayResult">
+      <div class="test-overlay-result-tabs tp-result-tabs" id="testOverlayResultTabs">
+        <button data-tp-tab="table" onclick="window.switchTestResultTab('table')">表格</button>
+        <button class="active" data-tp-tab="output" onclick="window.switchTestResultTab('output')">输出</button>
+        <button data-tp-tab="structured" onclick="window.switchTestResultTab('structured')">结构化</button>
+        <button data-tp-tab="chart" onclick="window.switchTestResultTab('chart')">图表</button>
+      </div>
+      <div class="test-overlay-result-content" id="testOverlayResultContent">
+        <pre style="margin:0;color:var(--text-dim)">等待运行…</pre>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
 

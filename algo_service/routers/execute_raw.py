@@ -3,17 +3,21 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
+# 项目根目录（algo_service 的上两级）加入 PYTHONPATH，使 subprocess 能 import algo_service
+_PROJECT_ROOT = str(Path(__file__).parent.parent.parent)
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from ..setup_env import get_registry  # type: ignore[import]
+from .algorithms import get_registry
 
 router = APIRouter(prefix="/api/v1", tags=["execute"])
 
@@ -29,6 +33,14 @@ class ExecuteRequest(BaseModel):
     timeout: float = Field(default=60.0, ge=1, le=300, description="超时秒数")
 
 
+class ErrorLocation(BaseModel):
+    line: int
+    column: int = 0
+    message: str
+    type: str = "error"
+    filename: str = ""
+
+
 class ExecuteResponse(BaseModel):
     success: bool
     result: Any = None
@@ -36,6 +48,54 @@ class ExecuteResponse(BaseModel):
     stderr: str = ""
     elapsed_ms: float = 0.0
     exit_code: int = 0
+    errors: list[ErrorLocation] = Field(default_factory=list)
+
+
+def _parse_traceback_errors(stderr: str, tmp_filename: str) -> list[dict]:
+    """从 stderr 中解析 Python traceback，提取行号和错误信息。"""
+    errors: list[dict] = []
+
+    file_line_pattern = re.compile(
+        r'File "([^"]*)",\s*line\s+(\d+)(?:,\s*in\s+\S+)?'
+    )
+
+    lines = stderr.strip().splitlines()
+
+    # 找最后一个非空非 File/^ 开头的行作为错误消息
+    error_message = ""
+    for line in reversed(lines):
+        stripped = line.strip()
+        if stripped and not stripped.startswith("File ") and not stripped.startswith("^"):
+            error_message = stripped
+            break
+
+    for match in file_line_pattern.finditer(stderr):
+        filename = match.group(1)
+        line_num = int(match.group(2))
+        if tmp_filename in filename or filename == "<string>":
+            errors.append({
+                "line": line_num,
+                "column": 0,
+                "message": error_message,
+                "type": "error",
+                "filename": filename,
+            })
+
+    # SyntaxError: 从 ^ 符号提取列号
+    syntax_match = re.search(r'^(\s*)\^', stderr, re.MULTILINE)
+    if syntax_match and errors:
+        errors[-1]["column"] = len(syntax_match.group(1))
+
+    if not errors and error_message:
+        errors.append({
+            "line": 1,
+            "column": 0,
+            "message": error_message,
+            "type": "error",
+            "filename": "",
+        })
+
+    return errors
 
 
 def _get_current_user(
@@ -89,12 +149,16 @@ async def execute_raw(
 
         start = time.perf_counter()
 
-        # 异步运行子进程
+        # 异步运行子进程（注入 PYTHONPATH 使代码可以 import algo_service）
+        _env = os.environ.copy()
+        _env["PYTHONPATH"] = _PROJECT_ROOT + (os.pathsep + _env["PYTHONPATH"] if _env.get("PYTHONPATH") else "")
         proc = await asyncio.create_subprocess_exec(
             "python3",
             str(tmp_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=_env,
+            cwd=_PROJECT_ROOT,
         )
 
         try:
@@ -131,6 +195,15 @@ async def execute_raw(
 
         clean_stdout = "\n".join(clean_stdout_lines)
 
+        # 解析 traceback 错误位置
+        parsed_errors = _parse_traceback_errors(stderr, str(tmp_path)) if stderr else []
+
+        # 修正行号偏移：减去参数注入代码的行数
+        if params_code and parsed_errors:
+            offset = params_code.count("\n")
+            for err in parsed_errors:
+                err["line"] = max(1, err["line"] - offset)
+
         return ExecuteResponse(
             success=exit_code == 0,
             result=result,
@@ -138,6 +211,7 @@ async def execute_raw(
             stderr=stderr,
             elapsed_ms=elapsed_ms,
             exit_code=exit_code,
+            errors=[ErrorLocation(**e) for e in parsed_errors],
         )
 
     finally:

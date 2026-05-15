@@ -41,6 +41,8 @@ if [[ "$WINDOWS_SRC" != "$WSL_DST" ]]; then
     --exclude '*.pyc' \
     "$WINDOWS_SRC/" "$WSL_DST/"
   echo "  ✔ 同步完成"
+  # 修复 Windows 同步过来的 CRLF 换行（所有 .sh 文件）
+  find "$WSL_DST/ci" -name "*.sh" -exec sed -i 's/\r//' {} \;
 else
   echo "  源与目标相同，跳过同步"
 fi

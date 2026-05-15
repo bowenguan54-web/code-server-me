@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -u
 cd /home/guan/code-server-me || exit 1
 mkdir -p .run

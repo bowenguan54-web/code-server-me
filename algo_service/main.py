@@ -7,8 +7,11 @@ Start with:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import tempfile
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
@@ -27,6 +30,8 @@ from .routers.submissions import router as submissions_router
 from .routers.users import router as users_router
 from .routers.ws_terminal import router as ws_router
 from .routers.execute_raw import router as execute_raw_router
+from .routers.lint import router as lint_router
+from .routers.ws_debug import router as ws_debug_router
 from .setup_env import ensure_algolib_installed
 from .sdk.file_watcher import FileWatcher
 from .sdk.registry import AlgorithmRegistry
@@ -100,11 +105,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         _watcher = FileWatcher(registry, on_change=_broadcast, on_delete=_broadcast)
         _watcher.start(resolved)
 
+    # Start background cleanup for temporary uploads.
+    asyncio.create_task(_cleanup_temp_uploads())
+
     yield
 
     # Shutdown.
     if _watcher is not None:
         _watcher.stop()
+
+
+async def _cleanup_temp_uploads() -> None:
+    """Periodically delete temp upload files older than 60 minutes."""
+    temp_root = Path(tempfile.gettempdir()) / "algolib_uploads"
+    while True:
+        await asyncio.sleep(300)  # check every 5 minutes
+        if not temp_root.exists():
+            continue
+        cutoff = time.time() - 3600
+        try:
+            for user_dir in temp_root.iterdir():
+                if not user_dir.is_dir():
+                    continue
+                for f in user_dir.iterdir():
+                    try:
+                        if f.is_file() and f.stat().st_mtime < cutoff:
+                            f.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
 
 
 # ── App ────────────────────────────────────────────────────────────────────────
@@ -140,6 +170,8 @@ app.include_router(publish_router)
 app.include_router(external_router)
 app.include_router(ws_router)
 app.include_router(execute_raw_router)
+app.include_router(lint_router)
+app.include_router(ws_debug_router)
 
 
 @app.get("/health")

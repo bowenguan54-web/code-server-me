@@ -916,7 +916,22 @@ def _load_entry_module(entry: AlgorithmEntry) -> types.ModuleType:
     return module
 
 
+def _preprocess_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """自动剥离 kwargs 中 Data URL 前缀（data:image/png;base64,xxx → xxx），
+    使算法代码可以直接 base64.b64decode() 而无需处理前缀。
+    """
+    processed: dict[str, Any] = {}
+    for key, value in kwargs.items():
+        if isinstance(value, str) and value.startswith("data:") and ";base64," in value[:100]:
+            comma_idx = value.index(",")
+            processed[key] = value[comma_idx + 1:]
+        else:
+            processed[key] = value
+    return processed
+
+
 def _execute_entry(entry: AlgorithmEntry, args: list[Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    kwargs = _preprocess_kwargs(kwargs)
     module = _load_entry_module(entry)
     func = getattr(module, entry.func_name, None)
     if func is None or not callable(func):
@@ -3126,6 +3141,36 @@ async def algo_changes_sse(registry: AlgorithmRegistry = Depends(get_registry)) 
     )
 
 
+@router.post("/upload-temp")
+async def upload_temp_file_v2(request: Request, file: UploadFile = File(...)) -> dict[str, Any]:
+    """Upload a file to a per-user temporary directory and return the server path.
+    Files are automatically cleaned up after 60 minutes.
+    """
+    try:
+        current_user = get_current_user(request)
+        user_id = str(current_user.get("id") or "anon")
+    except Exception:
+        user_id = "anon"
+
+    temp_dir = Path(tempfile.gettempdir()) / "algolib_uploads" / user_id
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    original = file.filename or "upload"
+    safe_name = f"{uuid_lib.uuid4().hex[:8]}_{Path(original).name}"
+    dest = temp_dir / safe_name
+    try:
+        content = await file.read()
+        dest.write_bytes(content)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"文件上传失败：{exc}") from exc
+    return {
+        "success": True,
+        "path": str(dest),
+        "filename": original,
+        "size": len(content),
+    }
+
+
 @router.post("/test/upload-temp")
 async def upload_temp_file(file: UploadFile = File(...)) -> dict[str, str]:
     """Upload a file to a temp path and return its path (for use in test kwargs)."""
@@ -3153,6 +3198,7 @@ async def run_source(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="args 字段必须是列表")
     if not isinstance(kwargs, dict):
         raise HTTPException(status_code=400, detail="kwargs 字段必须是字典")
+    kwargs = _preprocess_kwargs(kwargs)
 
     module_key = f"_algo_inline_{int(time.time() * 1000)}"
     module = types.ModuleType(module_key)
