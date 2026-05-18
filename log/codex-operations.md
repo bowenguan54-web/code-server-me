@@ -184,3 +184,102 @@ ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接�
 - 每次改完前端都要执行 `python .run/extract_js.py`，再将 `.run/algo-lib-inline-check.js` 复制到 `.run/algo-lib-check.js`。
 - 前端同步到 WSL 时必须同时覆盖 `src/browser/pages/algo-lib.html` 和 `release/src/browser/pages/algo-lib.html`。
 - 不要破坏自动推断逻辑；`widget_overrides` 必须可选，缺省时保持旧行为。
+
+
+## 2026-05-18 17:05 +08:00 - 拆分 algo-lib-check.js 为模块草稿
+
+### 本次操作
+- 用户要求基于上一轮方案生成 `.run/algo-modules/` 模块文件，要求从 `.run/algo-lib-check.js` 精确提取，不改业务逻辑。
+- 已创建 `.run/algo-modules/`，按原始行序拆成 44 个模块文件，并生成 `.run/algo-modules/README-split-manifest.txt` 记录每个模块对应的原始行号范围。
+- 每个模块顶部只新增职责注释；正文逐行来自 `.run/algo-lib-check.js` 对应切片。
+- 本次未替换 `.run/algo-lib-check.js` 入口文件，运行时仍使用原巨型文件；模块目录目前是拆分草稿，便于下一步接入 loader/build。
+
+### 验证
+- 校验所有非空原始源码行均已被模块覆盖，`missing_nonblank_count = 0`。
+- 校验每个模块正文与原文件对应切片完全一致，`body_mismatch = []`。
+- 校验所有模块大小均小于 20KB，`over_20kb = []`。
+- 执行 `node --check` 检查 `.run/algo-modules/*.js`，全部通过。
+
+### 约束/规则
+- 后续如果要真正启用拆分版，应先生成 loader 或运行构建脚本，不要直接删除原 `.run/algo-lib-check.js`。
+- 拆分后存在函数覆盖顺序依赖，尤其是 `_isBase64Image`、`_ensureDataUrl`、`showImageFullscreen`、`runFullTest`、`switchOutputTab`、`renderJsonTree`；加载顺序必须遵循 manifest。
+
+
+## 2026-05-18 17:12 +08:00 - inline-only 模块占位
+
+### 本次操作
+- 用户要求基于差异分析生成 inline 版本独有模块。
+- 已确认 `.run/algo-lib-inline-check.js` 与 `.run/algo-lib-check.js` 当前 SHA256 完全一致，无 inline 独有函数、无 check 独有函数、无同名不同实现。
+- 新增 `.run/algo-modules/inline-only/inline-overrides.js`，仅包含说明注释，作为未来 inline 覆盖共享模块函数的稳定扩展点。
+
+### 约束/规则
+- 当前 inline-only 不应包含业务逻辑；如果未来内嵌 code-server 需要差异逻辑，应放入 `inline-only/inline-overrides.js`，并在构建顺序中置于共享模块之后。
+
+
+## 2026-05-18 17:30 +08:00 - 模块构建脚本与文档
+
+### 本次操作
+- 用户要求在模块拆分完成后生成构建脚本和模块说明文档。
+- 新增 `.run/build-algo-lib.sh`：支持 `check`、`inline`、`all` 三种构建目标；构建时按模块顺序 concat，并在输出文件顶部写入自动生成注释和时间戳；构建后输出字节数。
+- 新增 `.run/algo-modules/README.md`：记录每个模块职责、加载顺序依赖图、开发流程、常见修改场景和 HTML 开发/生产加载方式。
+- 检查 HTML 引用：当前 `algo_management.html` 与 `src/browser/pages/algo-lib.html` 仍使用内联脚本，没有直接加载 `.run/algo-lib-check.js`，因此未修改 HTML 文件。
+
+### 验证
+- 使用 WSL 执行 `bash -n /mnt/e/code-server-me/.run/build-algo-lib.sh`，脚本语法检查通过。
+- 确认 `.run/build-algo-lib.sh` 与 `.run/algo-modules/README.md` 已生成。
+
+### 约束/规则
+- 后续修改模块后运行 `bash .run/build-algo-lib.sh all` 生成 `.run/algo-lib-check.js` 与 `.run/algo-lib-inline-check.js`。
+- inline 专属覆盖逻辑必须放在 `.run/algo-modules/inline-only/inline-overrides.js`，并保持在共享模块之后加载。
+- 现有 HTML 仍是内联脚本；如需页面实际使用拆分产物，需要额外执行项目的 HTML 注入/提取流程，不要误以为 `.run` bundle 自动被页面加载。
+
+
+## 2026-05-18 17:42 +08:00 - 拆分验证脚本
+
+### 本次操作
+- 用户要求生成拆分验证脚本和函数查找脚本。
+- 新增 `.run/verify-split.sh`：从 Git `HEAD:.run/algo-lib-check.js` 读取原始版本，执行 `.run/build-algo-lib.sh all`，检查生成文件语法、`grep -c "function "` 计数、函数声明顺序、重复函数集合和 `window.xxx =` 导出完整性。
+- 新增 `.run/list-functions.sh`：列出任意模块中的函数声明、箭头函数变量和 `window.xxx` 导出，便于定位函数在哪个模块。
+- 已给 `.run/build-algo-lib.sh`、`.run/verify-split.sh`、`.run/list-functions.sh` 添加可执行权限。
+
+### 验证
+- `bash -n` 检查 `.run/verify-split.sh` 和 `.run/list-functions.sh` 通过。
+- `bash .run/list-functions.sh .run/algo-modules/29-full-test-core.js` 能列出 `openTestPage`、`closeTestPage`、`renderTestParamCards` 等函数。
+- `bash .run/verify-split.sh` 通过：原始/生成 `function` 行计数均为 487；函数声明顺序一致；重复函数名集合与原始一致（7 个）；`window` 导出数量均为 276；生成 check/inline bundle 的 `node --check` 通过。
+
+### 约束/规则
+- `.run/verify-split.sh` 会重建 `.run/algo-lib-check.js` 和 `.run/algo-lib-inline-check.js`，运行前后不要手工编辑这两个生成文件。
+- 如果未来模块中故意新增或删除全局函数，需要同步理解 `verify-split.sh` 的基准仍来自 Git HEAD；在提交新基准后验证才会以新版本为准。
+
+
+## 2026-05-18 17:55 +08:00 - 前端模块架构文档与产物忽略规则
+
+### 本次操作
+- 用户要求补充构建产物是否忽略的建议，并生成 `.run/ARCHITECTURE.md`。
+- 修改 `.gitignore`：新增 `.run/algo-lib-check.js` 与 `.run/algo-lib-inline-check.js` 忽略规则，建议将 `.run/algo-modules/` 作为源码、bundle 作为构建产物。
+- 新增 `.run/ARCHITECTURE.md`：记录前端架构、模块职责速查、AI 助手上下文说明和标准修改流程。
+
+### 约束/规则
+- 注意：`.run/algo-lib-check.js` 和 `.run/algo-lib-inline-check.js` 当前已经被 Git 跟踪，`.gitignore` 不会自动停止跟踪已有文件；若确认部署不需要提交 bundle，需要后续手动执行 `git rm --cached .run/algo-lib-check.js .run/algo-lib-inline-check.js`。
+- 如果部署环境不能运行 `.run/build-algo-lib.sh`，则应移除 `.gitignore` 中这两条规则，并继续提交构建产物。
+- 后续每次修改前端模块前，先读 `.run/ARCHITECTURE.md` 定位模块，再读 `log/codex-operations.md` 复用已有规则。
+
+
+## 2026-05-18 18:15 +08:00 - 构建脚本自动注入 HTML
+
+### 本次操作
+- 用户要求 `.run/build-algo-lib.sh` 在 `all` 或 `inject` 下自动把 `.run/algo-lib-inline-check.js` 注入 `src/browser/pages/algo-lib.html`。
+- 修改 `src/browser/pages/algo-lib.html`：在主内联 `<script>` 内增加 `// ==== ALGO-LIB-JS-START ==== / // ==== ALGO-LIB-JS-END ==== ` 标记。
+- 修改 `.run/build-algo-lib.sh`：新增 `inject` 与 `dev` 子命令；`all` 现在会构建 check/inline 并注入 HTML；`dev` 会执行 all 后调用 `ci/dev/sync-and-restart.sh --full`。
+- 注入前安全检查：HTML 存在、START/END 标记各出现一次、inline JS 非空；注入前备份 `src/browser/pages/algo-lib.html.bak`。
+- 更新 `.run/ARCHITECTURE.md` 与 `.run/algo-modules/README.md` 的构建流程说明。
+
+### 验证
+- `bash -n .run/build-algo-lib.sh` 通过。
+- `bash .run/build-algo-lib.sh all` 成功生成 `.run/algo-lib-check.js`、`.run/algo-lib-inline-check.js` 并注入 `src/browser/pages/algo-lib.html`。
+- `bash .run/verify-split.sh` 通过：函数数量、函数顺序、重复函数集合和 window 导出均与 Git HEAD 原始版本一致。
+
+### 约束/规则
+- 现在标准前端模块流程是：改 `.run/algo-modules/*.js` → `bash .run/build-algo-lib.sh all` → HTML 已自动注入 → 如需 WSL 重启则运行 `bash .run/build-algo-lib.sh dev`。
+- `ci/dev/sync-and-restart.sh` 排除 `.run/` 不影响注入后的页面，因为同步目标是 `src/browser/pages/algo-lib.html`。
+- 如果从 `/mnt/e/code-server-me` 运行 `dev`，脚本会优先调用 `/home/guan/code-server-me/ci/dev/sync-and-restart.sh` 来完成 Windows→WSL 同步；可用 `ALGOLIB_WSL_PROJECT_DIR` 覆盖目标路径。

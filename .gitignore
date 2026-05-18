@@ -21,3 +21,9 @@ test/test-results
 # Quilt's internal data.
 /.pc
 /patches/*.diff~
+
+# AlgoLib generated frontend bundles.
+# Source modules live in .run/algo-modules/ and can rebuild these files.
+# If deployment cannot run .run/build-algo-lib.sh, remove these rules and commit the bundles instead.
+.run/algo-lib-check.js
+.run/algo-lib-inline-check.js
