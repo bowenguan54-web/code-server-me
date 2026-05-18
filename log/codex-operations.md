@@ -133,3 +133,24 @@ ullable 标记和 Literal 选项提取。
 - 校验：Windows py_compile 通过；Windows .run JS 语法检查通过；WSL py_compile 与 .run JS 语法检查通过；WSL 路由检查确认 /api/v1/upload-temp 和 /api/v1/algorithms/{algorithm_id:path}/execute 均已注册。
 - 运行验证：调用 /api/v1/algorithms/data_utils.chunk_list/execute 成功返回 success=true、output_hint=json 和执行结果。
 - 已重启 WSL 后端与 code-server：后端 8000 返回 200，code-server 8080 返回 302；实际服务页 /algo-lib 可检索到 	estFullpage、unFullTest 和 /api/v1/algorithms/。
+### 2026-05-15 21:00:52
+- 操作：为 AlgoLib 新增演示算法集合，写入 lgorithms_root/demo/folder_config.json 和 18 个 demo_*.py 独立算法文件，覆盖 int/float/str/text/bool/list/dict/dataframe/Literal/Optional/url/datetime/color/password/image/images/file/chart/mixed 输出等类型。
+- 验证：本地 python -m py_compile algorithms_root/demo/demo_*.py 通过；AST 校验每个文件仅一个公开函数，input_example JSON 与函数参数一致；后端 API 注册到 demo 命名空间共 18 个 demo。
+- 同步：已复制 lgorithms_root/demo/folder_config.json 和 demo_*.py 到 WSL /home/guan/code-server-me/algorithms_root/demo/。
+- 重启：已重启 WSL 中 uvicorn 后端  .0.0.0:8000 与 code-server 127.0.0.1:8080。
+- 复用规则：新增算法 demo 时保持每个算法一个独立 .py 文件；@algo_meta.input_example 的 key 必须与函数签名一致；文件/图片 demo 不依赖 pandas/numpy，Pillow 仅作为图片处理的可选依赖。
+### 2026-05-18 09:44:04
+- 用户要求：验证 lgorithms_root/demo/ 下 18 个 demo 算法是否可被 AlgoLib 扫描、注册和测试，并检查参数/输出推断。
+- 扫描配置：config.yaml 已包含 ./algorithms_root 和 ./algorithms_root/demo，无需修改 watch_roots。
+- 校验结果：18 个新增 demo 均被 Registry 扫描注册；所有参数 widget_hint 与预期一致，包括 content=text、ows=dataframe、Optional[str] nullable=True、images=images、ile_path=file。
+- 修复：仅修改 demo 文件。demo_dict.py 将返回字段 alues 改为 alue_list，避免被 infer_output_widget 误判为 chart；demo_image.py/demo_images.py 在未安装 Pillow 时原样返回输入 base64，保证输出仍可识别为 image/images。
+- 验证：本地和 WSL py_compile 通过；运行中后端确认 18 个预期 demo 全部存在；抽测 /execute 输出 demo_int_float=text、demo_dataframe=table、demo_chart_line=chart、demo_dict=json。
+- 同步与重启：已同步 demo 文件到 WSL /home/guan/code-server-me/algorithms_root/demo/；已重启后端 8000 和 code-server 8080，健康检查分别返回 200/302。
+### 2026-05-18 10:22:11
+- 用户要求：修复全屏测试页关闭后再次点击“测试”无反应，以及 @algo_meta.input_example 不再预填参数的问题。
+- 修改 src/browser/pages/algo-lib.html、lgo_management.html、.run/algo-lib-inline-check.js、.run/algo-lib-check.js；未修改后端、未修改 Monaco 初始化逻辑。
+- 修复点：openTestPage(algo) 每次都重新解析 lgo.inputExample 到 state._testInputExample，重置测试状态并重新渲染参数/输出；closeTestPage() 仅隐藏 #testFullpage，只清理测试状态，不触碰 state.editing 和编辑器 DOM。
+- 新增：hasTestInputExample、illTestParamExample、illAllTestExamples、ensureTestExampleButton；参数卡片有示例时显示“填入示例”，运行栏动态加入“填入全部示例”。
+- 同步：已重新提取 .run 两份 JS 检查文件，并同步到 WSL /home/guan/code-server-me/src/browser/pages/algo-lib.html 与实际服务文件 elease/src/browser/pages/algo-lib.html。
+- 校验：Windows 与 WSL 的 .run JS 
+ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接口确认 demo 算法 inputExample 正常返回。

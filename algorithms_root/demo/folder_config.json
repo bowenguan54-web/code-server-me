@@ -1,9 +1,8 @@
 {
   "namespace": "demo",
+  "zh_name": "演示算法",
   "type": "component",
   "module_kind": "component",
   "published": true,
-  "publish_status": "published",
-  "owner_id": "system",
-  "version": "1.0.0"
+  "publish_status": "published"
 }
