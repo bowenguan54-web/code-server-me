@@ -59,9 +59,16 @@ class AstParser:
 
         docstring = ast.get_docstring(node) or ""
         en_description = docstring.split("\n")[0].strip() if docstring else ""
+        # Prefer @algo_meta decorator; fall back to docstring conventions.
+        meta = AstParser._extract_algo_meta(node) or AstParser._parse_docstring_meta(
+            docstring, func_name, en_description
+        )
         snippet_body = AstParser._get_source_segment(source, node)
         params = AstParser._extract_params(node, docstring)
-        params = enrich_params(params)
+        widget_overrides = meta.get("widget_overrides") or {}
+        if not isinstance(widget_overrides, dict):
+            widget_overrides = {}
+        params = enrich_params(params, widget_overrides)
 
         return_type = "Any"
         if node.returns is not None:
@@ -69,11 +76,6 @@ class AstParser:
                 return_type = ast.unparse(node.returns)
             except Exception:
                 pass
-
-        # Prefer @algo_meta decorator; fall back to docstring conventions.
-        meta = AstParser._extract_algo_meta(node) or AstParser._parse_docstring_meta(
-            docstring, func_name, en_description
-        )
 
         return {
             "func_name": func_name,
@@ -86,6 +88,7 @@ class AstParser:
             "zh_tags": meta.get("zh_tags") or [],
             "version": meta.get("version") or "1.0.0",
             "input_example": meta.get("input_example") or "",
+            "widget_overrides": widget_overrides,
         }
 
     @staticmethod

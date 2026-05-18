@@ -205,14 +205,20 @@ def infer_output_widget(return_type: str, result_sample: Any = None) -> str:
     return "mixed"
 
 
-def enrich_params(params: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def enrich_params(
+    params: list[dict[str, Any]],
+    widget_overrides: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
     """为参数列表中的每个参数附加 widget_hint / nullable 等前端提示字段。"""
 
     enriched: list[dict[str, Any]] = []
+    overrides = widget_overrides or {}
     for param in params:
         param_copy = dict(param)
         _inner_type, nullable = _unwrap_optional_union(str(param_copy.get("type", "")))
-        widget = infer_param_widget(param_copy)
+        param_name = str(param_copy.get("name", "")).strip()
+        override = str(overrides.get(param_name, "")).strip()
+        widget = override or infer_param_widget(param_copy)
         param_copy["widget_hint"] = widget
         if nullable:
             param_copy["nullable"] = True

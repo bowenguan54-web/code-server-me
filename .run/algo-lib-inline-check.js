@@ -1059,6 +1059,8 @@
       mode: "template",
       importedFromPicker: false,
       functions: [],
+      widgetParams: [],
+      widgetOverrides: {},
       returnPage: ""
     };
 
@@ -1094,6 +1096,8 @@
       newAlgoState.currentFile = newAlgoState.files[0].relative_path;
       newAlgoState.importedFromPicker = false;
       newAlgoState.functions = [];
+      newAlgoState.widgetParams = [];
+      newAlgoState.widgetOverrides = {};
       qs("#main").innerHTML = `
         <div class="new-workspace">
           <div class="editor-top">
@@ -1140,6 +1144,18 @@
             <label class="full">描述<textarea id="wsDesc" rows="2">说明算法用途、输入输出和适用场景。</textarea></label>
             <label class="full">测试参数 JSON<textarea id="wsKwargs" rows="3">{"data":[0.1,0.6,0.9],"threshold":0.5}</textarea></label>
           </div>
+          <div class="widget-config-panel">
+            <div class="widget-config-header">
+              <div>
+                <div class="widget-config-title">参数控件配置</div>
+                <div class="widget-config-desc">写好函数后点击“识别参数”，可手动指定测试页每个参数使用的输入控件。</div>
+              </div>
+              <button type="button" onclick="window.parseAndRenderWidgetConfig()">识别参数</button>
+            </div>
+            <div id="wsWidgetConfigList" class="widget-config-list">
+              <div class="empty" style="padding:10px">尚未识别参数</div>
+            </div>
+          </div>
           <div class="code-check-row" id="wsImportHelp">
             <span>外部导入：选择一个 .py 文件或整个算法文件夹，系统会读取代码、识别入口函数，并按所填分类封装为 <code>alg.分类.函数</code>。</span>
             <button onclick="window.pickWorkspaceFile()">选择文件</button>
@@ -1166,6 +1182,126 @@
       await initWorkspaceMonaco(moduleKind);
     }
 
+    function unwrapWidgetType(typeText) {
+      let text = String(typeText || "Any").trim();
+      let nullable = false;
+      const optionalMatch = text.match(/^Optional\s*\[(.*)\]$/i);
+      if (optionalMatch) {
+        nullable = true;
+        text = optionalMatch[1].trim();
+      }
+      const unionMatch = text.match(/^Union\s*\[(.*)\]$/i);
+      if (unionMatch) {
+        const parts = splitTopLevelParams(unionMatch[1]);
+        nullable = nullable || parts.some(item => /^(None|NoneType|type\(None\))$/.test(item.trim()));
+        text = (parts.find(item => !/^(None|NoneType|type\(None\))$/.test(item.trim())) || "Any").trim();
+      }
+      if (text.includes("|")) {
+        const parts = text.split("|").map(item => item.trim()).filter(Boolean);
+        nullable = nullable || parts.some(item => /^(None|NoneType)$/.test(item));
+        text = parts.find(item => !/^(None|NoneType)$/.test(item)) || "Any";
+      }
+      return { type: text, nullable };
+    }
+
+    function splitFirstTopLevel(text, separator) {
+      let depth = 0;
+      const value = String(text || "");
+      for (let i = 0; i < value.length; i += 1) {
+        const ch = value[i];
+        if (ch === "(" || ch === "[" || ch === "{") depth += 1;
+        else if (ch === ")" || ch === "]" || ch === "}") depth = Math.max(0, depth - 1);
+        else if (ch === separator && depth === 0) return [value.slice(0, i), value.slice(i + 1)];
+      }
+      return [value, ""];
+    }
+
+    function widgetOptionsForType(typeText) {
+      const unwrapped = unwrapWidgetType(typeText);
+      const type = unwrapped.type.toLowerCase();
+      if (/literal\s*\[/.test(type)) return ["literal"];
+      if (/\bint\b/.test(type)) return ["int"];
+      if (/\bfloat\b|\bnumber\b/.test(type)) return ["float"];
+      if (/\bbool\b/.test(type)) return ["bool"];
+      if (/list\[dict\]|list\s*\[\s*dict|dataframe|pd\.dataframe/.test(type)) return ["dataframe", "list", "images"];
+      if (/\blist\b|\btuple\b|\bset\b/.test(type)) return ["list", "images", "dataframe"];
+      if (/\bdict\b/.test(type)) return ["dict", "json"];
+      if (/\bstr\b|\bany\b|^$/.test(type)) return ["str", "text", "color", "password", "url", "datetime", "image", "file"];
+      return ["str", "text", "json"];
+    }
+
+    function parseParamsFromCode(code) {
+      const source = String(code || "");
+      const targetName = qs("#wsName")?.value.trim();
+      const matches = Array.from(source.matchAll(/def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*?)\)\s*(?:->\s*[^:]+)?\s*:/g));
+      if (!matches.length) return [];
+      const selected = matches.find(match => match[1] === targetName) || matches[0];
+      return splitTopLevelParams(selected[2] || "").map(raw => {
+        const text = raw.trim();
+        if (!text || text === "/" || text === "*" || text.startsWith("*")) return null;
+        const [leftRaw, defaultRaw] = splitFirstTopLevel(text, "=");
+        const [nameRaw, typeRaw] = splitFirstTopLevel(leftRaw, ":");
+        const name = nameRaw.replace(/^\*\*?/, "").trim();
+        if (!name || name === "self" || name === "cls") return null;
+        const type = (typeRaw || "Any").trim() || "Any";
+        const unwrapped = unwrapWidgetType(type);
+        const recommended = inferParamWidget({ name, type: unwrapped.type });
+        const options = widgetOptionsForType(type);
+        const widget = options.includes(recommended) ? recommended : options[0];
+        return { name, type, default: defaultRaw.trim(), widget, nullable: unwrapped.nullable, options };
+      }).filter(Boolean);
+    }
+
+    function collectWorkspaceWidgetOverrides() {
+      const overrides = {};
+      qsa(".widget-select", qs("#wsWidgetConfigList") || document).forEach(select => {
+        const name = select.dataset.param || "";
+        if (name && select.value) overrides[name] = select.value;
+      });
+      newAlgoState.widgetOverrides = overrides;
+      return overrides;
+    }
+
+    function renderWidgetConfigRows(params) {
+      const list = qs("#wsWidgetConfigList");
+      if (!list) return;
+      if (!params.length) {
+        list.innerHTML = '<div class="empty" style="padding:10px">未识别到函数参数</div>';
+        return;
+      }
+      list.innerHTML = params.map(param => {
+        const selected = newAlgoState.widgetOverrides[param.name] || param.widget;
+        const options = (param.options || ["str"]).map(widget => (
+          `<option value="${esc(widget)}"${widget === selected ? " selected" : ""}>${esc(WIDGET_ZH[widget] || widget)}</option>`
+        )).join("");
+        return `
+          <div class="widget-config-row">
+            <span class="widget-param-name" title="${esc(param.name)}">${esc(param.name)}</span>
+            <span class="widget-param-type" title="${esc(param.type)}">${esc(param.type || "Any")}${param.default ? ` = ${esc(param.default)}` : ""}</span>
+            <select class="widget-select" data-param="${esc(param.name)}" onchange="window.onWidgetOverrideChange(this)">
+              ${options}
+            </select>
+            <label class="widget-nullable"><input type="checkbox" disabled ${param.nullable ? "checked" : ""}> 可为空</label>
+          </div>`;
+      }).join("");
+    }
+
+    function parseAndRenderWidgetConfig() {
+      updateWorkspaceFileContent();
+      const params = parseParamsFromCode(getWorkspaceCode());
+      if (!params.length) showToast("没有识别到可配置的函数参数");
+      newAlgoState.widgetParams = params;
+      params.forEach(param => {
+        if (!newAlgoState.widgetOverrides[param.name]) newAlgoState.widgetOverrides[param.name] = param.widget;
+      });
+      renderWidgetConfigRows(params);
+    }
+
+    function onWidgetOverrideChange(select) {
+      if (!select?.dataset?.param) return;
+      newAlgoState.widgetOverrides[select.dataset.param] = select.value;
+    }
+
     function onWsCatChange() {
       const v = qs("#wsCategory")?.value;
       const row = qs("#wsNewCatRow");
@@ -1181,6 +1317,9 @@
       const name = qs("#wsName").value.trim() || fallback;
       newAlgoState.files = newTemplateFiles(kind, name, templateKey);
       newAlgoState.currentFile = newAlgoState.files[0].relative_path;
+      newAlgoState.widgetParams = [];
+      newAlgoState.widgetOverrides = {};
+      renderWidgetConfigRows([]);
       renderWorkspaceFiles();
       initWorkspaceMonaco();
     }
@@ -1196,8 +1335,11 @@
         newAlgoState.files = [];
         newAlgoState.currentFile = "";
         newAlgoState.functions = [];
+        newAlgoState.widgetParams = [];
+        newAlgoState.widgetOverrides = {};
         newAlgoState.importedFromPicker = false;
         qs("#wsKind").value = "simple";
+        renderWidgetConfigRows([]);
         renderWorkspaceFiles();
         initWorkspaceMonaco();
       } else {
@@ -1246,6 +1388,9 @@
       newAlgoState.currentFile = entryName || loaded[0].relative_path;
       newAlgoState.importedFromPicker = true;
       newAlgoState.functions = functions;
+      newAlgoState.widgetParams = [];
+      newAlgoState.widgetOverrides = {};
+      renderWidgetConfigRows([]);
       if (qs("#wsKind")) qs("#wsKind").value = loaded.length > 1 ? "complex" : "simple";
       if (qs("#wsCreateMode")) qs("#wsCreateMode").value = "import";
       if (qs("#wsName") && exportFunc) qs("#wsName").value = exportFunc;
@@ -1594,6 +1739,7 @@
         return itemId === fullId;
       });
       if (duplicate) { showToast(`命名空间 "${fullId}" 已存在，请修改函数名或所属类别`); return; }
+      const widgetOverrides = collectWorkspaceWidgetOverrides();
 
       try {
         if (kind === "complex") {
@@ -1608,6 +1754,7 @@
               exports: [name],
               zh_description: qs("#wsDesc").value.trim(),
               zh_tags: tags,
+              widget_overrides: widgetOverrides,
               module_kind: moduleKind,
               published: false,
               publish_status: "draft",
@@ -1626,7 +1773,8 @@
               version: "1.0.0",
               code: newAlgoState.files[0].content,
               module_kind: moduleKind,
-              publish_status: "draft"
+              publish_status: "draft",
+              widget_overrides: widgetOverrides
             })
           });
         }
@@ -6354,6 +6502,11 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
 
     function openTestPage(algo) {
       if (!algo) { showToast("\u672a\u627e\u5230\u53ef\u6d4b\u8bd5\u7684\u7b97\u6cd5"); return; }
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      const mainEl = qs("#main");
+      if (mainEl) mainEl.scrollTop = 0;
+      document.body.style.overflow = "hidden";
       const host = document.getElementById("testFullpage");
       const main = document.getElementById("main");
       if (!host || !main) return;
@@ -6391,6 +6544,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     function closeTestPage() {
       const host = document.getElementById("testFullpage");
       if (host) host.style.display = "none";
+      document.body.style.overflow = "";
       state._testAlgo = null;
       state._testParamValues = {};
       state._testResult = null;
@@ -9120,6 +9274,9 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
     window.discardRejectedDraft = discardRejectedDraft;
     window.validateAlgCategoryNs = validateAlgCategoryNs;
     window.onWsCatChange = onWsCatChange;
+    window.parseParamsFromCode = parseParamsFromCode;
+    window.parseAndRenderWidgetConfig = parseAndRenderWidgetConfig;
+    window.onWidgetOverrideChange = onWidgetOverrideChange;
     window.saveWorkspaceAlgorithm = saveWorkspaceAlgorithm;
     window.testWorkspaceSource = testWorkspaceSource;
     window.checkWorkspaceCode = checkWorkspaceCode;

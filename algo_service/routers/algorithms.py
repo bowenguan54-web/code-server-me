@@ -89,6 +89,7 @@ def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
         "zhDescription": entry.zh_description,
         "zhTags": entry.zh_tags,
         "inputExample": entry.input_example,
+        "widgetOverrides": getattr(entry, "widget_overrides", {}) or {},
         "enDescription": entry.en_description,
         "params": entry.params,
         "namespace": entry.namespace,
@@ -390,6 +391,7 @@ def _algo_meta_decorator(
     zh_tags: list[str],
     version: str,
     input_example: str = "",
+    widget_overrides: dict[str, str] | None = None,
 ) -> str:
     """Return an @algo_meta decorator string."""
 
@@ -402,6 +404,8 @@ def _algo_meta_decorator(
     ]
     if input_example:
         lines.append(f"    input_example={json.dumps(input_example, ensure_ascii=False)},")
+    if widget_overrides:
+        lines.append(f"    widget_overrides={json.dumps(widget_overrides, ensure_ascii=False)},")
     lines.append(")")
     return "\n".join(lines)
 
@@ -498,6 +502,7 @@ def _upsert_algo_meta(source: str, func_name: str, metadata: dict[str, Any]) -> 
         zh_tags=[str(tag).strip() for tag in metadata.get("zh_tags", []) if str(tag).strip()],
         version=str(metadata.get("version") or "1.0.0"),
         input_example=str(metadata.get("input_example") or ""),
+        widget_overrides=metadata.get("widget_overrides") if isinstance(metadata.get("widget_overrides"), dict) else {},
     )
     lines[insert_at:insert_at] = [decorator_text]
     return "\n".join(lines).rstrip() + "\n"
@@ -524,6 +529,21 @@ def _write_folder_config(folder: Path, namespace: str, module_kind: str, publish
         update["zh_name"] = zh_name
     config.update(update)
     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _write_widget_overrides_to_manifest(manifest_path: Path, widget_overrides: dict[str, str] | None) -> None:
+    """Persist manually selected parameter widgets to folder_config/algopack."""
+
+    overrides = {str(key): str(value) for key, value in (widget_overrides or {}).items() if str(key).strip() and str(value).strip()}
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    if overrides:
+        data["widget_overrides"] = overrides
+    else:
+        data.pop("widget_overrides", None)
+    manifest_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _ensure_folder_kind_compatible(folder: Path, module_kind: str) -> None:
@@ -1515,6 +1535,7 @@ async def publish_template_as_component(
                     "zh_tags": payload.zh_tags or entry.zh_tags,
                     "version": payload.version or "1.0.0",
                     "input_example": payload.input_example or entry.input_example,
+                    "widget_overrides": payload.widget_overrides or getattr(entry, "widget_overrides", {}) or {},
                 },
             )
             (target_dir / f"{target_func_name}.py").write_text(source, encoding="utf-8")
@@ -1529,6 +1550,7 @@ async def publish_template_as_component(
         manifest["category"] = payload.category
         manifest["description"] = payload.description
         manifest["zh_description"] = payload.description
+        manifest["widget_overrides"] = payload.widget_overrides or getattr(entry, "widget_overrides", {}) or {}
         manifest["module_kind"] = "component"
         manifest["published"] = False
         manifest["publish_status"] = "draft"
@@ -1660,6 +1682,7 @@ async def create_algorithm(
         target_folder.mkdir(parents=True, exist_ok=True)
         _ensure_folder_kind_compatible(target_folder, module_kind)
         _write_folder_config(target_folder, namespace, module_kind, payload.publish_status or "draft", payload.category_zh_name or "")
+        _write_widget_overrides_to_manifest(target_folder / "folder_config.json", payload.widget_overrides)
         # Write owner_id into folder_config.json when user is authenticated
         if current_user_id:
             cfg_path = target_folder / "folder_config.json"
@@ -1678,6 +1701,7 @@ async def create_algorithm(
                 "zh_tags": payload.zh_tags,
                 "version": payload.version or "1.0.0",
                 "input_example": payload.input_example or "",
+                "widget_overrides": payload.widget_overrides,
             },
         )
         target_file.write_text(source, encoding="utf-8")
@@ -2025,6 +2049,7 @@ async def update_algorithm_metadata(
         "zh_tags": payload.zh_tags if payload.zh_tags is not None else entry.zh_tags,
         "version": payload.version if payload.version is not None else entry.version,
         "input_example": payload.input_example if payload.input_example is not None else entry.input_example,
+        "widget_overrides": payload.widget_overrides if payload.widget_overrides is not None else (getattr(entry, "widget_overrides", {}) or {}),
     }
 
     if entry.package_id:
@@ -2033,6 +2058,7 @@ async def update_algorithm_metadata(
             "zh_description": metadata["zh_description"],
             "zh_tags": metadata["zh_tags"],
             "version": metadata["version"],
+            "widget_overrides": metadata["widget_overrides"],
         }
         if payload.namespace:
             normalized = _normalize_call_namespace(payload.namespace)
@@ -2087,6 +2113,7 @@ async def update_algorithm_metadata(
         updated_source = _upsert_algo_meta(source, target_func_name, metadata)
         target_folder.mkdir(parents=True, exist_ok=True)
         _write_folder_config(target_folder, target_namespace, entry.type, _read_entry_publish_status(entry))
+        _write_widget_overrides_to_manifest(target_folder / "folder_config.json", metadata["widget_overrides"])
         if target_file != source_path and target_file.exists():
             raise HTTPException(status_code=409, detail=f"目标算法文件已存在：{target_file}")
         _ensure_folder_kind_compatible(target_folder, entry.type)

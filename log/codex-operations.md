@@ -154,3 +154,33 @@ ullable 标记和 Literal 选项提取。
 - 同步：已重新提取 .run 两份 JS 检查文件，并同步到 WSL /home/guan/code-server-me/src/browser/pages/algo-lib.html 与实际服务文件 elease/src/browser/pages/algo-lib.html。
 - 校验：Windows 与 WSL 的 .run JS 
 ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接口确认 demo 算法 inputExample 正常返回。
+### 2026-05-18 10:35:00
+- 用户要求：修复从滚动后的列表页进入全屏测试页时，测试页沿用旧 scrollTop 导致上半部分不可见的问题。
+- 修改 src/browser/pages/algo-lib.html、algo_management.html、.run/algo-lib-inline-check.js、.run/algo-lib-check.js；同步到 WSL /home/guan/code-server-me/src/browser/pages/algo-lib.html 与实际服务文件 release/src/browser/pages/algo-lib.html。
+- 修复点：openTestPage(algo) 进入时强制 document/body/#main 滚动归零，并设置 body overflow=hidden 禁止背景滚动；closeTestPage() 退出时恢复 body overflow。
+- CSS：追加 .test-fullpage/#testFullpage/[class*=comp-test-fullpage] fixed 全屏规则，z-index 9999，脱离父级滚动上下文。
+- 校验：Windows 与 WSL 的 .run JS node --check 均通过；WSL release 文件确认包含滚动控制代码。
+
+
+## 2026-05-18 16:44 +08:00 - 参数控件配置（widget_overrides）
+
+### 本次操作
+- 以后修改前继续先查看本文件，复用已确认的同步和验证流程。
+- 以 WSL 当前可运行的 `src/browser/pages/algo-lib.html` 为前端基底同步回本地，避免本地 HTML 旧编码损坏导致 JS 语法错误。
+- 后端新增 `widget_overrides` 元数据链路：Pydantic 模型、AST 解析、Registry Entry、manifest 写入、算法创建/更新、包创建与 `_entry_dict` 返回。
+- `enrich_params(params, widget_overrides=None)` 现在会优先使用用户指定控件类型，不传时保持原自动推断逻辑。
+- 新建算法工作区新增“参数控件配置”面板，支持“识别参数”、按类型过滤控件选项、保存时提交 `widget_overrides`。
+- 同步到 WSL：`src/browser/pages/algo-lib.html`、`release/src/browser/pages/algo-lib.html`、`.run/algo-lib-inline-check.js`、`.run/algo-lib-check.js` 以及相关后端文件。
+- 已重启 WSL 后端：`python3 -m uvicorn algo_service.main:app --host 0.0.0.0 --port 8000`。
+
+### 验证
+- Windows：`python -m py_compile algo_service/sdk/param_inferrer.py algo_service/sdk/ast_parser.py algo_service/sdk/registry.py algo_service/routers/algorithms.py algo_service/routers/packages.py algo_service/models/schemas.py`
+- Windows：`node --check .run/algo-lib-inline-check.js`、`node --check .run/algo-lib-check.js`
+- Windows：`enrich_params([{'name':'image','type':'str'}], {'image':'file'})` 返回 `file`；`Optional[str]` override 为 `text` 返回 `text`。
+- WSL：同步后同样执行 py_compile 与 node --check，均通过。
+
+### 约束/规则
+- 前端修改必须以 WSL 可运行版本为准，避免本地编码损坏版本扩散。
+- 每次改完前端都要执行 `python .run/extract_js.py`，再将 `.run/algo-lib-inline-check.js` 复制到 `.run/algo-lib-check.js`。
+- 前端同步到 WSL 时必须同时覆盖 `src/browser/pages/algo-lib.html` 和 `release/src/browser/pages/algo-lib.html`。
+- 不要破坏自动推断逻辑；`widget_overrides` 必须可选，缺省时保持旧行为。

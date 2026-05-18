@@ -59,6 +59,7 @@ class PublishAsComponentRequest(BaseModel):
     description: str = ""
     zh_tags: list[str] = Field(default_factory=list)
     input_example: str = ""
+    widget_overrides: dict[str, str] = Field(default_factory=dict)
     code: str = ""  # if provided, use this code instead of template source
 
 
@@ -76,6 +77,7 @@ class AlgorithmCreateRequest(BaseModel):
     module_kind: str = "component"
     publish_status: str = "draft"
     input_example: str = ""
+    widget_overrides: dict[str, str] = Field(default_factory=dict)
 
 
 class AlgorithmMetadataUpdateRequest(BaseModel):
@@ -87,6 +89,7 @@ class AlgorithmMetadataUpdateRequest(BaseModel):
     version: str | None = None
     namespace: str | None = None
     input_example: str | None = None
+    widget_overrides: dict[str, str] | None = None
 
 
 class AlgorithmSourceSaveRequest(BaseModel):

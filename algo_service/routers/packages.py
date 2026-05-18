@@ -122,6 +122,7 @@ async def create_package(
                         "zh_description": str(payload.get("zh_description", "")).strip(),
                         "zh_tags": payload.get("zh_tags", []),
                         "version": str(payload.get("version", "1.0.0")).strip() or "1.0.0",
+                        "widget_overrides": payload.get("widget_overrides", {}) if isinstance(payload.get("widget_overrides"), dict) else {},
                     },
                 )
                 break

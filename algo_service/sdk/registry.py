@@ -105,6 +105,7 @@ class AlgorithmEntry:
     version: str
     folder_path: str
     input_example: str = ""
+    widget_overrides: dict[str, str] = field(default_factory=dict)
     owner_id: str = "system"
     package_id: str | None = None
     package_root: str | None = None
@@ -184,6 +185,7 @@ class AlgorithmRegistry:
         namespace = str(config.get("namespace", "")).strip()
         folder_type = normalize_module_kind(config.get("module_kind", config.get("type", "component")))
         owner_id = str(config.get("owner_id", "system")).strip() or "system"
+        widget_overrides = config.get("widget_overrides") if isinstance(config.get("widget_overrides"), dict) else {}
         if not namespace:
             return
 
@@ -193,6 +195,8 @@ class AlgorithmRegistry:
             file_path = os.path.join(dirpath, filename)
             functions = ast_parser.extract_functions(file_path)
             for func_info in functions:
+                func_widget_overrides = func_info.get("widget_overrides") if isinstance(func_info.get("widget_overrides"), dict) else {}
+                merged_widget_overrides = {**widget_overrides, **func_widget_overrides}
                 entry = self._build_entry(
                     func_info=func_info,
                     namespace=namespace,
@@ -201,6 +205,7 @@ class AlgorithmRegistry:
                     dirpath=dirpath,
                     root_dir=root_dir,
                     owner_id=owner_id,
+                    widget_overrides=merged_widget_overrides,
                 )
                 self.register(entry)
 
@@ -266,16 +271,24 @@ class AlgorithmRegistry:
             module_kind=normalize_module_kind(manifest.get("module_kind", manifest.get("type", "component"))),
         )
         pkg_owner_id = str(manifest.get("owner_id", "system")).strip() or "system"
+        pkg_widget_overrides = manifest.get("widget_overrides") if isinstance(manifest.get("widget_overrides"), dict) else {}
 
         self._replace_package_entries(package.package_id)
         self._packages[package.package_id] = package
-        self._register_package_entries(package, ast_parser, owner_id=pkg_owner_id)
+        self._register_package_entries(package, ast_parser, owner_id=pkg_owner_id, widget_overrides=pkg_widget_overrides)
         return package
 
-    def _register_package_entries(self, package: AlgorithmPackage, ast_parser: Any, owner_id: str = "system") -> None:
+    def _register_package_entries(
+        self,
+        package: AlgorithmPackage,
+        ast_parser: Any,
+        owner_id: str = "system",
+        widget_overrides: dict[str, str] | None = None,
+    ) -> None:
         entry_path = os.path.join(package.root_path, package.entry_file)
         functions = ast_parser.extract_functions(entry_path)
         info_by_name = {item["func_name"]: item for item in functions}
+        package_widget_overrides = widget_overrides or {}
         for export_name in package.exports:
             func_info = info_by_name.get(export_name) or {
                 "func_name": export_name,
@@ -288,6 +301,8 @@ class AlgorithmRegistry:
                 "zh_tags": package.zh_tags,
                 "version": package.version,
             }
+            func_widget_overrides = func_info.get("widget_overrides") if isinstance(func_info.get("widget_overrides"), dict) else {}
+            merged_widget_overrides = {**package_widget_overrides, **func_widget_overrides}
             entry = self._build_entry(
                 func_info=func_info,
                 namespace=package.namespace,
@@ -299,6 +314,7 @@ class AlgorithmRegistry:
                 package_id=package.package_id,
                 package_root=package.root_path,
                 version_override=package.version,
+                widget_overrides=merged_widget_overrides,
             )
             self.register(entry)
 
@@ -357,9 +373,15 @@ class AlgorithmRegistry:
         package_id: str | None = None,
         package_root: str | None = None,
         version_override: str | None = None,
+        widget_overrides: dict[str, str] | None = None,
     ) -> AlgorithmEntry:
         func_name: str = func_info["func_name"]
         params: list[dict[str, Any]] = [p for p in func_info.get("params", []) if p["name"] != "self"]
+        overrides = widget_overrides or {}
+        if overrides:
+            from .param_inferrer import enrich_params
+
+            params = enrich_params(params, overrides)
         param_placeholders = ", ".join(f"${{{i + 1}:{p['name']}}}" for i, p in enumerate(params))
         call_snippet = f"alg.{namespace}.{func_name}({param_placeholders})"
         folder_path = os.path.relpath(dirpath, root_dir)
@@ -381,6 +403,7 @@ class AlgorithmRegistry:
             call_snippet=call_snippet,
             version=version_override or func_info.get("version") or "1.0.0",
             input_example=func_info.get("input_example") or "",
+            widget_overrides=overrides,
             folder_path=folder_path,
             owner_id=owner_id,
             package_id=package_id,
