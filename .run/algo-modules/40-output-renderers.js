@@ -1,8 +1,69 @@
 /*
  * AlgoLib module: 40-output-renderers.js
- * ?????????JSON??????????HTML???????????
- * ???? .run/algo-lib-check.js ??????????????????????
+ * 最终版文本、JSON、表格、图片、图表、HTML、文件和混合输出渲染。
+ * 从模块文件构建到 .run/algo-lib-check.js / .run/algo-lib-inline-check.js。
  */
+
+    const LABEL_ALIASES = ["labels", "label", "categories", "category", "names", "name", "keys", "x", "xAxis", "x_axis", "类别", "标签", "名称"];
+    const VALUE_ALIASES = ["values", "value", "data", "counts", "count", "amounts", "amount", "numbers", "y", "yAxis", "y_axis", "数值", "数量", "值"];
+    const CHART_BASE_OPTION = {
+      backgroundColor: "transparent",
+      textStyle: { color: "#ccc" },
+      legend: { textStyle: { color: "#ccc" } }
+    };
+
+    function findFieldByAliases(obj, aliases) {
+      if (!obj || typeof obj !== "object" || Array.isArray(obj)) return undefined;
+      for (const alias of aliases) {
+        if (Object.prototype.hasOwnProperty.call(obj, alias)) return obj[alias];
+      }
+      const keyMap = {};
+      Object.keys(obj).forEach(key => { keyMap[key.toLowerCase()] = key; });
+      for (const alias of aliases) {
+        const found = keyMap[String(alias).toLowerCase()];
+        if (found) return obj[found];
+      }
+      return undefined;
+    }
+
+    function isPlainOutputObject(value) {
+      return !!value && typeof value === "object" && !Array.isArray(value);
+    }
+
+    function isNumericValue(value) {
+      return typeof value === "number" && Number.isFinite(value);
+    }
+
+    function isNumberArray(value) {
+      return Array.isArray(value) && value.length > 0 && value.every(isNumericValue);
+    }
+
+    function arraysHaveSameLength(arrays) {
+      return arrays.length > 0 && arrays.every(arr => Array.isArray(arr) && arr.length === arrays[0].length);
+    }
+
+    function ensureOutputConvertHintStyle() {
+      if (document.getElementById("outputConvertHintStyle")) return;
+      const style = document.createElement("style");
+      style.id = "outputConvertHintStyle";
+      style.textContent = [
+        ".output-convert-hint { text-align:center; padding:40px 20px; color:var(--text-secondary); }",
+        ".output-convert-hint .hint-title { font-size:15px; margin-bottom:12px; color:var(--text); }",
+        ".output-convert-hint .hint-body { font-size:13px; text-align:left; display:inline-block; line-height:1.8; }"
+      ].join("\n");
+      document.head.appendChild(style);
+    }
+
+    function renderConvertHint(container, title, lines) {
+      ensureOutputConvertHintStyle();
+      const body = (lines || []).map(line => "· " + esc(line)).join("<br>");
+      container.innerHTML = [
+        '<div class="output-convert-hint">',
+        '<div class="hint-title">' + esc(title) + "</div>",
+        '<div class="hint-body">支持的数据结构：<br>' + body + "</div>",
+        "</div>"
+      ].join("");
+    }
 
     function renderOutputText(container, result) {
       const val = (result === null || result === undefined) ? "null" : String(result);
@@ -30,7 +91,7 @@
       bar.className = "output-action-bar";
       const copyBtn = document.createElement("button");
       copyBtn.className = "output-action-btn";
-      copyBtn.textContent = "复制JSON";
+      copyBtn.textContent = "复制 JSON";
       copyBtn.onclick = () => copyToClipboard(JSON.stringify(result, null, 2));
       bar.appendChild(copyBtn);
       container.appendChild(bar);
@@ -146,29 +207,52 @@
     }
 
     function _normalizeOutputTableData(result) {
-      if (result && typeof result === "object" && !Array.isArray(result)) {
-        if (Array.isArray(result.rows)) {
-          const headers = Array.isArray(result.columns) ? result.columns : (result.rows[0] && typeof result.rows[0] === "object" && !Array.isArray(result.rows[0]) ? Object.keys(result.rows[0]) : []);
-          const rows = result.rows.map(row => Array.isArray(row) ? row : headers.map(h => row?.[h]));
+      if (Array.isArray(result) && result.length) {
+        if (isPlainOutputObject(result[0])) {
+          const headers = Array.from(new Set(result.flatMap(row => Object.keys(row || {}))));
+          return { headers, rows: result.map(row => headers.map(h => row?.[h])) };
+        }
+        if (Array.isArray(result[0])) {
+          let headers = result[0].map((_, i) => "列" + (i + 1));
+          let rows = result;
+          if (result.length > 1 && result[0].every(c => typeof c === "string" && isNaN(Number(c)))) {
+            headers = result[0];
+            rows = result.slice(1);
+          }
           return { headers, rows };
         }
-        if (Array.isArray(result.data)) return _normalizeOutputTableData(result.data);
       }
-      if (!Array.isArray(result) || !result.length) return null;
-      if (typeof result[0] === "object" && !Array.isArray(result[0])) {
-        const headers = Object.keys(result[0]);
-        const rows = result.map(r => headers.map(h => r[h]));
+
+      if (!isPlainOutputObject(result)) return null;
+
+      if (Array.isArray(result.rows)) {
+        const headers = Array.isArray(result.columns)
+          ? result.columns
+          : (isPlainOutputObject(result.rows[0]) ? Object.keys(result.rows[0]) : []);
+        const rows = result.rows.map(row => Array.isArray(row) ? row : headers.map(h => row?.[h]));
         return { headers, rows };
       }
-      if (Array.isArray(result[0])) {
-        let headers = result[0].map((_, i) => "列" + (i + 1));
-        let rows = result;
-        if (result.length > 1 && result[0].every(c => typeof c === "string" && isNaN(Number(c)))) {
-          headers = result[0];
-          rows = result.slice(1);
-        }
+
+      const objectArrayKey = Object.keys(result).find(key => Array.isArray(result[key]) && result[key].length && isPlainOutputObject(result[key][0]));
+      if (objectArrayKey) return _normalizeOutputTableData(result[objectArrayKey]);
+
+      const arrayEntries = Object.entries(result).filter(([, value]) => Array.isArray(value) && value.every(item => item === null || typeof item !== "object"));
+      if (arrayEntries.length >= 2 && arraysHaveSameLength(arrayEntries.map(([, value]) => value))) {
+        const headers = arrayEntries.map(([key]) => key);
+        const rowCount = arrayEntries[0][1].length;
+        const rows = Array.from({ length: rowCount }, (_, rowIndex) => arrayEntries.map(([, values]) => values[rowIndex]));
         return { headers, rows };
       }
+
+      const labels = findFieldByAliases(result, LABEL_ALIASES);
+      const values = findFieldByAliases(result, VALUE_ALIASES);
+      if (Array.isArray(labels) && Array.isArray(values) && labels.length === values.length) {
+        return {
+          headers: ["标签", "数值"],
+          rows: labels.map((label, index) => [label, values[index]])
+        };
+      }
+
       return null;
     }
 
@@ -201,6 +285,19 @@
       window._lastTableRows = rows;
     }
 
+    function tryRenderTable(container, result) {
+      const spec = _normalizeOutputTableData(result);
+      if (!spec || !spec.headers.length) {
+        renderConvertHint(container, "当前数据无法转换为表格", [
+          '对象数组：[{"列1": 值, "列2": 值}, ...]',
+          '多个等长数组：{"列1": [值, ...], "列2": [值, ...]}',
+          '标签+数值：{"labels": [...], "values": [...]}'
+        ]);
+        return;
+      }
+      renderOutputTable(container, result);
+    }
+
     function copyTableAsTsv() {
       if (!window._lastTableHeaders) return;
       let tsv = window._lastTableHeaders.join("\t") + "\n";
@@ -214,8 +311,22 @@
       const raw = String(result ?? "");
       const src = _ensureDataUrl(raw);
       const downloadRaw = raw.startsWith("data:") ? (raw.split(",")[1] || raw) : raw;
-      container.innerHTML = '<div><img class="output-image" src="' + _escapeJsString(src).replace(/"/g, "&quot;") + '" onclick="showImageFullscreen(this.src)" /></div>' +
-        '<div class="output-action-bar"><button class="output-action-btn" onclick="downloadBase64File(\'' + _escapeJsString(downloadRaw) + "', 'output.png', 'image/png')\">下载图片</button></div>";
+      container.innerHTML = "";
+      const wrap = document.createElement("div");
+      const img = document.createElement("img");
+      img.className = "output-image";
+      img.src = src;
+      img.onclick = () => showImageFullscreen(img.src);
+      wrap.appendChild(img);
+      const bar = document.createElement("div");
+      bar.className = "output-action-bar";
+      const btn = document.createElement("button");
+      btn.className = "output-action-btn";
+      btn.textContent = "下载图片";
+      btn.onclick = () => downloadBase64File(downloadRaw, "output.png", "image/png");
+      bar.appendChild(btn);
+      container.appendChild(wrap);
+      container.appendChild(bar);
     }
 
     function renderOutputImages(container, result) {
@@ -223,17 +334,31 @@
         renderOutputImage(container, result);
         return;
       }
-      let html = '<div style="margin-bottom:8px;font-size:13px;color:var(--text-secondary)">共 ' + result.length + " 张图片</div>";
-      html += '<div class="output-images-grid">';
+      container.innerHTML = "";
+      const count = document.createElement("div");
+      count.style.marginBottom = "8px";
+      count.style.fontSize = "13px";
+      count.style.color = "var(--text-secondary)";
+      count.textContent = "共 " + result.length + " 张图片";
+      const grid = document.createElement("div");
+      grid.className = "output-images-grid";
       result.forEach(item => {
         const src = _ensureDataUrl(String(item));
-        html += '<div style="cursor:pointer" onclick="showImageFullscreen(\'' + _escapeJsString(src) + '\')"><img src="' + _escapeJsString(src).replace(/"/g, "&quot;") + '" style="width:100%;border-radius:6px" /></div>';
+        const holder = document.createElement("div");
+        holder.style.cursor = "pointer";
+        holder.onclick = () => showImageFullscreen(src);
+        const img = document.createElement("img");
+        img.src = src;
+        img.style.width = "100%";
+        img.style.borderRadius = "6px";
+        holder.appendChild(img);
+        grid.appendChild(holder);
       });
-      html += "</div>";
-      container.innerHTML = html;
+      container.appendChild(count);
+      container.appendChild(grid);
     }
 
-    function renderOutputChart(container, result) {
+    function renderEchartsOption(container, result, option) {
       if (typeof echarts === "undefined") {
         container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">页面未加载 ECharts 库，无法绘制图表。<br>降级显示 JSON 数据：</div>';
         const jsonDiv = document.createElement("div");
@@ -248,28 +373,169 @@
       container.innerHTML = "";
       container.appendChild(chartDiv);
       const chart = echarts.init(chartDiv);
-      let option = {};
-      if (Array.isArray(result) && result.every(v => typeof v === "number")) {
-        option = { xAxis: { type: "category", data: result.map((_, i) => i) }, yAxis: { type: "value" }, series: [{ data: result, type: "line", smooth: true }], tooltip: { trigger: "axis" } };
-      } else if (result && typeof result === "object" && !Array.isArray(result)) {
-        if (result.labels && result.values) {
-          option = { tooltip: { trigger: "item" }, series: [{ type: "pie", data: result.labels.map((l, i) => ({ name: l, value: result.values[i] })) }] };
-        } else if (result.x && result.y) {
-          option = { xAxis: { type: "category", data: result.x }, yAxis: { type: "value" }, series: [{ data: result.y, type: "line", smooth: true }], tooltip: { trigger: "axis" } };
-        } else {
-          renderOutputJson(container, result);
-          return;
+      const finalOption = Object.assign({}, CHART_BASE_OPTION, option, {
+        textStyle: Object.assign({}, CHART_BASE_OPTION.textStyle, option.textStyle || {}),
+        legend: Object.assign({}, CHART_BASE_OPTION.legend, option.legend || {}, {
+          textStyle: Object.assign({}, CHART_BASE_OPTION.legend.textStyle, option.legend?.textStyle || {})
+        })
+      });
+      chart.setOption(finalOption);
+      setTimeout(() => chart.resize(), 50);
+      window.addEventListener("resize", () => chart.resize(), { passive: true });
+    }
+
+    function buildSeriesChartOption(result, seriesType) {
+      const makeOption = (xData, series) => ({
+        tooltip: { trigger: "axis" },
+        legend: { data: series.map(item => item.name).filter(Boolean) },
+        xAxis: { type: "category", data: xData },
+        yAxis: { type: "value" },
+        series: series.map(item => Object.assign({}, item, { type: seriesType, smooth: seriesType === "line" }))
+      });
+
+      if (isNumberArray(result)) {
+        return makeOption(result.map((_, index) => index), [{ name: "数值", data: result }]);
+      }
+
+      if (isPlainOutputObject(result)) {
+        const labels = findFieldByAliases(result, LABEL_ALIASES);
+        const values = findFieldByAliases(result, VALUE_ALIASES);
+        if (Array.isArray(labels) && isNumberArray(values) && labels.length === values.length) {
+          return makeOption(labels, [{ name: "数值", data: values }]);
         }
-      } else if (Array.isArray(result) && result.length && typeof result[0] === "object") {
-        const keys = Object.keys(result[0]).filter(k => typeof result[0][k] === "number");
-        const categories = result.map((_, i) => i);
-        option = { xAxis: { type: "category", data: categories }, yAxis: { type: "value" }, legend: { data: keys }, series: keys.map(k => ({ name: k, type: "bar", data: result.map(r => r[k]) })), tooltip: { trigger: "axis" } };
-      } else {
-        renderOutputJson(container, result);
+
+        const numericEntries = Object.entries(result).filter(([, value]) => isNumberArray(value));
+        if (numericEntries.length === 1) {
+          const [name, valuesOnly] = numericEntries[0];
+          return makeOption(valuesOnly.map((_, index) => index), [{ name, data: valuesOnly }]);
+        }
+        if (numericEntries.length > 1 && arraysHaveSameLength(numericEntries.map(([, value]) => value))) {
+          const xData = numericEntries[0][1].map((_, index) => index);
+          return makeOption(xData, numericEntries.map(([name, data]) => ({ name, data })));
+        }
+      }
+
+      if (Array.isArray(result) && result.length && isPlainOutputObject(result[0])) {
+        const first = result[0];
+        const labelKey = LABEL_ALIASES.find(key => Object.prototype.hasOwnProperty.call(first, key) && !isNumericValue(first[key]));
+        const numericKeys = Object.keys(first).filter(key => result.every(row => isNumericValue(row?.[key])));
+        if (numericKeys.length) {
+          const xData = result.map((row, index) => labelKey ? row[labelKey] : index);
+          return makeOption(xData, numericKeys.map(key => ({ name: key, data: result.map(row => row[key]) })));
+        }
+      }
+
+      return null;
+    }
+
+    function tryRenderLineChart(container, result) {
+      const option = buildSeriesChartOption(result, "line");
+      if (!option) {
+        renderConvertHint(container, "当前数据无法转换为折线图", [
+          '{"labels": [...], "values": [...]}',
+          '{"x": [...], "y": [...]}',
+          "纯数字数组：[1, 2, 3]",
+          "多个等长数字数组或对象数组中的数字字段"
+        ]);
         return;
       }
-      chart.setOption(option);
-      window.addEventListener("resize", () => chart.resize(), { passive: true });
+      renderEchartsOption(container, result, option);
+    }
+
+    function tryRenderBarChart(container, result) {
+      const option = buildSeriesChartOption(result, "bar");
+      if (!option) {
+        renderConvertHint(container, "当前数据无法转换为柱状图", [
+          '{"labels": [...], "values": [...]}',
+          '{"x": [...], "y": [...]}',
+          "纯数字数组：[1, 2, 3]",
+          "多个等长数字数组或对象数组中的数字字段"
+        ]);
+        return;
+      }
+      renderEchartsOption(container, result, option);
+    }
+
+    function buildPieOption(result) {
+      const makePie = items => ({
+        tooltip: { trigger: "item" },
+        series: [{ type: "pie", radius: "65%", data: items }]
+      });
+
+      if (isPlainOutputObject(result)) {
+        const labels = findFieldByAliases(result, LABEL_ALIASES);
+        const values = findFieldByAliases(result, VALUE_ALIASES);
+        if (Array.isArray(labels) && isNumberArray(values) && labels.length === values.length) {
+          return makePie(labels.map((label, index) => ({ name: label, value: values[index] })));
+        }
+
+        if (isPlainOutputObject(result.percentages)) {
+          const parsed = Object.entries(result.percentages)
+            .map(([name, value]) => ({ name, value: parseFloat(String(value).replace("%", "")) }))
+            .filter(item => Number.isFinite(item.value));
+          if (parsed.length) return makePie(parsed);
+        }
+
+        const entries = Object.entries(result).filter(([, value]) => isNumericValue(value));
+        if (entries.length === Object.keys(result).length && entries.length > 0) {
+          return makePie(entries.map(([name, value]) => ({ name, value })));
+        }
+      }
+
+      if (Array.isArray(result) && result.length && isPlainOutputObject(result[0])) {
+        const items = result.map(item => ({
+          name: item.name ?? item.label ?? item.category,
+          value: item.value
+        })).filter(item => item.name !== undefined && isNumericValue(item.value));
+        if (items.length) return makePie(items);
+      }
+
+      return null;
+    }
+
+    function tryRenderPieChart(container, result) {
+      const option = buildPieOption(result);
+      if (!option) {
+        renderConvertHint(container, "当前数据无法转换为饼图", [
+          '{"labels": [...], "values": [...]}',
+          '{"手机": 4500, "笔记本": 3200}',
+          '[{"name": "手机", "value": 4500}, ...]',
+          '{"percentages": {"A": "30%", "B": "70%"}}'
+        ]);
+        return;
+      }
+      renderEchartsOption(container, result, option);
+    }
+
+    function renderOutputChart(container, result) {
+      if (buildPieOption(result)) {
+        tryRenderPieChart(container, result);
+        return;
+      }
+      tryRenderLineChart(container, result);
+    }
+
+    function tryRenderImage(container, result) {
+      if (typeof result === "string" && _isBase64Image(result)) {
+        renderOutputImage(container, result);
+        return;
+      }
+      if (Array.isArray(result) && result.length && result.every(item => typeof item === "string" && _isBase64Image(item))) {
+        renderOutputImages(container, result);
+        return;
+      }
+      if (isPlainOutputObject(result)) {
+        const found = Object.values(result).find(value => typeof value === "string" && _isBase64Image(value));
+        if (found) {
+          renderOutputImage(container, found);
+          return;
+        }
+      }
+      renderConvertHint(container, "当前数据无法转换为图片", [
+        "base64 图片字符串",
+        '{"image": "iVBOR..."}',
+        '["iVBOR...", "iVBOR..."]'
+      ]);
     }
 
     function renderOutputHtml(container, result) {
@@ -294,11 +560,81 @@
     function renderOutputFile(container, result) {
       if (result && typeof result === "object" && result.filename && (result.content || result.base64)) {
         const b64 = result.base64 || btoa(result.content);
-        container.innerHTML = '<div style="padding:20px;text-align:center"><div style="font-size:16px;margin-bottom:12px">' + esc(result.filename) + "</div>" +
-          '<button class="output-download-btn" onclick="downloadBase64File(\'' + _escapeJsString(b64) + "', '" + _escapeJsString(result.filename) + "')\">下载文件</button></div>";
+        container.innerHTML = "";
+        const wrap = document.createElement("div");
+        wrap.style.padding = "20px";
+        wrap.style.textAlign = "center";
+        const name = document.createElement("div");
+        name.style.fontSize = "16px";
+        name.style.marginBottom = "12px";
+        name.textContent = result.filename;
+        const btn = document.createElement("button");
+        btn.className = "output-download-btn";
+        btn.textContent = "下载文件";
+        btn.onclick = () => downloadBase64File(b64, result.filename);
+        wrap.appendChild(name);
+        wrap.appendChild(btn);
+        container.appendChild(wrap);
       } else {
         renderOutputJson(container, result);
       }
+    }
+
+    function tryRenderFileDownload(container, result) {
+      if (isPlainOutputObject(result) && result.filename && (result.content || result.base64)) {
+        renderOutputFile(container, result);
+        return;
+      }
+
+      if (typeof result === "string" && result.replace(/\s/g, "").length > 100 && !_isBase64Image(result)) {
+        container.innerHTML = "";
+        const btn = document.createElement("button");
+        btn.className = "output-download-btn";
+        btn.textContent = "下载文件";
+        btn.onclick = () => downloadBase64File(result, "output.bin", "application/octet-stream");
+        container.appendChild(btn);
+        return;
+      }
+
+      if (isPlainOutputObject(result)) {
+        const path = result.path || result.file_path || result.filePath;
+        if (path) {
+          container.innerHTML = "";
+          const label = document.createElement("div");
+          label.className = "output-section-label";
+          label.textContent = "文件路径";
+          const text = document.createElement("div");
+          text.className = "output-text";
+          text.textContent = String(path);
+          const bar = document.createElement("div");
+          bar.className = "output-action-bar";
+          if (/^(https?:\/\/|\/api\/)/i.test(String(path))) {
+            const a = document.createElement("a");
+            a.className = "output-download-btn";
+            a.href = String(path);
+            a.target = "_blank";
+            a.rel = "noopener";
+            a.textContent = "打开文件";
+            bar.appendChild(a);
+          }
+          const copyBtn = document.createElement("button");
+          copyBtn.className = "output-action-btn";
+          copyBtn.textContent = "复制路径";
+          copyBtn.onclick = () => copyToClipboard(String(path));
+          bar.appendChild(copyBtn);
+          container.appendChild(label);
+          container.appendChild(text);
+          container.appendChild(bar);
+          return;
+        }
+      }
+
+      renderConvertHint(container, "当前数据无法转换为文件下载", [
+        '{"filename": "result.txt", "content": "..."}',
+        '{"filename": "result.bin", "base64": "..."}',
+        "较长的 base64 文件字符串",
+        '{"path": "/api/download/xxx"} 或 {"file_path": "..."}'
+      ]);
     }
 
     function renderOutputMixed(container, result) {
@@ -314,7 +650,7 @@
           const content = document.createElement("div");
           if (_isBase64Image(val)) {
             renderOutputImage(content, val);
-          } else if (Array.isArray(val) && val.length && typeof val[0] === "object") {
+          } else if (_normalizeOutputTableData(val)) {
             renderOutputTable(content, val);
           } else if (typeof val === "object") {
             content.className = "json-tree";
@@ -333,30 +669,13 @@
       }
     }
 
-    // ===== 任务 7：图表 Tab =====
+    // ===== 图表 Tab 旧入口保留兼容 =====
     function renderChartOutput(response) {
       const container = document.getElementById("outputContent");
       if (!container) return;
-      if (!response || !response.result) {
+      if (!response || response.result === null || response.result === undefined) {
         container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">无数据</div>';
         return;
       }
-      const result = response.result;
-      const hint = response.output_hint;
-      if (hint === "chart") {
-        renderOutputChart(container, result);
-        return;
-      }
-      if (Array.isArray(result) && result.every(v => typeof v === "number")) {
-        renderOutputChart(container, result);
-        return;
-      }
-      if (Array.isArray(result) && result.length && typeof result[0] === "object") {
-        const numKeys = Object.keys(result[0]).filter(k => typeof result[0][k] === "number");
-        if (numKeys.length) {
-          renderOutputChart(container, result);
-          return;
-        }
-      }
-      container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">当前结果不适合绘制图表</div>';
+      tryRenderLineChart(container, response.result);
     }

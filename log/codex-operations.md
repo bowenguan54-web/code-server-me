@@ -283,3 +283,47 @@ ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接�
 - 现在标准前端模块流程是：改 `.run/algo-modules/*.js` → `bash .run/build-algo-lib.sh all` → HTML 已自动注入 → 如需 WSL 重启则运行 `bash .run/build-algo-lib.sh dev`。
 - `ci/dev/sync-and-restart.sh` 排除 `.run/` 不影响注入后的页面，因为同步目标是 `src/browser/pages/algo-lib.html`。
 - 如果从 `/mnt/e/code-server-me` 运行 `dev`，脚本会优先调用 `/home/guan/code-server-me/ci/dev/sync-and-restart.sh` 来完成 Windows→WSL 同步；可用 `ALGOLIB_WSL_PROJECT_DIR` 覆盖目标路径。
+
+
+## 2026-05-18 23:25 +08:00 - 后续构建注入与 WSL 同步约定
+
+### 本次操作
+- 用户要求以后每次修改后，由 Codex 负责完成前端模块构建与 HTML 注入步骤。
+- 用户只希望自己执行 WSL 同步重启命令：
+  `wsl bash -lc "cd /home/guan/code-server-me && bash ci/dev/sync-and-restart.sh --full"`
+
+### 约束/规则
+- 后续凡是修改 `.run/algo-modules/`、`.run/algo-modules/inline-only/` 或任何会影响内联前端 JS 的文件，Codex 修改完成后必须运行 `bash .run/build-algo-lib.sh all` 完成构建与注入。
+- Codex 不应默认替用户执行 WSL 同步重启；除非用户明确要求，否则最终只提示用户运行上述 `wsl bash -lc ... sync-and-restart.sh --full` 命令。
+- 修改前端模块时先读取 `.run/ARCHITECTURE.md` 和本日志，复用构建、注入、同步约定。
+
+
+## 2026-05-18 23:30 +08:00 - 全屏测试输出 Tab 改造
+
+### 本次操作
+- 用户要求把测试输出区从“原始输出/结构化/图表”三 Tab 改为用户主动选择的八种展示方式。
+- 修改 `.run/algo-modules/39-output-utils-run.js`：将最终输出路由改为 `raw/json/table/line/bar/pie/image/file`，保留旧 `renderStructuredOutput` 兼容入口。
+- 修改 `.run/algo-modules/40-output-renderers.js`：新增宽松字段匹配、统一转换失败提示、表格/折线图/柱状图/饼图/图片/文件下载的 `tryRender*` 系列函数。
+- `src/browser/pages/algo-lib.html` 的静态 `#outputTabs` 已调整为八个中文按钮。
+
+### 约束/规则
+- 新输出 Tab 是“尝试转换”而不是只依赖后端 `output_hint`；转换失败必须显示中文友好提示和支持结构示例。
+- 图表相关字段名使用宽松同义词：`labels/categories/name/x/类别/标签/名称` 与 `values/data/count/y/数值/数量/值`。
+- ECharts 不可用时降级显示 JSON，不阻断测试页面。
+
+
+## 2026-05-19 09:20 +08:00 - 全屏测试页 DOM 丢失修复
+
+### 本次操作
+- 用户反馈编辑器工具栏“测试”按钮无反应，返回列表后卡片“测试”也失效。
+- 修改 `.run/algo-modules/29-full-test-core.js`：新增 `_createTestFullpageElement()`，当 `#testFullpage` 被 `#main.innerHTML` 重绘删除后，可动态重建完整测试页 DOM。
+- 修改 `openTestPage()`：不再依赖 `#main` 内已有测试页；测试页固定挂载到 `document.body`，避免后续编辑器重绘再次删除。
+- `closeTestPage()` 继续只隐藏测试页并清理测试状态，不移除 DOM，不触碰 `state.editing`。
+
+### 验证
+- 已运行 `bash .run/build-algo-lib.sh all`，生成 check/inline bundle 并注入 `src/browser/pages/algo-lib.html`。
+- 已运行 `node --check .run/algo-lib-check.js && node --check .run/algo-lib-inline-check.js`，语法检查通过。
+
+### 约束/规则
+- 全屏测试页这类跨页面浮层不要挂在 `#main` 内；`#main` 会被列表页、编辑页反复 `innerHTML` 重建。
+- 需要跨页面保持的 DOM 应挂到 `document.body`，关闭时优先隐藏而不是删除。

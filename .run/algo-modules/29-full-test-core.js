@@ -1,20 +1,81 @@
 /*
  * AlgoLib module: 29-full-test-core.js
- * ???????????????????????
- * ???? .run/algo-lib-check.js ??????????????????????
+ * 全屏测试页打开关闭、参数卡片和示例填充。
+ * 从模块文件构建到 .run/algo-lib-check.js / .run/algo-lib-inline-check.js。
  */
 
+    function _createTestFullpageElement() {
+      const host = document.createElement("div");
+      host.id = "testFullpage";
+      host.className = "test-fullpage";
+      host.style.display = "none";
+      host.style.position = "fixed";
+      host.style.top = "0";
+      host.style.left = "0";
+      host.style.width = "100vw";
+      host.style.height = "100vh";
+      host.style.zIndex = "9999";
+      host.style.overflow = "auto";
+      host.innerHTML = `
+        <div class="test-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span id="testAlgoName" style="font-weight:600;font-size:16px"></span>
+            <span id="testAlgoNs" style="font-size:12px;color:var(--text-secondary)"></span>
+          </div>
+          <button class="test-close-btn" onclick="closeTestPage()">关闭测试</button>
+        </div>
+        <div class="test-body">
+          <div class="test-input-panel" id="testInputPanel">
+            <div class="test-section-title">参数输入</div>
+            <div id="testParamCards"></div>
+          </div>
+          <div class="test-divider" id="testDivider"></div>
+          <div class="test-output-panel" id="testOutputPanel">
+            <div class="test-section-title">运行结果</div>
+            <div class="output-tabs" id="outputTabs">
+              <button class="output-tab active" data-tab="raw" onclick="switchOutputTab('raw')">原始输出</button>
+              <button class="output-tab" data-tab="json" onclick="switchOutputTab('json')">JSON 树</button>
+              <button class="output-tab" data-tab="table" onclick="switchOutputTab('table')">表格</button>
+              <button class="output-tab" data-tab="line" onclick="switchOutputTab('line')">折线图</button>
+              <button class="output-tab" data-tab="bar" onclick="switchOutputTab('bar')">柱状图</button>
+              <button class="output-tab" data-tab="pie" onclick="switchOutputTab('pie')">饼图</button>
+              <button class="output-tab" data-tab="image" onclick="switchOutputTab('image')">图片</button>
+              <button class="output-tab" data-tab="file" onclick="switchOutputTab('file')">文件下载</button>
+            </div>
+            <div class="output-content" id="outputContent">
+              <div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>
+            </div>
+          </div>
+        </div>
+        <div class="test-run-bar">
+          <div><span class="test-elapsed" id="testElapsed"></span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="test-run-btn" id="testRunBtn" onclick="runFullTest()">运行测试</button>
+          </div>
+        </div>
+      `;
+      return host;
+    }
+
     function openTestPage(algo) {
-      if (!algo) { showToast("\u672a\u627e\u5230\u53ef\u6d4b\u8bd5\u7684\u7b97\u6cd5"); return; }
+      if (!algo) {
+        showToast("未找到可测试的算法");
+        return;
+      }
+
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
       const mainEl = qs("#main");
       if (mainEl) mainEl.scrollTop = 0;
       document.body.style.overflow = "hidden";
-      const host = document.getElementById("testFullpage");
-      const main = document.getElementById("main");
-      if (!host || !main) return;
-      if (host.parentElement !== main) main.appendChild(host);
+
+      let host = document.getElementById("testFullpage");
+      if (!host) {
+        host = _createTestFullpageElement();
+      }
+      if (host.parentElement !== document.body) {
+        document.body.appendChild(host);
+      }
 
       let inputExample = {};
       try {
@@ -26,7 +87,7 @@
       state._testAlgo = algo;
       state._testParamValues = {};
       state._testResult = null;
-      state._testOutputTab = "output";
+      state._testOutputTab = "raw";
       state._testInputExample = inputExample && typeof inputExample === "object" && !Array.isArray(inputExample) ? inputExample : {};
       state._compTestAlgo = algo;
       state._compTestSource = null;
@@ -34,14 +95,19 @@
       state._tpFileState = {};
       state.testPanelOpen = true;
 
-      ensureTestExampleButton();
+      const nameEl = document.getElementById("testAlgoName");
+      const nsEl = document.getElementById("testAlgoNs");
+      const outputEl = document.getElementById("outputContent");
+      const elapsedEl = document.getElementById("testElapsed");
+
       host.style.display = "flex";
-      document.getElementById("testAlgoName").textContent = algo.zhName || algo.funcName || algo.name || algo.id || "\u7b97\u6cd5";
-      document.getElementById("testAlgoNs").textContent = algo.callPrefix || algo.displayNamespace || "";
+      if (nameEl) nameEl.textContent = algo.zhName || algo.funcName || algo.name || algo.id || "算法";
+      if (nsEl) nsEl.textContent = algo.callPrefix || algo.displayNamespace || "";
       renderTestParamCards(algo.params || []);
-      document.getElementById("outputContent").innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">\u70b9\u51fb\u300c\u8fd0\u884c\u6d4b\u8bd5\u300d\u67e5\u770b\u7ed3\u679c</div>';
-      document.getElementById("testElapsed").textContent = "";
-      switchOutputTab("output");
+      if (outputEl) outputEl.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>';
+      if (elapsedEl) elapsedEl.textContent = "";
+      switchOutputTab("raw");
+      ensureTestExampleButton();
       initTestDivider();
     }
 
@@ -104,7 +170,7 @@
         const fillBtn = document.createElement("button");
         fillBtn.type = "button";
         fillBtn.className = "json-toolbar-btn";
-        fillBtn.textContent = "\u586b\u5165\u793a\u4f8b";
+        fillBtn.textContent = "填入示例";
         fillBtn.onclick = () => fillTestParamExample(param.name);
         right.appendChild(fillBtn);
       }
@@ -119,7 +185,7 @@
         skipInput.className = "param-skip-checkbox";
         skipInput.dataset.testSkip = param.name || "";
         const skipText = document.createElement("span");
-        skipText.textContent = "\u8df3\u8fc7\u6b64\u53c2\u6570";
+        skipText.textContent = "跳过此参数";
         skip.appendChild(skipInput);
         skip.appendChild(skipText);
         right.appendChild(skip);
@@ -168,8 +234,6 @@
       card.appendChild(inputArea);
       return card;
     }
-
-
 
     function hasTestInputExample(paramName) {
       return !!paramName && Object.prototype.hasOwnProperty.call(state._testInputExample || {}, paramName);
@@ -260,7 +324,7 @@
       btn.type = "button";
       btn.id = "testFillAllExampleBtn";
       btn.className = "json-toolbar-btn";
-      btn.textContent = "\u586b\u5165\u5168\u90e8\u793a\u4f8b";
+      btn.textContent = "填入全部示例";
       btn.onclick = fillAllTestExamples;
       runBarActions.insertBefore(btn, runBtn);
     }

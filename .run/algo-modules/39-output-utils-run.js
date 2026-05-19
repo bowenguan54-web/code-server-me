@@ -1,10 +1,10 @@
 /*
  * AlgoLib module: 39-output-utils-run.js
- * ?????????????????????????
- * ???? .run/algo-lib-check.js ??????????????????????
+ * 全屏测试页运行、输出路由和基础输出工具。
+ * 从模块文件构建到 .run/algo-lib-check.js / .run/algo-lib-inline-check.js。
  */
 
-    // ===== 任务 1：辅助函数 =====
+    // ===== 辅助函数 =====
     function _isBase64Image(s) {
       if (typeof s !== "string") return false;
       if (s.startsWith("data:image")) return true;
@@ -72,7 +72,7 @@
       document.body.appendChild(mask);
     }
 
-    // ===== 任务 2：参数收集函数 =====
+    // ===== 参数收集函数 =====
     function collectTestParams() {
       const algo = state._testAlgo;
       if (!algo) return { args: [], kwargs: {} };
@@ -125,7 +125,7 @@
       return { args: [], kwargs };
     }
 
-    // ===== 任务 3：运行函数 =====
+    // ===== 运行函数 =====
     async function runFullTest() {
       const algo = state._testAlgo;
       if (!algo) {
@@ -161,9 +161,9 @@
       }
     }
 
-    // ===== 任务 4：输出路由 =====
+    // ===== 输出路由 =====
     function renderTestOutput(response) {
-      const tab = state._testOutputTab || "output";
+      const tab = state._testOutputTab || "raw";
       switchOutputTab(tab);
     }
 
@@ -173,29 +173,27 @@
         el.classList.toggle("active", el.dataset.tab === tabName);
       });
       const response = state._testResult;
-      const content = document.getElementById("outputContent");
-      if (!content) return;
+      const container = document.getElementById("outputContent");
+      if (!container) return;
       if (!response) {
-        content.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>';
+        container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">点击「运行测试」查看结果</div>';
         return;
       }
+      const result = response.result;
       switch (tabName) {
-        case "output":
-          renderRawOutput(response);
-          break;
-        case "structured":
-          renderStructuredOutput(response);
-          break;
-        case "chart":
-          renderChartOutput(response);
-          break;
-        default:
-          renderRawOutput(response);
-          break;
+        case "raw": renderRawOutput(response); break;
+        case "json": renderOutputJson(container, result); break;
+        case "table": tryRenderTable(container, result); break;
+        case "line": tryRenderLineChart(container, result); break;
+        case "bar": tryRenderBarChart(container, result); break;
+        case "pie": tryRenderPieChart(container, result); break;
+        case "image": tryRenderImage(container, result); break;
+        case "file": tryRenderFileDownload(container, result); break;
+        default: renderRawOutput(response); break;
       }
     }
 
-    // ===== 任务 5：原始输出渲染 =====
+    // ===== 原始输出渲染 =====
     function renderRawOutput(response) {
       const container = document.getElementById("outputContent");
       if (!container) return;
@@ -221,7 +219,7 @@
       container.innerHTML = html;
     }
 
-    // ===== 任务 6：结构化输出渲染 =====
+    // ===== 结构化输出渲染（旧入口保留兼容） =====
     function renderStructuredOutput(response) {
       const container = document.getElementById("outputContent");
       if (!container) return;
