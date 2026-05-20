@@ -78,6 +78,7 @@ class AlgorithmCreateRequest(BaseModel):
     publish_status: str = "draft"
     input_example: str = ""
     widget_overrides: dict[str, str] = Field(default_factory=dict)
+    blocks: list[dict] | None = None
 
 
 class AlgorithmMetadataUpdateRequest(BaseModel):

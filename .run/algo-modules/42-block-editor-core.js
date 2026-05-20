@@ -4,9 +4,10 @@
  * ???? .run/algo-lib-check.js ??????????????????????
  */
 
-    function initBlockEditor(container, item) {
+    function initBlockEditor(container, item, initialBlocks) {
       // 仅对 template 类型启用分块编辑
       if (item.type !== "template" && item.moduleKind !== "template") return false;
+      if (state.blockEditor) cleanupBlockEditor();
       state.blockEditor = {
         container,
         algorithmId: item.id,
@@ -19,6 +20,24 @@
       const isAdmin = state.currentUser?.role === "admin";
       const isOwner = item.ownerId === state.currentUser?.id || item.owner_id === state.currentUser?.id;
       state.blockEditor.canDesign = isAdmin || isOwner;
+      if (Array.isArray(initialBlocks)) {
+        state.blockEditor.blocks = initialBlocks.map((block, index) => ({
+          id: block.id || `blk_${index + 1}`,
+          order: Number(block.order || index + 1),
+          title: block.title || `步骤 ${index + 1}`,
+          description: block.description || "",
+          hint: block.hint || "",
+          code: block.code || "\n",
+          locked: !!block.locked,
+        }));
+        state.blockEditor.designMode = true;
+        state.blockEditor.canDesign = true;
+        renderBlockEditorUI(container);
+        if (!state.completionItems || state.completionItems.length === 0) {
+          registerCompletionProvider();
+        }
+        return true;
+      }
       // 加载 blocks 数据后渲染
       api(`/api/v1/templates/${item.id}/blocks`).then(resp => {
         state.blockEditor.blocks = resp.blocks || [];
@@ -43,8 +62,9 @@
 
     function renderBlockEditorUI(container) {
       if (!state.blockEditor) return;
-      const { blocks, viewMode, designMode, canDesign } = state.blockEditor;
+      const { blocks, viewMode, designMode, canDesign, algorithmId } = state.blockEditor;
       const sorted = [...blocks].sort((a, b) => a.order - b.order);
+      const isNewTemplate = algorithmId === "__new_template__";
 
       // 将 Block 操作控件注入主工具栏的 #blockEditorControls 占位符
       const ctrl = qs("#blockEditorControls");
@@ -52,7 +72,7 @@
         const addBtnHtml = designMode
           ? `<button class="block-action" onclick="window.addNewBlock()">＋ 添加步骤</button>`
           : "";
-        const designToggle = canDesign
+        const designToggle = canDesign && !isNewTemplate
           ? `<button class="block-action ${designMode ? "active" : ""}" onclick="window.toggleDesignMode()">${designMode ? "退出设计" : "进入设计模式"}</button>`
           : "";
         ctrl.innerHTML = `

@@ -13,6 +13,7 @@ def algo_meta(
     version: str = "1.0.0",
     author: str = "",
     input_example: str = "",
+    widget_overrides: dict[str, str] | None = None,
 ) -> Any:
     """
     Decorator to attach Chinese metadata to an algorithm function.
@@ -32,6 +33,7 @@ def algo_meta(
             "version": version,
             "author": author,
             "input_example": input_example,
+            "widget_overrides": widget_overrides or {},
         }
         func._algo_meta = meta  # type: ignore[attr-defined]
 

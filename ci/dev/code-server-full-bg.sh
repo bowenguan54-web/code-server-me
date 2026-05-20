@@ -54,6 +54,34 @@ reset_extension_caches() {
   rm -f "$USER_DATA_DIR/CachedProfilesData/__default__profile__/extensions.user.cache"
 }
 
+unmark_algolib_extensions() {
+  local obsolete_file="$EXTENSIONS_DIR/.obsolete"
+  mkdir -p "$EXTENSIONS_DIR"
+
+  if [[ ! -f "$obsolete_file" ]]; then
+    return 0
+  fi
+
+  OBSOLETE_FILE="$obsolete_file" node <<'NODE'
+const fs = require('fs');
+const file = process.env.OBSOLETE_FILE;
+const ids = ['coder.algolib-1.0.0', 'bowenguan54.algolib-manager-1.0.0'];
+let data = {};
+
+try {
+  data = JSON.parse(fs.readFileSync(file, 'utf8') || '{}');
+} catch {
+  data = {};
+}
+
+for (const id of ids) {
+  delete data[id];
+}
+
+fs.writeFileSync(file, JSON.stringify(data));
+NODE
+}
+
 write_locale_config() {
   mkdir -p "$USER_DATA_DIR/User"
   cat > "$USER_DATA_DIR/User/argv.json" <<EOF
@@ -250,6 +278,8 @@ start_server() {
   else
     echo "Warning: algolib-manager dist not found, run 'npm run build' in extensions/algolib-manager first"
   fi
+
+  unmark_algolib_extensions
 
   (
     cd "$ROOT"

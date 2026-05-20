@@ -1,0 +1,34 @@
+[
+  {
+    "algorithm_id": "custom.my_algorit@@usr_admin",
+    "name": "my_algorit",
+    "call_prefix": "alg.custom.my_algorit",
+    "owner_id": "usr_admin",
+    "review_kind": "new_publish",
+    "target_public_call_prefix": "",
+    "status": "published",
+    "submitted_at": "2026-05-20T01:42:12.625978+00:00",
+    "approved_at": "2026-05-20T01:42:12.625978+00:00",
+    "published_at": "2026-05-20T01:42:12.625978+00:00",
+    "rejected_at": null,
+    "reject_reason": "",
+    "version_bump": "1.0.0",
+    "admin_direct": true
+  },
+  {
+    "algorithm_id": "custom.my_algorith@@usr_admin",
+    "name": "my_algorith",
+    "call_prefix": "alg.custom.my_algorith",
+    "owner_id": "usr_admin",
+    "review_kind": "new_publish",
+    "target_public_call_prefix": "",
+    "status": "published",
+    "submitted_at": "2026-05-20T02:24:59.220092+00:00",
+    "approved_at": "2026-05-20T02:24:59.220092+00:00",
+    "published_at": "2026-05-20T02:24:59.220092+00:00",
+    "rejected_at": null,
+    "reject_reason": "",
+    "version_bump": "1.0.0",
+    "admin_direct": true
+  }
+]

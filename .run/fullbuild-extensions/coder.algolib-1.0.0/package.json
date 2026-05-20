@@ -1,0 +1,52 @@
+{
+  "name": "algolib",
+  "displayName": "AlgoLib - 算法库",
+  "description": "AlgoLib 算法服务集成：代码补全、片段插入、状态监控",
+  "version": "1.0.0",
+  "publisher": "coder",
+  "license": "MIT",
+  "activationEvents": [
+    "*",
+    "onCommand:algolib.insertSnippet",
+    "onCommand:algolib.showAlgorithms",
+    "onLanguage:python"
+  ],
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "main": "./extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "algolib.showAlgorithms",
+        "title": "AlgoLib: 查看算法列表",
+        "category": "AlgoLib"
+      },
+      {
+        "command": "algolib.insertSnippet",
+        "title": "AlgoLib: 插入算法代码片段",
+        "category": "AlgoLib"
+      },
+      {
+        "command": "algolib.refreshAlgorithms",
+        "title": "AlgoLib: 刷新算法列表",
+        "category": "AlgoLib"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "algolib.showAlgorithms",
+        "key": "alt+a",
+        "when": "editorFocus"
+      },
+      {
+        "command": "algolib.insertSnippet",
+        "key": "ctrl+alt+s",
+        "when": "editorTextFocus || editorFocus"
+      }
+    ]
+  }
+}

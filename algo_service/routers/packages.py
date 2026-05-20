@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from .algorithms import _append_entry_version, _upsert_algo_meta, get_registry
+from .algorithms import _append_entry_version, _upsert_algo_meta, _upsert_entry_algo_meta, get_registry
 from ..sdk.auth_utils import get_current_user
 from ..sdk.registry import AlgorithmRegistry
 
@@ -66,13 +66,19 @@ async def save_package_file(
     content = payload.get("content")
     if not isinstance(content, str):
         raise HTTPException(status_code=400, detail="Field 'content' must be a string")
+    package = registry.get_package(package_id)
+    if package is not None and filename.strip().replace("\\", "/") == package.entry:
+        for export_name in package.exports:
+            entry = registry.get_by_id(f"{package.namespace}.{export_name}")
+            if entry is not None:
+                content = _upsert_entry_algo_meta(content, entry)
+                break
     try:
         functions = registry.save_package_file(package_id, filename, content)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    package = registry.get_package(package_id)
     if package is not None:
         for export_name in package.exports:
             entry = registry.get_by_id(f"{package.namespace}.{export_name}")
@@ -122,6 +128,7 @@ async def create_package(
                         "zh_description": str(payload.get("zh_description", "")).strip(),
                         "zh_tags": payload.get("zh_tags", []),
                         "version": str(payload.get("version", "1.0.0")).strip() or "1.0.0",
+                        "input_example": str(payload.get("input_example", "")).strip(),
                         "widget_overrides": payload.get("widget_overrides", {}) if isinstance(payload.get("widget_overrides"), dict) else {},
                     },
                 )

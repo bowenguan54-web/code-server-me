@@ -27,3 +27,7 @@ test/test-results
 # If deployment cannot run .run/build-algo-lib.sh, remove these rules and commit the bundles instead.
 .run/algo-lib-check.js
 .run/algo-lib-inline-check.js
+
+# AlgoLib offline vendor dependencies.
+# Run scripts/download-vendor-deps.sh on each deployed workspace.
+src/browser/static/vendor/

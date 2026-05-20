@@ -327,3 +327,96 @@ ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接�
 ### 约束/规则
 - 全屏测试页这类跨页面浮层不要挂在 `#main` 内；`#main` 会被列表页、编辑页反复 `innerHTML` 重建。
 - 需要跨页面保持的 DOM 应挂到 `document.body`，关闭时优先隐藏而不是删除。
+
+
+## 2026-05-19 09:45 +08:00 - 全屏测试输出八 Tab 最终路由修复
+
+### 本次操作
+- 用户反馈输出区八个 Tab 仍被旧 `switchOutputTab` 逻辑兜底为原始输出。
+- 修改 `.run/algo-modules/39-output-utils-run.js`：最终生效的 `switchOutputTab` 明确支持 `raw/json/table/line/bar/pie/image/file`，运行完成后按 `output_hint` 和数据结构自动切到合适 Tab。
+- 修改 `.run/algo-modules/40-output-renderers.js`：重写宽松表格/折线图/柱状图/饼图/图片/文件下载转换函数，并保留旧渲染函数和兼容入口。
+- 修改 `src/browser/pages/algo-lib.html`：将 ECharts CDN 放入 `<head>`，避免图表 Tab 使用时库未加载。
+
+### 约束/规则
+- 39 模块是最终输出路由层，会覆盖 32 模块中的旧兼容实现；新增输出 Tab 的路由必须优先在 39 中改。
+- 40 模块负责具体渲染和转换失败提示；不要删除 `renderOutput*` 旧入口，保持旧调用链兼容。
+- 图表初始化统一使用 `echarts.init(container, "dark")`，切换 Tab 后延迟 resize。
+
+### 验证
+- 已运行 `node --check .run/algo-modules/39-output-utils-run.js` 与 `node --check .run/algo-modules/40-output-renderers.js`，语法检查通过。
+- 已按用户要求运行 `bash .run/build-algo-lib.sh dev`，完成 check/inline bundle 构建、注入 HTML、同步 WSL 并重启服务。
+- 已运行 `node --check .run/algo-lib-check.js` 与 `node --check .run/algo-lib-inline-check.js`，生成产物语法检查通过。
+
+
+## 2026-05-19 10:10 +08:00 - 全屏测试示例值入口调整
+
+### 本次操作
+- 用户要求保留测试页打开时自动填入 `inputExample` 的行为，但将“填入全部示例”按钮从底部运行栏移动到参数输入区顶部。
+- 修改 `.run/algo-modules/29-full-test-core.js`：新增 `renderTestExampleTopButton()`，仅当 `state._testInputExample` 有内容时显示“一键填入示例值”按钮。
+- 修改 `openTestPage()`：有示例值时，输出区显示“已根据算法示例自动填入参数，点击「运行测试」即可查看结果”。
+- 保留 `ensureTestExampleButton()` 作为空操作，兼容旧调用链。
+
+### 约束/规则
+- 全屏测试页示例填充逻辑集中在 29 模块维护；旧运行栏按钮入口不再新增真实按钮。
+- 打开测试页时自动填入示例值不能删除，手动一键按钮只是补充入口。
+
+## 2026-05-19 10:26:02 +08:00
+- 修改 .run/algo-modules/08-workspace-core.js：新建算法工作区移除可见的算法形态下拉，默认多文件模式。
+- 保留隐藏 #wsKind=complex 兼容保存/测试逻辑，避免影响外部导入模式。
+- 模板选项简化为基础算法/数据质量，均生成 main.py + utils.py。
+- 增加工作区文件列表的新增文件与删除文件能力；按用户约束仅改 08 模块，通过运行时覆盖 renderWorkspaceFiles 接入按钮。
+- 复用规则：修改模块后运行 bash .run/build-algo-lib.sh dev 完成构建、注入、同步 WSL /home/guan/code-server-me 并重启。
+
+## 2026-05-19 10:59:55 +08:00
+- 修复新建算法工作区文件列表按钮拥挤：改为紧凑网格行，文件名独占一列，改名/删除按钮固定宽度。
+- 修复“测试当前文件”：不再因默认多文件模式直接返回，改为打开全屏测试页，并用当前 Monaco 文件源码通过 /api/v1/run-source 执行。
+- 保存新建算法/包时提交 wsKwargs 为 input_example；packages/create 写装饰器时同步 input_example，保证扫描后测试页能自动填入示例。
+- 修改模块后执行 build-algo-lib.sh dev，保持构建、注入、同步 WSL /home/guan/code-server-me 与重启流程一致。
+
+## 2026-05-19 11:22:39 +08:00
+- 修复已有算法无 input_example 时测试页参数为空：`.run/algo-modules/29-full-test-core.js` 增加按参数控件类型生成默认示例值的兜底逻辑。
+- 调整后端源码展示/保存链路：`algorithm-source` 返回给编辑器前剥离 `from algo_service.sdk.decorators import algo_meta` 与 `@algo_meta(...)`，保存入口文件时由后端自动补回平台装饰器。
+- 修改 `algo_service/routers/algorithms.py` 与 `algo_service/routers/packages.py`，确保单文件、多文件包入口文件保存都自动包装元数据，用户编辑区只暴露业务代码。
+- 验证：已运行 `node --check .run/algo-modules/29-full-test-core.js` 与 `python -m py_compile algo_service/routers/algorithms.py algo_service/routers/packages.py`。
+
+## 2026-05-19 15:15:00 +08:00
+- 将算法管理前端改为离线依赖：`.run/algo-modules/12-editor-shell.js` 的 Monaco `vs` 路径改为本地后端静态资源基址 `window._ALGO_STATIC_BASE || window._ALGO_BASE || http://127.0.0.1:8000`。
+- 修改 `src/browser/pages/algo-lib.html`：移除 jsdelivr CDN，改为从本地 `/static/vendor/` 加载 Monaco loader、ECharts、xterm 及其插件；由于 code-server 的 8080 `/static` 返回 404，HTML 用本地后端 8000 作为默认静态资源基址。
+- 修改 `algo_service/main.py`：挂载 `src/browser/static` 到 FastAPI `/static`，供嵌入 code-server 的页面加载离线 vendor 资源。
+- 新增 `scripts/download-vendor-deps.sh`：一键下载 ECharts、Monaco 0.45.0、xterm 相关资源到 `src/browser/static/vendor/`。
+- 更新 `.gitignore`：忽略 `src/browser/static/vendor/`；部署到新环境时需运行下载脚本，或取消忽略并提交 vendor 文件。
+- 验证：已运行 `bash .run/build-algo-lib.sh dev` 完成构建、注入、同步 WSL `/home/guan/code-server-me` 并重启；`node --check` 两个 bundle 通过，`python -m py_compile algo_service/main.py` 通过，`curl -I` 验证 8000 下 ECharts 与 Monaco loader 均返回 200。
+- 注意：不要直接在 Windows 挂载路径执行 `bash ci/dev/sync-and-restart.sh --full`；这会把源和目标误判为 `/mnt/e/code-server-me` 并可能尝试从错误的 release 目录启动。常规修改后继续使用 `bash .run/build-algo-lib.sh dev`，或按用户手动命令在 WSL 内执行 `cd /home/guan/code-server-me && bash ci/dev/sync-and-restart.sh --full`。
+
+## 2026-05-19 16:10:38 +08:00
+- 修复 code-server 离线 Webview/Simple Browser 仍访问 `vscode-cdn.net` 的问题。`patches/webview.diff` 已与当前 `lib/vscode` 版本不完全匹配，因此按补丁意图手工应用等价修改。
+- 修改 VS Code 源码与构建产物：`webClientServer.ts`/`server-main.js` 增加本地 `webviewEndpoint`；`environmentService.ts`/`workbench.js` 优先使用本地 webview endpoint；`pre/index.html` 与 `webWorkerExtensionHostIframe.html` 增加同源 hostname 绕过并放宽脚本 CSP，避免离线 hash 不匹配。
+- 关键规则：`ci/dev/sync-and-restart.sh` 默认排除 `lib/`，且当前 code-server 实际从 WSL 的 `release/lib/vscode/out/` 运行。Webview 底层修复必须同步到 `/home/guan/code-server-me/release/lib/vscode/out/`，普通前端同步不会覆盖这些 runtime 文件。
+- 已手动同步补丁到 WSL `/home/guan/code-server-me`，并直接补丁 `release/lib/vscode/out/server-main.js`、`release/lib/vscode/out/vs/code/browser/workbench/workbench.js`、`release/lib/vscode/out/vs/workbench/contrib/webview/browser/pre/index.html`、`release/lib/vscode/out/vs/workbench/services/extensions/worker/webWorkerExtensionHostIframe.html`。
+- 验证：`release` 下 `server-main.js` 已包含 `webviewEndpoint`，`workbench.js` 已包含 `new URL(this.options.webviewEndpoint, window.location.toString())`，webview `index.html` 已包含 `parent.hostname === hostname`；`node --check` 通过。
+- 已重启 WSL code-server full build。`curl http://127.0.0.1:8080/` 返回的页面配置中 `webviewEndpoint` 为本地 `/stable-.../static/out/vs/workbench/contrib/webview/browser/pre`，并且不再出现 `vscode-cdn.net`。
+
+## 2026-05-19 17:20:00 +08:00 - 新建算法模板支持分块设计
+- 当前开发环境已简化为 Windows 本地 FastAPI + 静态 HTML，不再处理 WSL/code-server/Webview 相关流程；修改模块后使用 `bash .run/build-algo-lib.sh all` 构建并注入 HTML。
+- 修改 `.run/algo-modules/08-workspace-core.js`：新建算法模板表单增加“编辑模式”下拉，支持“普通代码 / 分块设计”；分块模式会隐藏普通文件编辑网格，显示 `#wsBlockDesignerShell` 并用默认分块初始化现有 block editor。
+- 修改 `.run/algo-modules/42-block-editor-core.js`：`initBlockEditor(container, item, initialBlocks)` 支持传入新建态 blocks，跳过 API 加载，直接进入设计模式；新建模板隐藏“进入/退出设计模式”切换按钮。
+- 修改 `.run/algo-modules/10-workspace-monaco-save.js`：保存新建模板时，如果处于分块设计模式，会同步所有分块编辑器，将分块代码按顺序拼接为源码，并把 `blocks` 数组随 `/api/v1/algorithms/create` 一起提交。
+- 修改 `algo_service/models/schemas.py` 与 `algo_service/routers/algorithms.py`：`AlgorithmCreateRequest` 新增可选 `blocks` 字段；创建模板时保存 `{func_name}.blocks.json`，与现有 `GET /api/v1/templates/{id}/blocks` 读取路径保持一致。
+- 验证：已运行 `bash .run/build-algo-lib.sh all` 完成 check/inline bundle 构建并注入 `src/browser/pages/algo-lib.html`；`node --check` 两个 bundle 和相关模块通过；`python -m py_compile algo_service/routers/algorithms.py algo_service/models/schemas.py` 通过。
+
+## 2026-05-20 09:30:00 +08:00 - 新建算法参数示例改为按参数控件填写
+- 用户要求删除新建算法/模板里的“测试参数 JSON”大文本框，改为点击“识别参数”后为每个参数显示对应类型的示例值输入控件。
+- 修改 `.run/algo-modules/08-workspace-core.js`：移除 `#wsKwargs` 表单行；`renderWidgetConfigRows()` 每行新增“示例”输入区，按 widget 渲染 number/select/input/textarea，并维护 `newAlgoState.paramExamples`。
+- 修改 `.run/algo-modules/10-workspace-monaco-save.js`：`testWorkspaceSource()` 不再读取 `#wsKwargs`，而是从参数示例控件收集并转换 kwargs；保存草稿时将示例对象 `JSON.stringify(...)` 写入 `input_example`。
+- 修改 `.run/algo-modules/07-categories.js`：`newAlgoState` 新增 `paramExamples` 字段。
+- 后端核对结果：`AlgorithmCreateRequest`、`/api/v1/algorithms/create` 和 `/api/v1/packages/create` 已支持 `input_example` 持久化，无需额外改接口。
+- 验证：已运行 `bash .run/build-algo-lib.sh all` 完成构建并注入 HTML；`node --check` 相关模块和两个 bundle 通过；`python -m py_compile algo_service/routers/algorithms.py algo_service/routers/packages.py algo_service/models/schemas.py` 通过。
+
+## 2026-05-20 09:55:00 +08:00 - 修复 widget_overrides、正式发布和输入示例保存
+- 修改 `algo_service/sdk/decorators.py`：`algo_meta()` 增加 `widget_overrides` 可选参数，并写入函数 `_algo_meta` 元数据，解决动态加载用户算法时报 `unexpected keyword argument 'widget_overrides'`。
+- 修改 `.run/algo-modules/08-workspace-core.js`：参数控件配置中的示例值输入框不再显示任何 placeholder，避免误导用户。
+- 修改 `algo_service/routers/publish.py`：`_set_status()` 增加 `force` 参数，正式发布接口使用强制发布，避免管理员从草稿直接发布时报 `Invalid transition: draft -> published`。
+- 修改 `.run/algo-modules/15-editor-inline-test-panel.js` 与 `.run/algo-modules/41-init-exports.js`：编辑器内测试面板新增“保存为输入示例”按钮，调用 `PATCH /api/v1/algorithms/{id}/metadata` 持久化当前参数。
+- 修改 `algo_service/routers/algorithms.py`：metadata 更新包算法 manifest 时也带上 `input_example` 字段，保持字段链路一致。
+- 规则：每次修改前端模块后必须运行 `bash .run/build-algo-lib.sh all`，确保 `.run/algo-lib-inline-check.js` 重新注入到 `src/browser/pages/algo-lib.html`。
+- 验证：已运行 `python -m py_compile algo_service/sdk/decorators.py algo_service/routers/publish.py algo_service/routers/algorithms.py`；已运行 `node --check` 检查修改模块和两个 bundle；已运行 `bash .run/build-algo-lib.sh all` 完成构建和注入。

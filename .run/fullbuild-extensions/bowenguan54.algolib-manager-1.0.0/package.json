@@ -1,0 +1,100 @@
+{
+  "name": "algolib-manager",
+  "displayName": "AlgoLib 算法管理",
+  "description": "在 VS Code 内管理、编辑、运行、审核算法",
+  "version": "1.0.0",
+  "publisher": "bowenguan54",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "AlgoLib",
+      "properties": {
+        "algolib.baseUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "description": "AlgoLib 后端服务地址"
+        },
+        "algolib.autoLogin": {
+          "type": "boolean",
+          "default": true,
+          "description": "启动时自动从 session 文件登录"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "algolib",
+          "title": "AlgoLib",
+          "icon": "media/algolib-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "algolib": [
+        { "id": "algolib.explorer", "name": "算法浏览器" },
+        { "id": "algolib.myAlgos", "name": "我的算法" },
+        { "id": "algolib.snippets", "name": "代码片段" },
+        { "id": "algolib.quickActions", "name": "快捷操作", "type": "webview" }
+      ]
+    },
+    "commands": [
+      { "command": "algolib.login",           "title": "AlgoLib: 登录" },
+      { "command": "algolib.refresh",         "title": "AlgoLib: 刷新算法列表" },
+      { "command": "algolib.browse",          "title": "AlgoLib: 打开算法浏览器" },
+      { "command": "algolib.createAlgorithm", "title": "AlgoLib: 新建算法" },
+      { "command": "algolib.createCategory",  "title": "AlgoLib: 新建分类" },
+      { "command": "algolib.openAlgorithm",   "title": "AlgoLib: 打开算法" },
+      { "command": "algolib.editAlgorithm",   "title": "AlgoLib: 编辑算法" },
+      { "command": "algolib.editBlocks",      "title": "AlgoLib: 分块编辑算法" },
+      { "command": "algolib.deleteAlgorithm", "title": "AlgoLib: 删除算法" },
+      { "command": "algolib.runFile",         "title": "AlgoLib: 运行当前文件" },
+      { "command": "algolib.runBlock",        "title": "AlgoLib: 运行当前代码块" },
+      { "command": "algolib.runWithParams",   "title": "AlgoLib: 带参数运行" },
+      { "command": "algolib.submitReview",    "title": "AlgoLib: 提交审核" },
+      { "command": "algolib.publish",         "title": "AlgoLib: 发布算法" },
+      { "command": "algolib.openOutput",      "title": "AlgoLib: 打开输出面板" },
+      { "command": "algolib.insertSnippet",   "title": "AlgoLib: 插入代码片段" }
+    ],
+    "keybindings": [
+      { "command": "algolib.runFile",       "key": "f5",           "when": "algolib.active" },
+      { "command": "algolib.runBlock",      "key": "ctrl+enter",   "when": "algolib.active" },
+      { "command": "algolib.runWithParams", "key": "shift+enter",  "when": "algolib.active" },
+      { "command": "algolib.openOutput",    "key": "ctrl+shift+o", "when": "algolib.active" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "algolib.refresh",         "when": "view == algolib.explorer", "group": "navigation" },
+        { "command": "algolib.createAlgorithm", "when": "view == algolib.explorer", "group": "navigation" },
+        { "command": "algolib.createCategory",  "when": "view == algolib.explorer", "group": "navigation" }
+      ],
+      "view/item/context": [
+        { "command": "algolib.openAlgorithm",   "when": "viewItem == algorithm", "group": "1_open" },
+        { "command": "algolib.editBlocks",      "when": "viewItem == algorithm", "group": "1_open" },
+        { "command": "algolib.runFile",         "when": "viewItem == algorithm", "group": "2_run" },
+        { "command": "algolib.runWithParams",   "when": "viewItem == algorithm", "group": "2_run" },
+        { "command": "algolib.submitReview",    "when": "viewItem == algorithm", "group": "3_lifecycle" },
+        { "command": "algolib.publish",         "when": "viewItem == algorithm", "group": "3_lifecycle" },
+        { "command": "algolib.deleteAlgorithm", "when": "viewItem == algorithm", "group": "4_danger" }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "eventsource": "^2.0.2"
+  }
+}

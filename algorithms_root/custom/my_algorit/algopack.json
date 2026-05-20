@@ -1,0 +1,19 @@
+{
+  "name": "my_algorit",
+  "zh_name": "自定义算法",
+  "version": "1.0.0",
+  "namespace": "custom",
+  "entry": "main.py",
+  "exports": [
+    "my_algorit"
+  ],
+  "zh_description": "说明算法用途、输入输出和适用场景。",
+  "zh_tags": [
+    "自定义",
+    "组件"
+  ],
+  "dependencies": {},
+  "published": true,
+  "publish_status": "published",
+  "module_kind": "component"
+}

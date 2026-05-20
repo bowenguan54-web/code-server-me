@@ -104,6 +104,7 @@
           <button class="primary" id="runBtn" onclick="window.runTest()">▶ 运行</button>
           <select id="timeout"><option value="5">5s</option><option value="30">30s</option><option value="60">60s</option></select>
           <button onclick="window.saveTestCase()">保存测试用例</button>
+          <button onclick="window.saveCurrentAsInputExample()">保存为输入示例</button>
           <select id="history" onchange="window.loadTestCase()"><option value="">历史记录</option></select>
           <button onclick="window.generateExampleData()">生成示例数据</button>
         </div>
@@ -186,6 +187,26 @@
         payload[name] = parseParamValueByType(type, input.value);
       });
       return payload;
+    }
+
+    async function saveCurrentAsInputExample() {
+      if (!state.editing?.id) {
+        showToast("未打开算法");
+        return;
+      }
+      const params = collectParams();
+      const inputExample = JSON.stringify(params);
+      try {
+        await api(`/api/v1/algorithms/${safeId(state.editing.id)}/metadata`, {
+          method: "PATCH",
+          body: JSON.stringify({ input_example: inputExample })
+        });
+        if (state.editing.algo) state.editing.algo.inputExample = inputExample;
+        showToast("输入示例已保存");
+        renderTestPanel();
+      } catch (err) {
+        showToast(err.message || "保存输入示例失败");
+      }
     }
 
     function generateExampleData() {

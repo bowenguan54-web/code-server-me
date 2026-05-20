@@ -155,25 +155,42 @@
       updateWorkspaceFileContent();
       const output = qs("#wsOutput");
       if (!output) { showToast("测试面板未找到，请刷新页面后重试"); return; }
-      if (!qs("#wsKind") || !qs("#wsName") || !qs("#wsKwargs")) { showToast("界面未就绪，请稍后再试"); return; }
-      if (qs("#wsKind").value === "complex") {
-        output.classList.remove("hidden");
-        output.innerHTML = "<pre>复杂多文件算法包含相对导入，请先保存为草稿，然后在组件卡片中点击“测试”。</pre>";
-        return;
-      }
-      let kwargs = {};
-      try { kwargs = JSON.parse(qs("#wsKwargs").value || "{}"); } catch (error) { showToast("测试参数必须是 JSON"); return; }
-      try {
-        const result = await api("/api/v1/run-source", {
-          method: "POST",
-          body: JSON.stringify({ content: getWorkspaceCode(), function: qs("#wsName").value.trim(), kwargs })
+      if (!qs("#wsKind") || !qs("#wsName")) { showToast("界面未就绪，请稍后再试"); return; }
+      const source = getWorkspaceCode();
+      const parsedParams = parseParamsFromCode(source);
+      if (parsedParams.length && !(newAlgoState.widgetParams || []).length) {
+        newAlgoState.widgetParams = parsedParams;
+        parsedParams.forEach(param => {
+          if (!newAlgoState.widgetOverrides[param.name]) newAlgoState.widgetOverrides[param.name] = param.widget;
         });
-        output.classList.remove("hidden");
-        showResultWithRenderBtn(output, result);
-      } catch (error) {
-        output.classList.remove("hidden");
-        output.innerHTML = `<pre>${esc(error.message)}</pre>`;
+        renderWidgetConfigRows(parsedParams);
       }
+      const kwargs = typeof collectWorkspaceParamExamples === "function" ? collectWorkspaceParamExamples() : {};
+      const params = ((newAlgoState.widgetParams || []).length ? newAlgoState.widgetParams : parsedParams).map(item => ({
+        name: item.name,
+        type: item.type || "Any",
+        default: item.default || "",
+        nullable: !!item.nullable,
+        widget_hint: newAlgoState.widgetOverrides?.[item.name] || item.widget || inferParamWidget(item),
+        widget_options: item.options || []
+      }));
+      const funcName = inferFirstPythonFunction(source) || qs("#wsName").value.trim();
+      if (!funcName) { showToast("当前文件没有可测试的 Python 函数"); return; }
+      openTestPage({
+        id: "__workspace_source__",
+        zhName: qs("#wsZhName")?.value.trim() || "新建算法",
+        funcName,
+        name: funcName,
+        namespace: qs("#wsCategory")?.value || "custom",
+        callPrefix: `alg.${(qs("#wsCategory")?.value || "custom").replace(/^alg\./, "")}.${funcName}`,
+        displayNamespace: `alg.${(qs("#wsCategory")?.value || "custom").replace(/^alg\./, "")}.${funcName}`,
+        params,
+        inputExample: JSON.stringify(kwargs),
+        _workspaceSource: source
+      });
+      output.classList.add("hidden");
+      output.innerHTML = "";
+      return;
     }
 
     async function saveWorkspaceAlgorithm(moduleKind) {
@@ -182,6 +199,31 @@
       let name = qs("#wsName").value.trim();
       let catValue = qs("#wsCategory")?.value || "";
       const tags = qs("#wsTags").value.split(",").map(item => item.trim()).filter(Boolean);
+      const isBlockMode = moduleKind === "template" && qs("#wsEditMode")?.value === "blocks" && state.blockEditor;
+      let blocksPayload = null;
+      let blockSource = "";
+      if (isBlockMode) {
+        syncEditorsToBlocks();
+        blocksPayload = [...state.blockEditor.blocks]
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map((block, index) => ({
+            id: block.id || `blk_${index + 1}`,
+            order: Number(block.order || index + 1),
+            title: block.title || `步骤 ${index + 1}`,
+            description: block.description || "",
+            hint: block.hint || "",
+            code: block.code || "",
+            locked: !!block.locked,
+          }));
+        blockSource = blocksPayload.map(block => {
+          const code = block.code || "";
+          return code.endsWith("\n") ? code : `${code}\n`;
+        }).join("");
+        newAlgoState.files = [{ relative_path: `${name || "my_algorithm"}.py`, content: blockSource }];
+        newAlgoState.currentFile = newAlgoState.files[0].relative_path;
+        kind = "simple";
+        if (qs("#wsKind")) qs("#wsKind").value = "simple";
+      }
 
       if (qs("#wsCreateMode")?.value === "import") {
         if (!newAlgoState.importedFromPicker || !newAlgoState.files.length) {
@@ -231,6 +273,7 @@
       if (!namespace) { showToast("命名空间不能为空"); return; }
       if (/[\u4e00-\u9fff\uff00-\uffef\u3000-\u303f]/.test(namespace)) { showToast("命名空间不能包含中文字符，请使用英文字母、数字和下划线"); return; }
       if (!/^[a-z_][a-z0-9_.]*$/.test(namespace)) { showToast("命名空间只能使用小写字母、数字、下划线和点号"); return; }
+      const inputExample = JSON.stringify(typeof collectWorkspaceParamExamples === "function" ? collectWorkspaceParamExamples() : {});
 
       // 重复命名空间检测
       const allItems = [...(state.data.components || []), ...(state.data.templates || [])];
@@ -243,7 +286,7 @@
       const widgetOverrides = collectWorkspaceWidgetOverrides();
 
       try {
-        if (kind === "complex") {
+        if (kind === "complex" && !isBlockMode) {
           await api("/api/v1/packages/create", {
             method: "POST",
             body: JSON.stringify({
@@ -255,6 +298,7 @@
               exports: [name],
               zh_description: qs("#wsDesc").value.trim(),
               zh_tags: tags,
+              input_example: inputExample,
               widget_overrides: widgetOverrides,
               module_kind: moduleKind,
               published: false,
@@ -272,14 +316,17 @@
               zh_description: qs("#wsDesc").value.trim(),
               zh_tags: tags,
               version: "1.0.0",
-              code: newAlgoState.files[0].content,
+              code: isBlockMode ? blockSource : newAlgoState.files[0].content,
               module_kind: moduleKind,
               publish_status: "draft",
-              widget_overrides: widgetOverrides
+              input_example: inputExample,
+              widget_overrides: widgetOverrides,
+              blocks: blocksPayload
             })
           });
         }
         showToast("算法已保存为草稿");
+        if (state.blockEditor) cleanupBlockEditor();
         switchPage(newAlgoState.returnPage || (moduleKind === "template" ? "templates-general" : "components-general"));
       } catch (error) {
         showToast(error.message);

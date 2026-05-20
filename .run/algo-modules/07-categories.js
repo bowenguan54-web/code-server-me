@@ -238,5 +238,6 @@
       functions: [],
       widgetParams: [],
       widgetOverrides: {},
+      paramExamples: {},
       returnPage: ""
     };

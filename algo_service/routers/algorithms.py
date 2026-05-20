@@ -275,7 +275,7 @@ def _folder_files_for_entry(entry: AlgorithmEntry) -> list[dict[str, Any]]:
             {
                 "filename": resolved.name,
                 "relative_path": relative_path,
-                "content": content,
+                "content": _strip_algo_meta_for_editor(content),
                 "is_entry": resolved == entry_path,
                 "functions": AstParser.extract_functions(str(resolved)),
             }
@@ -339,10 +339,11 @@ def _merge_review_draft_files(entry: AlgorithmEntry, draft_files: list[dict[str,
         if not filename or not filename.endswith(".py") or "/" in filename or filename == "__init__.py":
             continue
         previous = merged.get(filename, {})
+        raw_content = str(raw.get("content", previous.get("content", "")))
         merged[filename] = {
             "filename": Path(filename).name,
             "relative_path": filename,
-            "content": str(raw.get("content", previous.get("content", ""))),
+            "content": _strip_algo_meta_for_editor(raw_content),
             "is_entry": filename == entry_name or bool(previous.get("is_entry")),
             "functions": previous.get("functions", []),
         }
@@ -506,6 +507,61 @@ def _upsert_algo_meta(source: str, func_name: str, metadata: dict[str, Any]) -> 
     )
     lines[insert_at:insert_at] = [decorator_text]
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _entry_meta_payload(entry: AlgorithmEntry) -> dict[str, Any]:
+    """Build metadata used by backend-side algo_meta wrapping."""
+
+    return {
+        "zh_name": entry.zh_name or entry.func_name,
+        "zh_description": entry.zh_description or "",
+        "zh_tags": entry.zh_tags or [],
+        "version": entry.version or "1.0.0",
+        "input_example": entry.input_example or "",
+        "widget_overrides": getattr(entry, "widget_overrides", {}) or {},
+    }
+
+
+def _select_meta_function_name(source: str, preferred: str) -> str:
+    """Pick the function that should receive backend metadata wrapping."""
+
+    names = _public_function_names(source)
+    if preferred in names:
+        return preferred
+    if names:
+        return names[0]
+    return preferred
+
+
+def _upsert_entry_algo_meta(source: str, entry: AlgorithmEntry) -> str:
+    """Wrap editable user source with platform metadata before persistence."""
+
+    func_name = _select_meta_function_name(source, entry.func_name)
+    return _upsert_algo_meta(source, func_name, _entry_meta_payload(entry))
+
+
+def _strip_algo_meta_for_editor(source: str) -> str:
+    """Remove platform-only algo_meta decorator lines before returning source to editor."""
+
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return source
+    lines = source.splitlines()
+    remove_ranges: list[tuple[int, int]] = []
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.module == "algo_service.sdk.decorators":
+            if node.names and all(alias.name == "algo_meta" for alias in node.names):
+                remove_ranges.append((node.lineno - 1, int(getattr(node, "end_lineno", node.lineno))))
+            continue
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            if _decorator_name(decorator) == "algo_meta":
+                remove_ranges.append((decorator.lineno - 1, int(getattr(decorator, "end_lineno", decorator.lineno))))
+    for start, end in sorted(remove_ranges, reverse=True):
+        del lines[start:end]
+    return "\n".join(lines).rstrip() + ("\n" if lines else "")
 
 
 def _write_folder_config(folder: Path, namespace: str, module_kind: str, publish_status: str = "draft", zh_name: str = "") -> None:
@@ -1705,6 +1761,10 @@ async def create_algorithm(
             },
         )
         target_file.write_text(source, encoding="utf-8")
+        if payload.blocks and module_kind == "template":
+            blocks_path = target_folder / f"{func_name}.blocks.json"
+            blocks_payload = {"schema_version": "1.0", "blocks": payload.blocks}
+            blocks_path.write_text(json.dumps(blocks_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         scan_root = str(_ALGORITHMS_ROOT / "users" / current_user_id) if current_user_id else str(target_folder)
         registry.scan_directory(scan_root)
     except (OSError, SyntaxError) as exc:
@@ -2058,6 +2118,7 @@ async def update_algorithm_metadata(
             "zh_description": metadata["zh_description"],
             "zh_tags": metadata["zh_tags"],
             "version": metadata["version"],
+            "input_example": metadata["input_example"],
             "widget_overrides": metadata["widget_overrides"],
         }
         if payload.namespace:
@@ -2223,7 +2284,7 @@ async def get_algorithm_source(
             return {
                 "success": True,
                 "algorithm": _entry_dict(entry),
-                "source": draft_source,
+                "source": _strip_algo_meta_for_editor(draft_source),
                 "source_file": str(source_path),
                 "folder_files": draft_folder_files,
                 "is_draft_mode": True,
@@ -2231,7 +2292,7 @@ async def get_algorithm_source(
     return {
         "success": True,
         "algorithm": _entry_dict(entry),
-        "source": source_path.read_text(encoding="utf-8"),
+        "source": _strip_algo_meta_for_editor(source_path.read_text(encoding="utf-8")),
         "source_file": str(source_path),
         "folder_files": _folder_files_for_entry(entry),
         "is_draft_mode": False,
@@ -2920,6 +2981,9 @@ async def save_algorithm_folder_file(
         raise HTTPException(status_code=400, detail="文件路径不合法")
     if not target.exists():
         raise HTTPException(status_code=404, detail=f"文件不存在：{clean}")
+    content_to_save = payload.content
+    if target == Path(entry.source_file).resolve():
+        content_to_save = _upsert_entry_algo_meta(payload.content, entry)
     current_status = _read_entry_publish_status(entry)
     draft = _load_review_draft(entry)
     if (draft and isinstance(draft.get("files"), list)) or current_status in {"published", "reviewing", "approved", "rejected"}:
@@ -2935,14 +2999,14 @@ async def save_algorithm_folder_file(
             item for item in draft.get("files", [])
             if isinstance(item, dict) and str(item.get("filename") or item.get("relative_path") or "") != clean
         ]
-        files.append({"filename": clean, "relative_path": clean, "content": payload.content})
+        files.append({"filename": clean, "relative_path": clean, "content": content_to_save})
         draft["files"] = files
         draft["updated_at"] = datetime.now(timezone.utc).isoformat()
         _save_review_draft(entry, draft)
         merged_files = _merge_review_draft_files(entry, files)
         return {"success": True, "algorithm": _entry_dict(entry), "folder_files": merged_files, "is_draft_mode": True}
     try:
-        target.write_text(payload.content, encoding="utf-8")
+        target.write_text(content_to_save, encoding="utf-8")
         registry.rescan_file(str(target))
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"保存文件失败：{exc}") from exc
@@ -3042,6 +3106,7 @@ async def save_algorithm_source(
         ast.parse(payload.content)
     except SyntaxError as exc:
         raise HTTPException(status_code=400, detail=f"Python 语法错误：{exc}") from exc
+    content_to_save = _upsert_entry_algo_meta(payload.content, entry)
     current_status = _read_entry_publish_status(entry)
     # For published/reviewing/approved algorithms, save to review draft (preserve live file)
     if current_status in ("published", "reviewing", "approved"):
@@ -3053,7 +3118,7 @@ async def save_algorithm_source(
             "base_status": existing.get("base_status") or current_status,
             "status": existing.get("status") or "pending",
             "metadata": existing.get("metadata") or {},
-            "files": [{"filename": filename, "relative_path": filename, "content": payload.content}],
+            "files": [{"filename": filename, "relative_path": filename, "content": content_to_save}],
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         _save_review_draft(entry, draft)
@@ -3064,7 +3129,7 @@ async def save_algorithm_source(
             "is_draft_mode": True,
         }
     try:
-        source_path.write_text(payload.content, encoding="utf-8")
+        source_path.write_text(content_to_save, encoding="utf-8")
         registry.rescan_file(str(source_path))
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"保存源码失败：{exc}") from exc

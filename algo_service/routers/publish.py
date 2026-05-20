@@ -152,6 +152,7 @@ def _set_status(
     registry: AlgorithmRegistry,
     target_version: str = "",
     version_change: str = "",
+    force: bool = False,
 ) -> dict[str, Any]:
     """Persist a publish status transition and rescan the owning directory."""
 
@@ -160,7 +161,7 @@ def _set_status(
     config_path = _entry_config_path(entry)
     config = _load_json(config_path)
     current = _current_status(config)
-    if next_status not in ALLOWED_TRANSITIONS.get(current, set()) and current != next_status:
+    if not force and next_status not in ALLOWED_TRANSITIONS.get(current, set()) and current != next_status:
         raise HTTPException(status_code=400, detail=f"Invalid transition: {current} -> {next_status}")
     config["publish_status"] = next_status
     if target_version:
@@ -265,7 +266,7 @@ async def publish_algorithm(
     """Publish an approved component to the external API surface."""
 
     entry = _get_entry(registry, algorithm_id)
-    algorithm = _set_status(entry, "published", x_operator or "system", body.reason if body else "", registry)
+    algorithm = _set_status(entry, "published", x_operator or "system", body.reason if body else "", registry, force=True)
     return {"success": True, "algorithm": algorithm, "external_api_path": algorithm["externalApiPath"]}
 
 

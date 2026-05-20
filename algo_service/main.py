@@ -19,6 +19,7 @@ from typing import AsyncIterator
 import yaml
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .routers.algorithms import external_router, router as algorithms_router, set_registry
 from .routers.auth import router as auth_router
@@ -155,6 +156,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+static_dir = Path(__file__).parent.parent / "src" / "browser" / "static"
+static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Wire registry into the router.
 set_registry(registry)

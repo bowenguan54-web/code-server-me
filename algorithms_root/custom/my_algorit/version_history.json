@@ -1,0 +1,78 @@
+[
+  {
+    "version_id": "ver_0001",
+    "algorithm_id": "custom.my_algorit",
+    "call_prefix": "alg.custom.my_algorit",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-05-20T01:42:02.484649+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algorit(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n        \"passed\": passed,\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algorit@@usr_admin",
+      "registryId": "custom.my_algorit",
+      "callPrefix": "alg.custom.my_algorit",
+      "callSnippet": "alg.custom.my_algorit(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algorit(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n        \"passed\": passed,\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "draft",
+      "publishStatus": "draft",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algorit",
+      "externalApiPath": "/api/external/v1/custom/my_algorit",
+      "displayNamespace": "alg.custom.my_algorit",
+      "zhName": "自定义算法",
+      "zhDescription": "说明算法用途、输入输出和适用场景。",
+      "zhTags": [
+        "自定义",
+        "组件"
+      ],
+      "inputExample": "{\"data\":[0.1,0.6,0.9],\"threshold\":0.5}",
+      "widgetOverrides": {
+        "data": "list",
+        "threshold": "float"
+      },
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algorit",
+      "packageId": "custom.my_algorit",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\users\\usr_admin\\custom\\my_algorit",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\users\\usr_admin\\custom\\my_algorit\\main.py",
+      "ownerId": "usr_admin",
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicCallPrefix": ""
+    }
+  }
+]

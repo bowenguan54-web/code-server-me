@@ -145,7 +145,8 @@
     async function loadMonaco() {
       if (state.monacoReady) return state.monacoReady;
       state.monacoReady = new Promise(resolve => {
-        require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" } });
+        const staticBase = window._ALGO_STATIC_BASE || window._ALGO_BASE || "http://127.0.0.1:8000";
+        require.config({ paths: { vs: `${staticBase}/static/vendor/monaco-editor@0.45.0/min/vs` } });
         require(["vs/editor/editor.main"], () => {
           monaco.editor.defineTheme("algolib-dark", {
             base: "vs-dark",

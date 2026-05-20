@@ -69,6 +69,7 @@
     window.startTreeResize = startTreeResize;
     window.renderParams = renderParams;
     window.runTest = runTest;
+    window.saveCurrentAsInputExample = saveCurrentAsInputExample;
     window.switchOutput = switchOutput;
     window.generateExampleData = generateExampleData;
     function loadInputExample() {
