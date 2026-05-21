@@ -185,16 +185,17 @@
             </div>
             <div class="output">
               <table class="api-table">
-                <thead><tr><th>版本</th><th>动作</th><th>时间</th><th>备注</th><th>文件</th></tr></thead>
+                <thead><tr><th>版本</th><th>动作</th><th>贡献人</th><th>时间</th><th>备注</th><th>文件</th></tr></thead>
                 <tbody>${(data.versions || []).slice().reverse().map(item => `
                   <tr>
                     <td>${esc(item.version_id)}</td>
                     <td>${esc(item.action)}</td>
+                    <td>${esc(item.operator_name || item.operator || "")}</td>
                     <td>${esc(item.timestamp)}</td>
                     <td>${esc(item.note || "")}</td>
                     <td>${esc((item.files || []).map(file => file.relative_path).join(", "))}</td>
                   </tr>
-                `).join("") || '<tr><td colspan="5">暂无版本</td></tr>'}</tbody>
+                `).join("") || '<tr><td colspan="6">暂无版本</td></tr>'}</tbody>
               </table>
             </div>
             <div class="modal-actions"><button onclick="window.closeModal()">关闭</button></div>

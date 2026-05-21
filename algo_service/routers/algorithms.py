@@ -65,6 +65,65 @@ def _entry_client_id(entry: AlgorithmEntry) -> str:
     return entry.id
 
 
+def _entry_contributors(entry: AlgorithmEntry) -> list[dict[str, Any]]:
+    """Read published contribution records for an algorithm entry."""
+
+    try:
+        history_path = _entry_config_path(entry).parent / "publish_history.json"
+    except (OSError, RuntimeError):
+        return []
+    if not history_path.exists():
+        return []
+    try:
+        raw = json.loads(history_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(raw, list):
+        return []
+
+    contributors: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in raw:
+        if not isinstance(item, dict) or item.get("status") != "published":
+            continue
+        operator = str(item.get("operator") or "system")
+        timestamp = str(item.get("timestamp") or "")
+        to_version = str(item.get("to_version") or item.get("target_version") or item.get("version") or "")
+        key = (operator, timestamp, to_version)
+        if key in seen:
+            continue
+        seen.add(key)
+        from_version = str(item.get("from_version") or "")
+        action_type = str(item.get("action_type") or ("iteration" if from_version and to_version and from_version != to_version else "new_publish"))
+        contributors.append(
+            {
+                "operator": operator,
+                "operator_name": str(item.get("operator_name") or operator),
+                "timestamp": timestamp,
+                "from_version": from_version,
+                "to_version": to_version,
+                "action_type": action_type,
+            }
+        )
+    return contributors
+
+
+def _entry_publish_history(entry: AlgorithmEntry) -> list[dict[str, Any]]:
+    """Read all publish/operation history records for an algorithm entry."""
+
+    try:
+        history_path = _entry_config_path(entry).parent / "publish_history.json"
+    except (OSError, RuntimeError):
+        return []
+    if not history_path.exists():
+        return []
+    try:
+        raw = json.loads(history_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return raw if isinstance(raw, list) else []
+
+
 def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
     publish_status = _read_entry_publish_status(entry)
     display_namespace = entry.call_prefix or f"alg.{entry.namespace}.{entry.func_name}"
@@ -101,6 +160,7 @@ def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
         "packageRoot": entry.package_root,
         "sourceFile": entry.source_file,
         "ownerId": getattr(entry, "owner_id", "system"),
+        "contributors": _entry_contributors(entry),
         "rejectReason": review_draft.get("reject_reason", "") if review_draft else "",
         "reviewKind": review_draft.get("review_kind", "") if review_draft else "",
         "targetPublicCallPrefix": review_draft.get("target_public_call_prefix", "") if review_draft else "",
@@ -166,7 +226,17 @@ def _entry_config_path(entry: AlgorithmEntry) -> Path:
     """Return the manifest path that owns an algorithm entry."""
 
     if entry.package_root:
-        return Path(entry.package_root) / "algopack.json"
+        package_root = Path(entry.package_root)
+        algopack_path = package_root / "algopack.json"
+        if algopack_path.exists():
+            return algopack_path
+        folder_config_path = package_root / "folder_config.json"
+        if folder_config_path.exists():
+            return folder_config_path
+        source_folder_config_path = Path(entry.source_file).parent / "folder_config.json"
+        if source_folder_config_path.exists():
+            return source_folder_config_path
+        return algopack_path
     return Path(entry.source_file).parent / "folder_config.json"
 
 
@@ -796,6 +866,11 @@ def _entry_from_client_id(registry: AlgorithmRegistry, algorithm_id: str) -> Alg
     """Resolve a public id or private frontend id."""
 
     normalized = _normalize_call_namespace(algorithm_id)
+    if "@@" in normalized:
+        base_id, owner_id = normalized.split("@@", 1)
+        owned_entry = _entry_by_owner(registry, base_id, owner_id)
+        if owned_entry is not None:
+            return owned_entry
     return registry.get_by_id(normalized) or registry.get_by_id(algorithm_id)
 
 
@@ -1494,7 +1569,7 @@ async def publish_template_as_component(
     try:
         u = get_current_user(request)
         current_user_id = u.get("id")
-    except Exception:
+    except HTTPException:
         pass
 
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
@@ -1682,48 +1757,37 @@ async def create_algorithm(
         pass
 
     if current_user_id:
-        # Create algorithm in user's private directory to preserve ownership
-        user_algo_dir = _ALGORITHMS_ROOT / "users" / current_user_id / namespace / func_name
-        target_folder = user_algo_dir
+        # 认证用户创建/另存算法时必须落到用户私有目录，不能复用或覆盖公有目录。
+        private_folder_name = f"{namespace.replace('.', '_')}_{func_name}"
+        target_folder = _ALGORITHMS_ROOT / "users" / current_user_id / private_folder_name
         target_file = target_folder / f"{func_name}.py"
     else:
         root = _default_algorithm_root(registry)
         target_folder = root.joinpath(*namespace.split("."))
         target_file = target_folder / f"{func_name}.py"
 
-    if target_file.exists():
-        # Allow upsert if the current user already owns this algorithm
+    if current_user_id and target_folder.exists():
+        # 只允许覆盖当前用户自己的私有草稿目录；任何其他 owner 都不能被触碰。
         owner_cfg = target_folder / "folder_config.json"
         existing_owner_id: str | None = None
-        existing_publish_status: str = "draft"
         try:
             existing_cfg = json.loads(owner_cfg.read_text(encoding="utf-8"))
             existing_owner_id = existing_cfg.get("owner_id")
-            existing_publish_status = existing_cfg.get("publish_status", "draft")
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError):
+            existing_owner_id = None
+        if existing_owner_id != current_user_id:
+            raise HTTPException(status_code=409, detail="目标私有草稿目录已存在但不属于当前用户，请换一个函数名")
+    elif target_file.exists():
+        # 未认证/系统级创建沿用原有公有目录逻辑，禁止覆盖已有公有文件。
+        owner_cfg = target_folder / "folder_config.json"
+        existing_owner_id: str | None = None
+        try:
+            existing_cfg = json.loads(owner_cfg.read_text(encoding="utf-8"))
+            existing_owner_id = existing_cfg.get("owner_id")
+        except (OSError, json.JSONDecodeError):
+            existing_owner_id = None
         if current_user_id and existing_owner_id == current_user_id:
-            # User owns this private algorithm → allow overwrite (upsert)
             pass
-        elif not existing_owner_id or existing_owner_id == "system":
-            # The file belongs to a public (system-owned) algorithm at the user's path.
-            # This happens when the user originally created this algorithm and it was published
-            # (owner_id was removed during publish but the folder was not moved to global location).
-            # We need a separate private folder for the new draft.
-            draft_folder = target_folder.parent / f"_draft_{func_name}"
-            target_folder = draft_folder
-            target_file = draft_folder / f"{func_name}.py"
-            # If draft folder also already exists and is owned by this user, allow overwrite
-            if target_file.exists():
-                draft_cfg_path = draft_folder / "folder_config.json"
-                draft_owner: str | None = None
-                try:
-                    draft_cfg = json.loads(draft_cfg_path.read_text(encoding="utf-8"))
-                    draft_owner = draft_cfg.get("owner_id")
-                except Exception:
-                    pass
-                if not (current_user_id and draft_owner == current_user_id):
-                    raise HTTPException(status_code=409, detail=f"算法文件已存在：{func_name}，请换一个函数名")
         else:
             raise HTTPException(status_code=409, detail=f"算法文件已存在：{target_file.name}，请换一个函数名")
 
@@ -1744,9 +1808,10 @@ async def create_algorithm(
             cfg_path = target_folder / "folder_config.json"
             try:
                 cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-            except Exception:
+            except (OSError, json.JSONDecodeError):
                 cfg = {}
             cfg["owner_id"] = current_user_id
+            cfg["name"] = func_name
             cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
         source = _upsert_algo_meta(
             payload.code,
@@ -2048,6 +2113,20 @@ async def snapshot_algorithm_version(
     )
     history = _load_version_history(_version_history_path_for_entry(entry))
     return {"success": True, "version": history[-1], "count": len(history)}
+
+
+@router.get("/algorithms/{algorithm_id:path}/publish-history")
+async def get_algorithm_publish_history(
+    algorithm_id: str,
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Return operation history for the basic info modal."""
+
+    entry = _entry_from_client_id(registry, algorithm_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
+    history = _entry_publish_history(entry)
+    return {"success": True, "history": history[-100:]}
 
 
 @router.get("/algorithms/{algorithm_id:path}")
@@ -2683,6 +2762,12 @@ async def _do_publish_algorithm(
     owner_id = getattr(entry, "owner_id", None) or "system"
     if owner_id != "system":
         config_path = _entry_config_path(entry)
+        source_dir = Path(entry.package_root) if getattr(entry, "package_root", None) else Path(entry.source_file).parent
+        if not config_path.exists():
+            for candidate in (source_dir / "folder_config.json", source_dir / "algopack.json"):
+                if candidate.exists():
+                    config_path = candidate
+                    break
         if config_path.exists():
             try:
                 current_folder = config_path.parent
@@ -2695,21 +2780,34 @@ async def _do_publish_algorithm(
                         for old_file in current_folder.glob("*.py"):
                             registry.unregister_by_file(str(old_file))
                         shutil.move(str(current_folder), str(global_folder))
-                        new_config_path = global_folder / "folder_config.json"
-                        cfg = json.loads(new_config_path.read_text(encoding="utf-8"))
+                        new_config_path = global_folder / config_path.name
+                        if not new_config_path.exists():
+                            for candidate in (global_folder / "folder_config.json", global_folder / "algopack.json"):
+                                if candidate.exists():
+                                    new_config_path = candidate
+                                    break
+                        if new_config_path.exists():
+                            cfg = json.loads(new_config_path.read_text(encoding="utf-8"))
+                        else:
+                            new_config_path = global_folder / "folder_config.json"
+                            cfg = {"namespace": entry.namespace, "module_kind": entry.type, "type": entry.type}
                         cfg.pop("owner_id", None)
+                        cfg["published"] = True
+                        cfg["publish_status"] = "published"
                         new_config_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
                         registry.scan_directory(str(global_folder.parent))
-                        entry = registry.get_by_id(entry.id) or entry
+                        entry = _entry_by_owner(registry, entry.id, "system") or registry.get_by_id(entry.id) or entry
                         moved = True
                     except OSError:
                         moved = False
                 if not moved:
                     config = json.loads(config_path.read_text(encoding="utf-8"))
                     config.pop("owner_id", None)
+                    config["published"] = True
+                    config["publish_status"] = "published"
                     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
                     registry.scan_directory(str(config_path.parent.parent))
-                    entry = registry.get_by_id(entry.id) or entry
+                    entry = _entry_by_owner(registry, entry.id, "system") or registry.get_by_id(entry.id) or entry
             except (OSError, json.JSONDecodeError) as exc:
                 raise HTTPException(status_code=500, detail=f"发布算法失败（无法移除私有标记）: {exc}") from exc
     return _update_publish_status(entry, "published", registry)
@@ -3003,6 +3101,33 @@ async def save_algorithm_folder_file(
         draft["files"] = files
         draft["updated_at"] = datetime.now(timezone.utc).isoformat()
         _save_review_draft(entry, draft)
+        try:
+            from .publish import _append_history
+
+            operator = str(
+                current_user.get("id")
+                or current_user.get("username")
+                or request.headers.get("X-Operator")
+                or "system"
+            )
+            operator_name = str(
+                current_user.get("display_name")
+                or current_user.get("displayName")
+                or current_user.get("username")
+                or operator
+            )
+            _append_history(
+                entry,
+                "saved",
+                operator=operator,
+                reason=f"代码保存：{clean}",
+                operator_name=operator_name,
+                from_version=str(entry.version or ""),
+                to_version=str(entry.version or ""),
+                action_type="code_save",
+            )
+        except HTTPException:
+            raise
         merged_files = _merge_review_draft_files(entry, files)
         return {"success": True, "algorithm": _entry_dict(entry), "folder_files": merged_files, "is_draft_mode": True}
     try:
@@ -3011,6 +3136,33 @@ async def save_algorithm_folder_file(
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"保存文件失败：{exc}") from exc
     refreshed = registry.get_by_id(_entry_client_id(entry)) or registry.get_by_id(entry.id) or entry
+    try:
+        from .publish import _append_history
+
+        operator = str(
+            current_user.get("id")
+            or current_user.get("username")
+            or request.headers.get("X-Operator")
+            or "system"
+        )
+        operator_name = str(
+            current_user.get("display_name")
+            or current_user.get("displayName")
+            or current_user.get("username")
+            or operator
+        )
+        _append_history(
+            refreshed,
+            "saved",
+            operator=operator,
+            reason=f"代码保存：{clean}",
+            operator_name=operator_name,
+            from_version=str(refreshed.version or ""),
+            to_version=str(refreshed.version or ""),
+            action_type="code_save",
+        )
+    except HTTPException:
+        raise
     sse_manager.broadcast({"event": "updated", "file": str(target), "algorithms": registry.to_completion_json()})
     return {"success": True, "algorithm": _entry_dict(refreshed), "folder_files": _folder_files_for_entry(refreshed)}
 

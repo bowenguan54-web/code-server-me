@@ -1,7 +1,7 @@
 /*
  * AlgoLib module: 17-algo-info-admin-publish.js
- * ???????????????????????
- * ???? .run/algo-lib-check.js ??????????????????????
+ * 算法基本信息、管理员发布、版本与修改记录。
+ * 修改本文件后请运行 .run/build-algo-lib.sh all 重新构建并注入页面。
  */
 
     function editCurrentAlgorithmInfo() {
@@ -74,8 +74,6 @@ print(result)`;
     }
 
     function openAlgorithmInfoModal(item, page) {
-      const prefix = namespacePrefix(item);
-      const funcName = namespaceFunction(item);
       qs("#modalRoot").classList.remove("hidden");
       qs("#modalRoot").innerHTML = `
         <div class="modal">
@@ -83,16 +81,88 @@ print(result)`;
           <div class="form-grid">
             <div class="form-row"><label>中文名称</label><input value="${esc(item.zhName || "")}" disabled /></div>
             <div class="form-row"><label>描述</label><textarea rows="4" disabled>${esc(item.zhDescription || "")}</textarea></div>
-            <div class="form-row"><label>命名空间</label><input value="${esc(item.namespace || "")}" disabled /></div>
+            <div class="form-row"><label>所属分类</label><input value="${esc(item.namespace || "")}" disabled /></div>
             <div class="form-row"><label>标签</label><input value="${esc((item.zhTags || []).join(","))}" disabled /></div>
             <div class="form-row"><label>版本</label><input value="${esc(item.version || "1.0.0")}" disabled /></div>
           </div>
+          <h4 style="margin:16px 0 8px">修改记录</h4>
+          <div class="output" style="max-height:240px;overflow:auto">
+            <table class="api-table" style="font-size:13px">
+              <thead><tr><th>操作人</th><th>时间</th><th>动作</th></tr></thead>
+              <tbody id="infoHistoryBody">
+                <tr><td colspan="3" style="text-align:center;color:var(--text-dim)">加载中...</td></tr>
+              </tbody>
+            </table>
+          </div>
           <div class="modal-actions">
             <button onclick="window.closeModal()">关闭</button>
-            <button class="primary" onclick="window.closeModal();window.openEditorById('${esc(item.id)}','${esc(page)}')">去编辑</button>
+            <button class="primary" onclick="window.closeModal();window.openEditorById('${esc(item.id)}','${esc(page)}')">打开编辑</button>
           </div>
         </div>
       `;
+      loadAlgorithmHistory(item.id || item.registryId || item.callPrefix || "");
+    }
+
+    function formatAlgorithmHistoryAction(record) {
+      const actionType = record.action_type || record.status || "";
+      const fromVersion = record.from_version || "";
+      const toVersion = record.to_version || "";
+      const reason = record.reason || "";
+      switch (actionType) {
+        case "code_save": return "保存代码";
+        case "submit":
+        case "reviewing":
+          return `提交审核${toVersion ? " → v" + toVersion : ""}`;
+        case "approve":
+        case "approved":
+          return fromVersion && toVersion
+            ? `审核通过 v${fromVersion} → v${toVersion}`
+            : "审核通过";
+        case "reject":
+        case "rejected":
+          return `驳回${reason ? "：" + reason : ""}`;
+        case "publish":
+        case "published":
+        case "new_publish":
+          return `正式发布${toVersion ? " v" + toVersion : ""}`;
+        case "iteration":
+          return fromVersion && toVersion
+            ? `正式发布 v${fromVersion} → v${toVersion}`
+            : "正式发布";
+        case "withdraw":
+        case "draft":
+          return "撤回审核";
+        case "deprecate":
+        case "deprecated":
+          return "下架";
+        default:
+          return record.status || record.action_type || "未知操作";
+      }
+    }
+
+    async function loadAlgorithmHistory(id) {
+      const tbody = qs("#infoHistoryBody");
+      if (!tbody) return;
+      if (!id) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim)">暂无修改记录</td></tr>';
+        return;
+      }
+      try {
+        const data = await api(`/api/v1/algorithms/${safeId(id)}/publish-history`);
+        const history = (Array.isArray(data.history) ? data.history : []).slice().reverse().slice(0, 50);
+        if (!history.length) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim)">暂无修改记录</td></tr>';
+          return;
+        }
+        tbody.innerHTML = history.map(record => {
+          const time = record.timestamp ? new Date(record.timestamp).toLocaleString("zh-CN") : "-";
+          const operator = record.operator_name || record.operator || "system";
+          const action = formatAlgorithmHistoryAction(record);
+          return `<tr><td>${esc(operator)}</td><td>${esc(time)}</td><td>${esc(action)}</td></tr>`;
+        }).join("");
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim)">加载失败</td></tr>';
+      }
     }
 
     async function saveAlgorithmInfo(id, page) {
@@ -326,18 +396,32 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const zh_name = qs("#adminPublishZhName")?.value.trim() || "";
       const zh_description = qs("#adminPublishDesc")?.value.trim() || "";
       const zh_tags = (qs("#adminPublishTags")?.value || "").split(",").map(s => s.trim()).filter(Boolean);
+      const operator_name = state.currentUser?.display_name || state.currentUser?.displayName || state.currentUser?.username || state.currentUser?.id || "admin";
       closeModal();
       try {
-        const result = await api(`/api/v1/algorithms/${safeId(id)}/admin-publish`, {
+        const result = await api(`/api/v1/algorithms/${safeId(id)}/publish`, {
           method: "POST",
-          body: JSON.stringify({ version_bump, version_bump_type, note, metadata: { zh_name, zh_description, zh_tags } }),
+          body: JSON.stringify({
+            reason: note,
+            note,
+            target_version: version_bump,
+            version_change: version_bump_type,
+            version_bump,
+            version_bump_type,
+            metadata: { zh_name, zh_description, zh_tags, operator_name }
+          }),
         });
         showToast("已正式发布");
+        const currentPage = state.page;
+        const currentParent = typeof parentPageOf === "function" ? parentPageOf(currentPage) : currentPage;
         await loadModuleData("components");
         await loadModuleData("templates");
-        if (state.page === "review") await renderReviewPage();
-        else if (state.page === "components" || state.page === "my-algos") renderCards(state.page);
-        else if (state.page === "templates") renderCards("templates");
+        if (currentPage === "review") {
+          await renderReviewPage();
+        } else if (currentPage === "my-algos" || currentParent === "components" || currentParent === "templates") {
+          await loadModuleData(currentPage);
+          renderCards(currentPage);
+        }
         if (state.editing?.id === id) {
           state.editing.algo = result.algorithm;
           refreshEditorStatusButtons();

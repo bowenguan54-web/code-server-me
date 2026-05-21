@@ -317,6 +317,7 @@ function collectWorkspaceParamExamples() {
 
 function formatWorkspaceExampleValue(value, widget) {
   if (value === undefined || value === null) return "";
+  if (value === "") return "";
   if (typeof value === "object" || ["list", "dict", "json", "dataframe", "images"].includes(widget)) {
     try { return JSON.stringify(value, null, 2); } catch (_error) { return String(value); }
   }
@@ -356,8 +357,8 @@ function renderWidgetConfigRows(params) {
   }
   list.innerHTML = params.map(param => {
     const selected = newAlgoState.widgetOverrides[param.name] || param.widget;
-    const exampleValue = defaultExampleForParam(param);
-    newAlgoState.paramExamples[param.name] = exampleValue;
+    const exampleValue = "";
+    delete newAlgoState.paramExamples[param.name];
     const options = (param.options || ["str"]).map(widget => (
       `<option value="${esc(widget)}"${widget === selected ? " selected" : ""}>${esc(WIDGET_ZH[widget] || widget)}</option>`
     )).join("");

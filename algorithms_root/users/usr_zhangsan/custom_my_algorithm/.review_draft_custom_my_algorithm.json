@@ -1,0 +1,31 @@
+{
+  "algorithm_id": "custom.my_algorithm",
+  "call_prefix": "alg.custom.my_algorithm",
+  "base_status": "draft",
+  "status": "reviewing",
+  "review_kind": "new_publish",
+  "target_public_id": "",
+  "target_public_call_prefix": "",
+  "base_public_version": "",
+  "version_bump_type": "keep",
+  "version_bump": "1.0.1",
+  "metadata": {},
+  "files": [
+    {
+      "filename": "main.py",
+      "relative_path": "main.py",
+      "content": "from .preprocess import clean_values\nfrom .model import score_values\n\n\ndef my_algorithm(data: list[float], threshold: float = 0.5) -> dict:\n    values = clean_values(data)\n    scores = score_values(values)\n    passed = [value for value, score in zip(values, scores) if score >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"valid_count\": len(values),\n        \"scores\": scores,\n        \"passed\": passed,\n        \"threshold\": threshold,\n    }\n"
+    },
+    {
+      "filename": "model.py",
+      "relative_path": "model.py",
+      "content": "def score_values(values: list[float]) -> list[float]:\n    if not values:\n        return []\n    low = min(values)\n    high = max(values)\n    if low == high:\n        return [1.0 for _ in values]\n    return [round((value - low) / (high - low), 6) for value in values]\n"
+    },
+    {
+      "filename": "preprocess.py",
+      "relative_path": "preprocess.py",
+      "content": "def clean_values(data: list[float]) -> list[float]:\n    values = []\n    for item in data:\n        if item is None:\n            continue\n        values.append(float(item))\n    return values\n"
+    }
+  ],
+  "updated_at": "2026-05-21T02:50:02.504628+00:00"
+}

@@ -1,7 +1,7 @@
 {
   "name": "my_algorith",
   "zh_name": "自定义算法",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "namespace": "custom",
   "entry": "main.py",
   "exports": [
@@ -15,5 +15,10 @@
   "dependencies": {},
   "published": true,
   "publish_status": "published",
-  "module_kind": "component"
+  "module_kind": "component",
+  "input_example": "{\"data\":[0.1,0.6,0.8],\"threshold\":0.5}",
+  "widget_overrides": {
+    "data": "list",
+    "threshold": "float"
+  }
 }

@@ -53,6 +53,7 @@
           <div class="editor-toolbar" id="editorToolbar">
             <button onclick="window.closeEditor()">返回</button>
             <button onclick="window.openComponentTestModal()">测试</button>
+            <button onclick="window.openEditorParamConfig()">参数配置</button>
             <button onclick="window.editCurrentAlgorithmInfo()">基本信息</button>
             ${e.page === "templates" ? `<button onclick="window.editTemplateDescription('${esc(e.id)}')">编辑说明</button>` : ""}
             ${isComponentEditor && state.currentUser?.role === "admin" && !isPublicItem(e.algo) ? `<button data-status-btn="1" class="success" onclick="window.openAdminPublishModal('${esc(e.id)}')">正式发布</button>` : ""}

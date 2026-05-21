@@ -428,7 +428,13 @@ class AlgorithmRegistry:
         if not namespace or not name:
             raise ValueError("Package manifest requires namespace and name")
 
-        package_root = Path(root_dir).resolve().joinpath(*namespace.split("."), name)
+        root_path = Path(root_dir).resolve()
+        owner_id = str(manifest.get("owner_id", "system")).strip() or "system"
+        if owner_id and owner_id != "system":
+            # 私有 package 使用扁平目录，避免与已发布的同命名空间公有目录发生物理路径冲突。
+            package_root = root_path / f"{namespace.replace('.', '_')}_{name}"
+        else:
+            package_root = root_path.joinpath(*namespace.split("."), name)
         if package_root.exists():
             raise ValueError(f"Package already exists: {package_root}")
         package_root.mkdir(parents=True, exist_ok=False)
@@ -447,8 +453,8 @@ class AlgorithmRegistry:
             "publish_status": str(manifest.get("publish_status", "draft")).strip() or "draft",
             "module_kind": normalize_module_kind(manifest.get("module_kind", manifest.get("type", "component"))),
         }
-        if manifest.get("owner_id") and manifest["owner_id"] != "system":
-            manifest_payload["owner_id"] = manifest["owner_id"]
+        if owner_id and owner_id != "system":
+            manifest_payload["owner_id"] = owner_id
         (package_root / "algopack.json").write_text(
             json.dumps(manifest_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -462,7 +468,7 @@ class AlgorithmRegistry:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(str(file_item.get("content", "")), encoding="utf-8")
 
-        return self._scan_package_dir(str(package_root), str(Path(root_dir).resolve()), AstParser)
+        return self._scan_package_dir(str(package_root), str(root_path), AstParser)
 
     def save_package_file(self, package_id: str, filename: str, content: str) -> list[str]:
         from .ast_parser import AstParser

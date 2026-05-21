@@ -1,0 +1,17 @@
+{
+  "name": "my_algorith",
+  "zh_name": "my_algorith",
+  "version": "1.0.1",
+  "namespace": "custom",
+  "entry": "main.py",
+  "exports": [
+    "my_algorith"
+  ],
+  "zh_description": "在这里编写算法逻辑。",
+  "zh_tags": [],
+  "dependencies": {},
+  "published": false,
+  "publish_status": "reviewing",
+  "module_kind": "component",
+  "owner_id": "usr_zhangsan"
+}

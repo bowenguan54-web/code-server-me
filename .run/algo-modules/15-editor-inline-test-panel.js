@@ -100,6 +100,12 @@
         </select>
         ${state.editing?.algo?.inputExample ? `<div class="control-row" style="margin-bottom:4px;gap:8px"><button class="ghost" style="padding:2px 10px;font-size:12px" onclick="window.loadInputExample()">📋 加载输入示例</button><span style="color:var(--text-dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px">${esc(state.editing.algo.inputExample.slice(0,80))}</span></div>` : ""}
         <div id="params" class="param-grid"></div>
+        <div class="control-row" style="margin:8px 0 4px;gap:8px;align-items:center">
+          <button onclick="window.recognizeEditorParams()">识别参数</button>
+          <button onclick="window.saveEditorParamConfig()">保存参数配置</button>
+          <span style="color:var(--text-dim);font-size:12px">可从当前代码重新识别参数，修改控件类型和输入示例</span>
+        </div>
+        <div id="editorWidgetConfig" class="widget-config-list"></div>
         <div class="control-row">
           <button class="primary" id="runBtn" onclick="window.runTest()">▶ 运行</button>
           <select id="timeout"><option value="5">5s</option><option value="30">30s</option><option value="60">60s</option></select>
@@ -206,6 +212,190 @@
         renderTestPanel();
       } catch (err) {
         showToast(err.message || "保存输入示例失败");
+      }
+    }
+
+    function _currentEditorCodeForParams() {
+      return state.models.get(state.currentFile)?.getValue() || state.editor?.getValue?.() || "";
+    }
+
+    function _editorInputExampleObject() {
+      try {
+        const parsed = JSON.parse(state.editing?.algo?.inputExample || "{}");
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+      } catch (_error) {
+        return {};
+      }
+    }
+
+    function _formatEditorExampleValue(value, widget) {
+      if (value === undefined || value === null) return "";
+      if (value === "") return "";
+      if (typeof value === "object" || ["list", "dict", "json", "dataframe", "images"].includes(widget)) {
+        try { return JSON.stringify(value); } catch (_error) { return String(value); }
+      }
+      return String(value);
+    }
+
+    function openEditorParamConfig() {
+      if (!state.editing) {
+        showToast("未打开算法");
+        return;
+      }
+      setTestHeight(Math.max(state.testHeight || 0, 300));
+      renderTestPanel();
+      window.setTimeout(() => {
+        recognizeEditorParams();
+        const config = qs("#editorWidgetConfig");
+        if (config) config.scrollIntoView({ block: "nearest" });
+      }, 0);
+    }
+
+    function _renderEditorExampleInput(param, widget, value) {
+      const safeName = esc(param.name);
+      const safeValue = esc(_formatEditorExampleValue(value, widget));
+      if (widget === "bool") {
+        return `
+          <select class="widget-example-input" data-editor-example="${safeName}" onchange="window.onEditorParamExampleChange(this)">
+            <option value=""></option>
+            <option value="true" ${value === true || value === "true" ? "selected" : ""}>true</option>
+            <option value="false" ${value === false || value === "false" ? "selected" : ""}>false</option>
+          </select>`;
+      }
+      if (widget === "int" || widget === "float") {
+        return `<input class="widget-example-input" data-editor-example="${safeName}" type="number" step="${widget === "int" ? "1" : "any"}" value="${safeValue}" placeholder="" oninput="window.onEditorParamExampleChange(this)" />`;
+      }
+      if (["list", "dict", "json", "dataframe", "text", "images"].includes(widget)) {
+        return `
+          <div class="widget-example-box">
+            <textarea class="widget-example-input" data-editor-example="${safeName}" rows="2" placeholder="" oninput="window.onEditorParamExampleChange(this)">${safeValue}</textarea>
+            ${["list", "dict", "json", "dataframe", "images"].includes(widget) ? `<button type="button" onclick="window.formatEditorParamExample('${safeName}')">格式化</button>` : ""}
+          </div>`;
+      }
+      return `<input class="widget-example-input" data-editor-example="${safeName}" type="text" value="${safeValue}" placeholder="" oninput="window.onEditorParamExampleChange(this)" />`;
+    }
+
+    function recognizeEditorParams() {
+      if (typeof parseParamsFromCode !== "function") {
+        showToast("参数识别工具未加载");
+        return;
+      }
+      const params = parseParamsFromCode(_currentEditorCodeForParams());
+      if (!params.length) {
+        showToast("未识别到函数参数");
+        renderEditorWidgetConfigRows([]);
+        return;
+      }
+      const existingOverrides = state.editing?.algo?.widgetOverrides || state.editing?.algo?.widget_overrides || {};
+      const examples = _editorInputExampleObject();
+      state.editorWidgetParams = params;
+      state.editorWidgetOverrides = { ...existingOverrides };
+      state.editorParamExamples = {};
+      params.forEach(param => {
+        if (!state.editorWidgetOverrides[param.name]) state.editorWidgetOverrides[param.name] = param.widget;
+        if (Object.prototype.hasOwnProperty.call(examples, param.name)) {
+          state.editorParamExamples[param.name] = _formatEditorExampleValue(examples[param.name], state.editorWidgetOverrides[param.name] || param.widget);
+        }
+      });
+      renderEditorWidgetConfigRows(params);
+    }
+
+    function renderEditorWidgetConfigRows(params = state.editorWidgetParams || []) {
+      const list = qs("#editorWidgetConfig");
+      if (!list) return;
+      if (!params.length) {
+        list.innerHTML = "";
+        return;
+      }
+      list.innerHTML = `
+        <div class="widget-config-panel" style="margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg-card2)">
+          <strong style="display:block;margin-bottom:8px">参数控件配置</strong>
+          ${params.map(param => {
+            const selected = (state.editorWidgetOverrides || {})[param.name] || param.widget || "str";
+            const options = (param.options || (typeof widgetOptionsForType === "function" ? widgetOptionsForType(param.type) : ["str"])).map(widget => (
+              `<option value="${esc(widget)}" ${widget === selected ? "selected" : ""}>${esc(((typeof WIDGET_ZH !== "undefined") && WIDGET_ZH[widget]) || widget)}</option>`
+            )).join("");
+            const rawExample = (state.editorParamExamples || {})[param.name] ?? "";
+            return `
+              <div class="widget-config-row" style="grid-template-columns:minmax(120px,1fr) minmax(90px,.7fr) minmax(150px,1fr) minmax(220px,1.4fr) auto">
+                <div><strong>${esc(param.name)}</strong></div>
+                <code>${esc(param.type || "str")}${param.default ? ` = ${esc(param.default)}` : ""}</code>
+                <select data-editor-param="${esc(param.name)}" onchange="window.onEditorWidgetOverrideChange(this)">${options}</select>
+                <div class="widget-example-cell">
+                  <span class="widget-example-label">示例</span>
+                  ${_renderEditorExampleInput(param, selected, rawExample)}
+                </div>
+                <label class="widget-nullable"><input type="checkbox" disabled ${param.nullable ? "checked" : ""}> 可为空</label>
+              </div>`;
+          }).join("")}
+        </div>`;
+    }
+
+    function onEditorWidgetOverrideChange(select) {
+      if (!select?.dataset?.editorParam) return;
+      state.editorWidgetOverrides = state.editorWidgetOverrides || {};
+      state.editorWidgetOverrides[select.dataset.editorParam] = select.value;
+      renderEditorWidgetConfigRows();
+    }
+
+    function onEditorParamExampleChange(input) {
+      if (!input?.dataset?.editorExample) return;
+      state.editorParamExamples = state.editorParamExamples || {};
+      if (input.value === "") delete state.editorParamExamples[input.dataset.editorExample];
+      else state.editorParamExamples[input.dataset.editorExample] = input.value;
+    }
+
+    function formatEditorParamExample(paramName) {
+      const input = qsa("[data-editor-example]").find(el => el.dataset.editorExample === paramName);
+      if (!input) return;
+      try {
+        input.value = JSON.stringify(JSON.parse(input.value), null, 2);
+        onEditorParamExampleChange(input);
+      } catch (_error) {
+        showToast("JSON 格式错误");
+      }
+    }
+
+    async function saveEditorParamConfig() {
+      if (!state.editing?.id) {
+        showToast("未打开算法");
+        return;
+      }
+      if (!state.editorWidgetParams?.length) {
+        recognizeEditorParams();
+      }
+      const params = state.editorWidgetParams || [];
+      const overrides = {};
+      params.forEach(param => {
+        const widget = (state.editorWidgetOverrides || {})[param.name] || param.widget;
+        if (widget) overrides[param.name] = widget;
+      });
+      const examples = {};
+      params.forEach(param => {
+        const raw = (state.editorParamExamples || {})[param.name];
+        if (raw === undefined || raw === null || raw === "") return;
+        const widget = overrides[param.name] || param.widget || param.type || "str";
+        examples[param.name] = parseParamValueByType(param.type || widget, raw);
+      });
+      const inputExample = JSON.stringify(examples);
+      try {
+        await api(`/api/v1/algorithms/${safeId(state.editing.id)}/metadata`, {
+          method: "PATCH",
+          body: JSON.stringify({ widget_overrides: overrides, input_example: inputExample })
+        });
+        if (state.editing.algo) {
+          state.editing.algo.widgetOverrides = overrides;
+          state.editing.algo.widget_overrides = overrides;
+          state.editing.algo.inputExample = inputExample;
+          state.editing.algo.params = params.map(param => ({
+            ...param,
+            widget_hint: overrides[param.name] || param.widget || param.widget_hint
+          }));
+        }
+        showToast("参数配置已保存");
+        renderTestPanel();
+      } catch (err) {
+        showToast(err.message || "保存参数配置失败");
       }
     }
 

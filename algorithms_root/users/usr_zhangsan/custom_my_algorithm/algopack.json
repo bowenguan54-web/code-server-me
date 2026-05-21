@@ -1,0 +1,20 @@
+{
+  "name": "my_algorithm",
+  "zh_name": "复杂算法示例",
+  "version": "1.0.1",
+  "namespace": "custom",
+  "entry": "main.py",
+  "exports": [
+    "my_algorithm"
+  ],
+  "zh_description": "多文件复杂算法入口，演示预处理、模型逻辑和结果封装。",
+  "zh_tags": [
+    "复杂算法",
+    "多文件"
+  ],
+  "dependencies": {},
+  "published": false,
+  "publish_status": "reviewing",
+  "module_kind": "component",
+  "owner_id": "usr_zhangsan"
+}

@@ -19,10 +19,11 @@
     async function renderReviewPage(filterStatus) {
       const activeFilter = filterStatus || state.reviewFilter || "all";
       state.reviewFilter = activeFilter;
-      qs("#main").innerHTML = `<h1>算法审核</h1><div class="empty">加载审核队列...</div>`;
+        qs("#main").innerHTML = `<h1>算法审核</h1><div class="empty">加载审核队列...</div>`;
       try {
         await loadModuleData("components");
         await loadModuleData("templates");
+        await loadModuleData("snippets");
         // Fetch historical log
         let logEntries = [];
         try { const r = await api("/api/v1/review-log"); logEntries = r.log || []; } catch (_) {}
@@ -47,7 +48,41 @@
           owner_id: i.ownerId, review_kind: i.reviewKind || "", status: getStatus(i),
           submitted_at: "", _live: i, _isLog: false,
         }));
-        const allRows = [...logRows, ...liveOnlyRows];
+        const snippetRows = (state.data.snippets || []).flatMap(snippet => {
+          const status = getStatus(snippet);
+          const draft = snippet.review_draft || snippet.reviewDraft || null;
+          const rows = [];
+          if (["reviewing", "rejected", "approved", "published"].includes(status)) {
+            rows.push({
+              algorithm_id: snippet.id,
+              name: snippet.zh_name || snippet.zhName || snippet.name,
+              call_prefix: snippet.name || snippet.id,
+              owner_id: snippet.owner_id || snippet.ownerId || "",
+              review_kind: "snippet_publish",
+              status,
+              submitted_at: snippet.updated_at || snippet.updatedAt || "",
+              _snippet: snippet,
+              _isSnippet: true,
+            });
+          }
+          if (draft && ["pending", "reviewing", "rejected"].includes(draft.status || "")) {
+            rows.push({
+              algorithm_id: snippet.id,
+              name: snippet.zh_name || snippet.zhName || snippet.name,
+              call_prefix: snippet.name || snippet.id,
+              owner_id: draft.submitter_id || snippet.owner_id || snippet.ownerId || "",
+              review_kind: "snippet_edit",
+              status: draft.status === "pending" ? "reviewing" : draft.status,
+              submitted_at: draft.submitted_at || "",
+              reject_reason: draft.reject_reason || "",
+              _snippet: snippet,
+              _isSnippet: true,
+              _draft: draft,
+            });
+          }
+          return rows;
+        });
+        const allRows = [...logRows, ...liveOnlyRows, ...snippetRows];
         const cntAll = allRows.length;
         const cntReviewing = allRows.filter(r => r.status === "reviewing").length;
         const cntPublished = allRows.filter(r => r.status === "published").length;
@@ -71,6 +106,23 @@
           <table class="api-table">
             <thead><tr><th>算法</th><th>命名空间</th><th style="width:110px;white-space:nowrap">审核状态</th><th style="width:80px">类型</th><th style="width:240px;white-space:nowrap;text-align:center">操作</th></tr></thead>
             <tbody>${filtered.map(row => {
+              if (row._isSnippet) {
+                const rowStatus = row.status;
+                const snippetId = row.algorithm_id || "";
+                const kindLabel = row.review_kind === "snippet_edit" ? "片段修改" : "片段发布";
+                return `<tr>
+                  <td>${esc(row.name || "")}</td>
+                  <td><code>${esc(row.call_prefix || "")}</code></td>
+                  <td style="white-space:nowrap"><span class="tag ${statusClass(rowStatus)}">${esc(reviewStatusLabel(rowStatus))}</span></td>
+                  <td><span class="tag ${row.review_kind === "snippet_edit" ? "warning" : ""}">${esc(kindLabel)}</span></td>
+                  <td style="white-space:nowrap;text-align:center">
+                    <button onclick="window.showSnippetHistory('${esc(snippetId)}')">修改记录</button>
+                    ${row.review_kind === "snippet_edit" && rowStatus === "reviewing" ? `<button class="success" onclick="window.approveSnippetEdit('${esc(snippetId)}')">通过修改</button><button class="danger" onclick="window.rejectSnippetEdit('${esc(snippetId)}')">驳回修改</button>` : ""}
+                    ${row.review_kind === "snippet_publish" && rowStatus === "reviewing" ? `<button class="success" onclick="window.publishSnippet('${esc(snippetId)}')">正式发布</button><button class="danger" onclick="window.rejectSnippetReview('${esc(snippetId)}')">驳回</button>` : ""}
+                    ${row.reject_reason ? `<span title="${esc(row.reject_reason)}" style="color:var(--danger);font-size:11px;cursor:pointer" onclick="showToast('${esc(row.reject_reason.slice(0,80))}')">⚠ 驳回原因</span>` : ""}
+                  </td>
+                </tr>`;
+              }
               const live = row._live;
               const rowStatus = row.status;
               const kindLabel = row.review_kind === "version_iteration" ? "版本迭代" : (row.review_kind === "new_publish" ? "新建" : "");

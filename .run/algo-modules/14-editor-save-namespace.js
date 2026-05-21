@@ -4,11 +4,31 @@
  * ???? .run/algo-lib-check.js ??????????????????????
  */
 
+    async function reloadEditorListData(page) {
+      const parent = typeof parentPageOf === "function" ? parentPageOf(page) : page;
+      const keys = Array.from(new Set([page, parent, "my-algos"].filter(Boolean)));
+      for (const key of keys) {
+        try {
+          await loadModuleData(key);
+        } catch (err) {
+          console.warn("reload editor list data failed", key, err);
+        }
+      }
+      const merged = [];
+      keys.forEach(key => {
+        (state.data[key] || []).forEach(item => {
+          if (item && !merged.some(existing => existing.id === item.id)) merged.push(item);
+        });
+      });
+      return merged;
+    }
+
     async function _saveAsPrivateDraft() {
       const algo = state.editing?.algo;
       if (!algo) return;
       const files = Array.from(state.models.entries()).map(([filename, model]) => ({
         filename,
+        relative_path: filename,
         content: model?.getValue() || "",
         isEntry: !!state.fileMeta.get(filename)?.is_entry
       }));
@@ -23,6 +43,61 @@
         if (!fromName || fromName === toName) return code;
         return String(code || "").replace(new RegExp(`(def\\s+)${escapeRegExp(fromName)}(\\s*\\()`, "m"), `$1${toName}$2`);
       };
+      const packageId = state.editing.algo.packageId || state.editing.package?.package_id;
+      if (packageId) {
+        const entryName = entryFile?.filename || state.currentFile || "main.py";
+        const packageFiles = files.map(file => ({
+          filename: file.filename,
+          relative_path: file.relative_path || file.filename,
+          content: file === entryFile ? renameEntryFunction(file.content || "", oldFuncName, funcName) : (file.content || "")
+        }));
+        try {
+          const result = await api("/api/v1/packages/create", {
+            method: "POST",
+            body: JSON.stringify({
+              name: funcName,
+              namespace: category,
+              zh_name: algo.zhName || funcName,
+              version: algo.version || "1.0.0",
+              zh_description: algo.zhDescription || "",
+              zh_tags: algo.zhTags || [],
+              entry: entryName,
+              exports: [funcName],
+              module_kind: moduleKind,
+              publish_status: "draft",
+              input_example: algo.inputExample || "",
+              widget_overrides: algo.widgetOverrides || algo.widget_overrides || {},
+              files: packageFiles
+            })
+          });
+          const newPackage = result.package;
+          const list = await reloadEditorListData(state.editing.page);
+          const newAlgo = list.find(item =>
+            (item.packageId === newPackage?.package_id || item.package_id === newPackage?.package_id) &&
+            namespaceFunction(item) === funcName &&
+            ownsAlgorithm(item)
+          ) || list.find(item =>
+            namespaceFunction(item) === funcName &&
+            (item.namespace || "") === category &&
+            ownsAlgorithm(item)
+          );
+          if (newAlgo) {
+            showToast("✅ 已另存为您的私有草稿（多文件）");
+            state.highlightId = newAlgo.id;
+            state.editing.id = newAlgo.id;
+            state.editing.algo = newAlgo;
+            await openEditor(newAlgo, state.editing.page);
+          } else {
+            state.editing.package = newPackage || state.editing.package;
+            showToast("✅ 已另存为您的私有草稿（多文件）");
+            refreshEditorStatusButtons();
+          }
+        } catch (err) {
+          showToast(err.message);
+        }
+        return;
+      }
+
       const entryContent = renameEntryFunction(entryFile?.content || "", oldFuncName, funcName);
       try {
         const result = await api("/api/v1/algorithms/create", {
@@ -51,7 +126,8 @@
           }
           state.editing.id = newAlgo.id;
           state.editing.algo = newAlgo;
-          await loadModuleData(state.editing.page);
+          await reloadEditorListData(state.editing.page);
+          state.highlightId = newAlgo.id;
           showToast("✅ 已另存为您的私有草稿");
           refreshEditorStatusButtons();
           // Update namespace display to new algo
@@ -102,12 +178,12 @@
       if (!state.editing || !state.currentFile) return;
       const content = state.models.get(state.currentFile)?.getValue() || "";
       const packageId = state.editing.algo.packageId || state.editing.package?.package_id;
-      const isOwner = canManageAlgorithm(state.editing.algo);
+      const isOwner = state.currentUser?.role === "admin" || canManageAlgorithm(state.editing.algo);
+      if (!isOwner) {
+        await _saveAsPrivateDraft();
+        return;
+      }
       if (!packageId) {
-        if (!isOwner) {
-          await _saveAsPrivateDraft();
-          return;
-        }
         try {
           const result = await api(`/api/v1/algorithm-source/${safeId(state.editing.id)}/files/${safeId(state.currentFile)}`, {
             method: "POST",
@@ -250,7 +326,7 @@
       if (main) main.classList.remove("editor-active");
       state.pendingScrollRestore = page;
       switchPage(page);
-      restoreMainScroll(page);
+      window.setTimeout(() => restoreMainScroll(page), 80);
     }
 
     async function saveAndCloseEditor() {

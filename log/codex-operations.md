@@ -62,7 +62,8 @@ setsid -f ./release/bin/code-server --bind-addr 127.0.0.1:8080 --auth none --dis
 ### 2026-05-15 11:35:38
 - 用户要求：测试结果增加表格展示；新增图片文件夹批处理算法 demo；从编辑器返回时恢复进入前滚动位置；分类筛选时隐藏其他空文件夹。
 - 修改 src/browser/pages/algo-lib.html：新增 pageScroll/pendingScrollRestore 状态，进入编辑器前记录 #main.scrollTop，关闭编辑器回列表后恢复滚动位置。
-- 修改 src/browser/pages/algo-lib.html：修复 enderCards 中错误使用 state.filter?.category 的问题，改为读取 #filterCategory，选中分类后不再补空分类组。
+- 修改 src/browser/pages/algo-lib.html：修复 
+enderCards 中错误使用 state.filter?.category 的问题，改为读取 #filterCategory，选中分类后不再补空分类组。
 - 修改 src/browser/pages/algo-lib.html：测试面板增加“表格”结果标签，新增通用 __output_type__ == "table" 渲染逻辑，并对表格结果自动切换到表格页。
 - 新增 lgorithms_root/demo/image_folder_batch.py：图片文件夹批处理 demo，支持上传文件夹/多文件路径，处理后保存到输出目录，并返回表格结果。
 - 已复制嵌入页到 lgo_management.html，并同步到 WSL /home/guan/code-server-me。
@@ -72,24 +73,35 @@ setsid -f ./release/bin/code-server --bind-addr 127.0.0.1:8080 --auth none --dis
 
 ### 2026-05-15 15:35:11
 - 用户反馈：测试质量报告仍无表格标签；图片文件夹 demo 需用 E:\新建文件夹 输入、E:/test 输出验证；返回编辑器滚动恢复和分类过滤隐藏空组未生效。
-- 关键定位：当前 code-server 运行时 ootPath 是 /home/guan/code-server-me/release，实际服务 HTML 为 /home/guan/code-server-me/release/src/browser/pages/algo-lib.html，此前只同步 src/browser/pages/algo-lib.html，所以浏览器看到旧界面。
-- 新增固定规则：以后修改嵌入算法管理界面时，必须同时同步三处：Windows src/browser/pages/algo-lib.html、WSL src/browser/pages/algo-lib.html、WSL elease/src/browser/pages/algo-lib.html；Windows 若存在 elease/src/browser/pages/algo-lib.html 也同步。
+- 关键定位：当前 code-server 运行时 
+ootPath 是 /home/guan/code-server-me/release，实际服务 HTML 为 /home/guan/code-server-me/release/src/browser/pages/algo-lib.html，此前只同步 src/browser/pages/algo-lib.html，所以浏览器看到旧界面。
+- 新增固定规则：以后修改嵌入算法管理界面时，必须同时同步三处：Windows src/browser/pages/algo-lib.html、WSL src/browser/pages/algo-lib.html、WSL 
+elease/src/browser/pages/algo-lib.html；Windows 若存在 
+elease/src/browser/pages/algo-lib.html 也同步。
 - 本次修复：前端测试面板静态和动态结果标签都加入“表格”；服务端 curl /algo-lib 已确认 data-tp-tab="table" 出现 2 次。
-- 本次修复：返回编辑区前记录实际 state.page 为 eturnPage，关闭编辑器后按该页面恢复滚动；并在 switchPage 后立即和渲染后双保险恢复。
+- 本次修复：返回编辑区前记录实际 state.page 为 
+eturnPage，关闭编辑器后按该页面恢复滚动；并在 switchPage 后立即和渲染后双保险恢复。
 - 本次修复：分类过滤时生成 groupKeys，选中分类后过滤掉所有 0 项分组，避免其他文件夹显示 0。
 - 本次修复：image_folder_batch.py 增加 Windows 路径到 WSL /mnt/<drive>/... 的转换，支持 E:\新建文件夹 和 E:/test 这种输入/输出。
 - 已验证：image_folder_batch('E:\新建文件夹','E:/test') 返回 2 行成功记录，输出到 E:\test；因 WSL 未安装 Pillow，当前处理策略为复制原图并在结果说明中标注。
-- 已校验：Windows 前端 JS OK；WSL src 和 elease/src 两份前端 JS OK；demo Python py_compile OK。
+- 已校验：Windows 前端 JS OK；WSL src 和 
+elease/src 两份前端 JS OK；demo Python py_compile OK。
 - 已重启 WSL：后端 8000 返回 200，code-server 8080 返回 302。
 
 ### 2026-05-15 16:28:37
 - 用户要求：从分类筛选后的列表（例如分类 demo）进入编辑/测试后，返回时仍保持该分类筛选界面，而不是回到顶部或默认列表。
-- 修改 src/browser/pages/algo-lib.html：新增 ememberListViewState / estoreListViewState，保存并恢复搜索、分类、语言、状态、权限和滚动位置。
+- 修改 src/browser/pages/algo-lib.html：新增 
+ememberListViewState / 
+estoreListViewState，保存并恢复搜索、分类、语言、状态、权限和滚动位置。
 - 修改卡片“测试”按钮：调用 openComponentTestModalById(id, page) 时传入当前页面，避免测试入口把 components-general 错退成 components。
 - 修改 openComponentTestModalById：打开测试前如果需要进入编辑器，使用传入的当前页面作为返回页面。
-- 修改 enderModulePage、loadCurrentPage、我的算法列表刷新：hydrate 筛选项之后恢复已保存的筛选状态，再渲染卡片。
-- 已同步到 Windows/WSL 的 src/browser/pages/algo-lib.html、lgo_management.html，以及 WSL 实际服务文件 elease/src/browser/pages/algo-lib.html。
-- 已校验：Windows JS OK；WSL src 与 elease/src JS OK；curl /algo-lib 可检索到 estoreListViewState。
+- 修改 
+enderModulePage、loadCurrentPage、我的算法列表刷新：hydrate 筛选项之后恢复已保存的筛选状态，再渲染卡片。
+- 已同步到 Windows/WSL 的 src/browser/pages/algo-lib.html、lgo_management.html，以及 WSL 实际服务文件 
+elease/src/browser/pages/algo-lib.html。
+- 已校验：Windows JS OK；WSL src 与 
+elease/src JS OK；curl /algo-lib 可检索到 
+estoreListViewState。
 - 已重启 WSL 项目：后端 8000 返回 200，code-server 8080 返回 302。
 
 ### 2026-05-15 16:50:00
@@ -116,10 +128,13 @@ setsid -f ./release/bin/code-server --bind-addr 127.0.0.1:8080 --auth none --dis
 ### 2026-05-15 19:48:31
 - 用户进入第三阶段：为全屏测试页面接入运行逻辑和输出渲染，本阶段不重启项目。
 - 修改 src/browser/pages/algo-lib.html：参数卡片补充 data-param-name，跳过复选框补充 param-skip-checkbox，用于运行前收集参数和跳过 nullable 参数。
-- 新增/覆盖阶段三 JS：collectTestParams 改为组装 {args, kwargs}；unFullTest 改为调用 POST /api/v1/algorithms/{id}/execute；新增 enderTestOutput/switchOutputTab 输出路由。
+- 新增/覆盖阶段三 JS：collectTestParams 改为组装 {args, kwargs}；
+unFullTest 改为调用 POST /api/v1/algorithms/{id}/execute；新增 
+enderTestOutput/switchOutputTab 输出路由。
 - 新增结构化输出渲染：text/json/table/image/images/chart/html/file/error/mixed；表格超过 100 行截断；JSON 使用 DOM 树递归渲染；图片支持 data URL 和裸 base64；ECharts 缺失时优雅降级。
 - 新增辅助函数：_isBase64Image、_ensureDataUrl、copyToClipboard、downloadBlob、downloadBase64File、showImageFullscreen、copyTableAsTsv，并挂载到 window。
-- 已复制到 lgo_management.html，并同步到 WSL src/browser/pages/algo-lib.html 和实际服务文件 elease/src/browser/pages/algo-lib.html。
+- 已复制到 lgo_management.html，并同步到 WSL src/browser/pages/algo-lib.html 和实际服务文件 
+elease/src/browser/pages/algo-lib.html。
 - 已执行 Windows JS 语法检查和 WSL src/release 两份 JS 语法检查，均通过。
 - 按用户要求，本阶段未重启前端或后端服务。
 
@@ -129,10 +144,12 @@ setsid -f ./release/bin/code-server --bind-addr 127.0.0.1:8080 --auth none --dis
 ullable 标记和 Literal 选项提取。
 - 修改 lgo_service/routers/algorithms.py：将 import re 提到文件顶部；删除函数内部局部 import re；保留增强版 _preprocess_kwargs 和 _execute_entry；新增 POST /api/v1/algorithms/{algorithm_id:path}/execute，供全屏测试页按前端 id 执行算法。
 - 前端 src/browser/pages/algo-lib.html、lgo_management.html、.run/algo-lib-inline-check.js、.run/algo-lib-check.js 已保持阶段二/三最新逻辑，测试入口调用全屏 openTestPage。
-- 已同步到 WSL /home/guan/code-server-me 的后端文件、src/browser/pages/algo-lib.html、实际服务文件 elease/src/browser/pages/algo-lib.html 和 .run JS 检查文件。
+- 已同步到 WSL /home/guan/code-server-me 的后端文件、src/browser/pages/algo-lib.html、实际服务文件 
+elease/src/browser/pages/algo-lib.html 和 .run JS 检查文件。
 - 校验：Windows py_compile 通过；Windows .run JS 语法检查通过；WSL py_compile 与 .run JS 语法检查通过；WSL 路由检查确认 /api/v1/upload-temp 和 /api/v1/algorithms/{algorithm_id:path}/execute 均已注册。
 - 运行验证：调用 /api/v1/algorithms/data_utils.chunk_list/execute 成功返回 success=true、output_hint=json 和执行结果。
-- 已重启 WSL 后端与 code-server：后端 8000 返回 200，code-server 8080 返回 302；实际服务页 /algo-lib 可检索到 	estFullpage、unFullTest 和 /api/v1/algorithms/。
+- 已重启 WSL 后端与 code-server：后端 8000 返回 200，code-server 8080 返回 302；实际服务页 /algo-lib 可检索到 	estFullpage、
+unFullTest 和 /api/v1/algorithms/。
 ### 2026-05-15 21:00:52
 - 操作：为 AlgoLib 新增演示算法集合，写入 lgorithms_root/demo/folder_config.json 和 18 个 demo_*.py 独立算法文件，覆盖 int/float/str/text/bool/list/dict/dataframe/Literal/Optional/url/datetime/color/password/image/images/file/chart/mixed 输出等类型。
 - 验证：本地 python -m py_compile algorithms_root/demo/demo_*.py 通过；AST 校验每个文件仅一个公开函数，input_example JSON 与函数参数一致；后端 API 注册到 demo 命名空间共 18 个 demo。
@@ -142,7 +159,8 @@ ullable 标记和 Literal 选项提取。
 ### 2026-05-18 09:44:04
 - 用户要求：验证 lgorithms_root/demo/ 下 18 个 demo 算法是否可被 AlgoLib 扫描、注册和测试，并检查参数/输出推断。
 - 扫描配置：config.yaml 已包含 ./algorithms_root 和 ./algorithms_root/demo，无需修改 watch_roots。
-- 校验结果：18 个新增 demo 均被 Registry 扫描注册；所有参数 widget_hint 与预期一致，包括 content=text、ows=dataframe、Optional[str] nullable=True、images=images、ile_path=file。
+- 校验结果：18 个新增 demo 均被 Registry 扫描注册；所有参数 widget_hint 与预期一致，包括 content=text、
+ows=dataframe、Optional[str] nullable=True、images=images、ile_path=file。
 - 修复：仅修改 demo 文件。demo_dict.py 将返回字段 alues 改为 alue_list，避免被 infer_output_widget 误判为 chart；demo_image.py/demo_images.py 在未安装 Pillow 时原样返回输入 base64，保证输出仍可识别为 image/images。
 - 验证：本地和 WSL py_compile 通过；运行中后端确认 18 个预期 demo 全部存在；抽测 /execute 输出 demo_int_float=text、demo_dataframe=table、demo_chart_line=chart、demo_dict=json。
 - 同步与重启：已同步 demo 文件到 WSL /home/guan/code-server-me/algorithms_root/demo/；已重启后端 8000 和 code-server 8080，健康检查分别返回 200/302。
@@ -151,7 +169,8 @@ ullable 标记和 Literal 选项提取。
 - 修改 src/browser/pages/algo-lib.html、lgo_management.html、.run/algo-lib-inline-check.js、.run/algo-lib-check.js；未修改后端、未修改 Monaco 初始化逻辑。
 - 修复点：openTestPage(algo) 每次都重新解析 lgo.inputExample 到 state._testInputExample，重置测试状态并重新渲染参数/输出；closeTestPage() 仅隐藏 #testFullpage，只清理测试状态，不触碰 state.editing 和编辑器 DOM。
 - 新增：hasTestInputExample、illTestParamExample、illAllTestExamples、ensureTestExampleButton；参数卡片有示例时显示“填入示例”，运行栏动态加入“填入全部示例”。
-- 同步：已重新提取 .run 两份 JS 检查文件，并同步到 WSL /home/guan/code-server-me/src/browser/pages/algo-lib.html 与实际服务文件 elease/src/browser/pages/algo-lib.html。
+- 同步：已重新提取 .run 两份 JS 检查文件，并同步到 WSL /home/guan/code-server-me/src/browser/pages/algo-lib.html 与实际服务文件 
+elease/src/browser/pages/algo-lib.html。
 - 校验：Windows 与 WSL 的 .run JS 
 ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接口确认 demo 算法 inputExample 正常返回。
 ### 2026-05-18 10:35:00
@@ -420,3 +439,68 @@ ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接�
 - 修改 `algo_service/routers/algorithms.py`：metadata 更新包算法 manifest 时也带上 `input_example` 字段，保持字段链路一致。
 - 规则：每次修改前端模块后必须运行 `bash .run/build-algo-lib.sh all`，确保 `.run/algo-lib-inline-check.js` 重新注入到 `src/browser/pages/algo-lib.html`。
 - 验证：已运行 `python -m py_compile algo_service/sdk/decorators.py algo_service/routers/publish.py algo_service/routers/algorithms.py`；已运行 `node --check` 检查修改模块和两个 bundle；已运行 `bash .run/build-algo-lib.sh all` 完成构建和注入。
+
+## 2026-05-20 11:20:00 +08:00 - 补齐正式发布路径与编辑器参数配置
+- 用户直接打开 `src/browser/pages/algo-lib.html` 是正确入口；前端模块改完后必须先构建并注入，否则页面仍会显示旧逻辑。
+- 确认 `.run/algo-modules/08-workspace-core.js` 的 `renderWidgetConfigRows()` 不再调用 `defaultExampleForParam(param)`，识别参数后的示例值为空，`defaultExampleForParam` 仅作为未调用的旧工具保留。
+- 修改 `.run/algo-modules/17-algo-info-admin-publish.js`：管理员“正式发布”从旧的 `/admin-publish` 改为调用后端已有 `/publish`，并随请求提交版本迭代与基础 metadata。
+- 修改 `algo_service/routers/algorithms.py`：`_entry_config_path()` 优先检查真实存在的 `algopack.json`，不存在时回退到 `folder_config.json`，避免普通目录算法发布时错误查找 `algopack.json`。
+- 修改 `algo_service/routers/publish.py`：发布请求体兼容 `note/version_bump/metadata`，`publish_algorithm()` 使用 force 发布并写入版本、中文名、描述、标签等元信息。
+- 修改 `.run/algo-modules/15-editor-inline-test-panel.js` 与 `.run/algo-modules/41-init-exports.js`：编辑器测试面板新增“识别参数 / 保存参数配置”，可从当前代码重新识别参数、调整控件类型和输入示例，并保存 `widget_overrides` 与 `input_example`。
+- 验证：已运行 `node --check` 检查相关模块和两个 bundle；已运行 `python -m py_compile algo_service/routers/algorithms.py algo_service/routers/publish.py algo_service/sdk/decorators.py`；已运行 `bash .run/build-algo-lib.sh all` 完成构建并注入 `src/browser/pages/algo-lib.html`。
+
+## 2026-05-20 11:55:00 +08:00 - 修复示例空值双引号、发布首点报错和编辑参数入口
+- 用户反馈新建算法识别参数后示例框仍显示 `""`，原因是空字符串进入 JSON/list/dataframe 示例格式化函数后被 `JSON.stringify("")` 渲染成双引号。
+- 修改 `.run/algo-modules/08-workspace-core.js`：`formatWorkspaceExampleValue()` 对空字符串直接返回空字符串，`renderWidgetConfigRows()` 继续保持不自动写入默认示例。
+- 修改 `.run/algo-modules/15-editor-inline-test-panel.js`：编辑器参数示例格式化同样对空字符串直接返回空字符串；新增 `openEditorParamConfig()`，用于从编辑器工具栏直接展开测试面板并识别当前代码参数。
+- 修改 `.run/algo-modules/12-editor-shell.js` 与 `.run/algo-modules/41-init-exports.js`：编辑器工具栏增加“参数配置”按钮，并导出 `window.openEditorParamConfig`。
+- 修改 `algo_service/routers/algorithms.py`：正式发布私有算法时，移动目录后重新定位真实存在的 `folder_config.json` 或 `algopack.json`，避免第一次发布移动目录后仍按旧路径读取 manifest 导致首点失败、第二次才成功。
+- 验证：已运行 `node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`、`python -m py_compile algo_service/routers/algorithms.py`；已运行 `bash .run/build-algo-lib.sh all` 完成构建并注入 `src/browser/pages/algo-lib.html`。
+
+## 2026-05-20 12:35:00 +08:00 - 公有贡献历史与代码片段修改审核
+- 后端 `algo_service/routers/algorithms.py` 的 `_entry_dict()` 新增 `contributors` 字段，从算法/模板目录的 `publish_history.json` 提取已发布贡献记录，供基本信息弹窗展示贡献人、时间和版本变化。
+- 后端 `algo_service/routers/publish.py` 的发布历史记录补充 `operator_name/from_version/to_version/action_type`，管理员正式发布时会把前端传入的当前用户显示名写入历史。
+- 后端 `algo_service/routers/snippets.py` 增加代码片段 `history` 与 `review_draft` 持久字段，并新增 `/snippets/{id}/edit-draft`、`/approve-edit`、`/reject-edit` 接口；公有片段编辑先进入审核草稿，管理员通过后才覆盖公有内容。
+- 前端 `06-cards-list.js`、`22-snippets.js` 增加公有代码片段“编辑 / 复制 / 修改记录”入口；编辑公有片段时保存按钮变为“提交修改”，不会直接改公有内容。
+- 前端 `23-settings-review-sse.js` 的审核页合并显示代码片段发布审核和公有片段修改审核，管理员可在同一页面通过或驳回片段修改。
+- 前端 `17-algo-info-admin-publish.js`、`21-review-admin-actions.js` 增加贡献记录/贡献人显示；`41-init-exports.js` 导出片段 fork、历史、通过修改和驳回修改函数。
+- 验证：已运行 Python `py_compile` 检查相关后端文件；已运行 `node --check` 检查修改模块和两个 bundle；已运行 `bash .run/build-algo-lib.sh all` 完成构建并注入 `src/browser/pages/algo-lib.html`。
+
+## 2026-05-21 09:47:47 +08:00 - 修复包文件保存入口字段名
+- 修改 `algo_service/routers/packages.py`：`save_package_file()` 判断入口文件时从错误的 `package.entry` 改为 `package.entry_file`，匹配 `AlgorithmPackage` dataclass 的真实字段名。
+- 全局检查 `packages.py`，确认没有其他 `package.entry` 误用。
+- 验证：已运行 `python -m py_compile algo_service/routers/packages.py`；因 8000 端口已有服务监听，使用临时端口 `18000` 运行 `python -m uvicorn algo_service.main:app --host 127.0.0.1 --port 18000 --reload` 并访问 `/docs` 返回 200，随后关闭该临时验证进程。
+
+## 2026-05-21 10:13:02 +08:00 - 防止普通用户直接覆盖公有多文件算法
+- 修改 `.run/algo-modules/14-editor-save-namespace.js`：`saveCurrentFile()` 在单文件和 package 分支之前统一判断权限，非 owner 的普通用户保存公有算法时会先另存为私有草稿。
+- 修改 `_saveAsPrivateDraft()`：当当前算法有 `packageId` 时调用 `/api/v1/packages/create` 创建完整多文件私有副本，并带上所有 Monaco model 文件、入口文件、exports、metadata、输入示例和控件覆盖配置；创建后重新加载列表并切换到新私有算法。
+- 修改 `algo_service/routers/packages.py`：新增 package 写入权限校验，普通用户不能直接写入 `owner_id == system` 的公有 package；私有 package 仅 owner 或 admin 可写；保存入口文件继续使用 `package.entry_file`。
+- 验证：已运行 `node --check .run/algo-modules/14-editor-save-namespace.js`、`python -m py_compile algo_service/routers/packages.py`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-05-21 10:41:28 +08:00 - 隔离公有算法另存私有草稿路径
+- 修改 algo_service/routers/algorithms.py：认证用户通过 /api/v1/algorithms/create 创建或另存算法时，一律落到 algorithms_root/users/{user_id}/{namespace}_{funcName}/，不再复用 namespace/funcName 目录，避免覆盖已发布公有算法的 folder_config.json。
+- 修改 algo_service/sdk/registry.py：带 owner_id 的 package 创建使用 users/{user_id}/{namespace}_{name}/ 扁平目录，避免私有多文件草稿与同命名空间公有 package 的物理路径冲突。
+- 确认 algo_service/routers/packages.py 中 package 文件保存仍使用 package.entry_file，并保留公有/私有 package 写入权限校验。
+- 验证：已运行 python -m py_compile algo_service/routers/algorithms.py algo_service/routers/packages.py algo_service/sdk/registry.py；已运行 node --check .run/algo-modules/14-editor-save-namespace.js。
+- 追加验证：用临时目录调用 AlgorithmRegistry.create_package(owner_id=usr_test)，确认私有 package 物理路径为 custom_my_algorithm，且不会创建 custom/my_algorithm。
+
+## 2026-05-21 11:08:53 +08:00 - ???????????????????
+- ?? `algo_service/routers/publish.py`???????????? `action_type` ? `submit/approve/reject/publish/withdraw/deprecate`??? `from_version/to_version/operator/operator_name`?`publish-history` ??????????????
+- ?? `algo_service/routers/algorithms.py`??????????? `publish_history.json` ?? `code_save` ?????????????
+- ?? `algo_service/routers/packages.py`?package ??????????? `code_save` ?????????? package entry??????????????
+- ?? `.run/algo-modules/17-algo-info-admin-publish.js`?????????????????????????????????? `/api/v1/algorithms/{id}/publish-history`?????????? 50 ???????????
+- ?? `.run/algo-modules/41-init-exports.js`??? `window.loadAlgorithmHistory`?
+- ?????? `python -m py_compile algo_service/routers/publish.py algo_service/routers/algorithms.py algo_service/routers/packages.py`???? `node --check` ????????? bundle???? `bash .run/build-algo-lib.sh all` ??????? `src/browser/pages/algo-lib.html`?
+
+## 2026-05-21 修复基本信息弹窗中文乱码
+- 问题：上次修改 `.run/algo-modules/17-algo-info-admin-publish.js` 时，基本信息弹窗部分中文被写成 `????`，构建注入后页面显示乱码。
+- 修复：恢复弹窗标题、字段名、修改记录表头、按钮和历史动作映射为中文。
+- 已执行：`bash .run/build-algo-lib.sh all`，并通过 `node --check .run/algo-lib-check.js` 与 `node --check .run/algo-lib-inline-check.js`。
+
+## 2026-05-21 11:18:00 +08:00 - 修复修改记录加载与另存私有草稿返回卡住
+- 修改 `algo_service/routers/algorithms.py`：新增 `/api/v1/algorithms/{id}/publish-history` 显式路由，并放在通配详情路由之前，避免前端基本信息弹窗请求被 `/algorithms/{id}` 吃掉导致“加载失败”。
+- 修改 `algo_service/routers/algorithms.py`：`_entry_from_client_id()` 支持解析前端私有算法 id 的 `@@owner_id` 后缀，确保私有算法的修改记录、保存和详情定位到正确 owner。
+- 修改 `.run/algo-modules/14-editor-save-namespace.js`：公有算法另存私有草稿后，会同时刷新当前页、父级算法页和“我的算法”数据，并高亮/切换到新私有草稿，避免返回列表只剩骨架或无法继续操作。
+- 修改 `.run/algo-modules/14-editor-save-namespace.js`：关闭编辑器时延迟恢复滚动位置，让 `switchPage()` 完成异步渲染后再恢复，减少返回后页面卡在加载态的问题。
+- 修改 `.run/algo-modules/17-algo-info-admin-publish.js`：正式发布后按当前页父级刷新列表，支持在分类子页中正确重绘卡片。
+- 验证：已运行 `python -m py_compile algo_service/routers/algorithms.py`、`node --check` 检查相关模块和两个 bundle；已运行 `bash .run/build-algo-lib.sh all` 完成构建并注入 `src/browser/pages/algo-lib.html`；确认 `publish-history` 路由注册顺序位于通配详情路由之前。

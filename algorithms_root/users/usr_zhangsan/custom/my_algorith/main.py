@@ -1,4 +1,4 @@
-def my_algorit(data: list, threshold: float = 0.5) -> dict:
+def my_algorith(data: list, threshold: float = 0.5) -> dict:
     """在这里编写算法逻辑。
 
     Args:
@@ -9,5 +9,4 @@ def my_algorit(data: list, threshold: float = 0.5) -> dict:
     return {
         "input_count": len(data),
         "passed_count": len(passed),
-        "passed": passed,
     }

@@ -133,16 +133,30 @@
         if (!isAdmin && isOwner && status === "reviewing") btns.push(`<button onclick="window.withdrawReview('${esc(id)}')">撤回</button>`);
         if (isAdmin || (canManage && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteAlgorithm('${esc(id)}')">删除</button>`);
       } else {
-        if (status === "published" && !isAdmin) btns.push(`<button onclick="window.editSnippet('${esc(id)}', true)">编辑</button>`);
-        else if (canManage || ownsSnippet(item)) btns.push(`<button onclick="window.editSnippet('${esc(id)}')">编辑</button>`);
-        btns.push(`<button onclick="window.copySnippet('${esc(id)}')">复制</button>`);
-        if (canSubmitSnippet(item)) btns.push(`<button class="warning" onclick="window.submitSnippetReview('${esc(id)}')">提交审核</button>`);
-        if (!isAdmin && ownsSnippet(item) && status === "reviewing") btns.push(`<button onclick="window.withdrawSnippetReview('${esc(id)}')">撤回</button>`);
-        if (isAdmin && status === "reviewing") {
-          btns.push(`<button class="success" onclick="window.publishSnippet('${esc(id)}')">正式发布</button>`);
-          btns.push(`<button class="danger" onclick="window.rejectSnippetReview('${esc(id)}')">驳回</button>`);
+        const draft = item.review_draft || item.reviewDraft || null;
+        const draftStatus = draft && draft.status ? draft.status : "";
+        const publicSnippet = status === "published" || isPublicItem(item);
+        if (publicSnippet) {
+          btns.push(`<button onclick="window.editSnippet('${esc(id)}')">编辑</button>`);
+          btns.push(`<button onclick="window.forkSnippet('${esc(id)}')">复制</button>`);
+          btns.push(`<button onclick="window.showSnippetHistory('${esc(id)}')">修改记录</button>`);
+          if (isAdmin && draftStatus === "reviewing") {
+            btns.push(`<button class="success" onclick="window.approveSnippetEdit('${esc(id)}')">通过修改</button>`);
+            btns.push(`<button class="danger" onclick="window.rejectSnippetEdit('${esc(id)}')">驳回修改</button>`);
+          }
+          if (isAdmin) btns.push(`<button class="danger" onclick="window.deleteSnippet('${esc(id)}')">删除</button>`);
+        } else {
+          if (canManage || ownsSnippet(item)) btns.push(`<button onclick="window.editSnippet('${esc(id)}')">编辑</button>`);
+          btns.push(`<button onclick="window.copySnippet('${esc(id)}')">复制</button>`);
+          btns.push(`<button onclick="window.showSnippetHistory('${esc(id)}')">修改记录</button>`);
+          if (canSubmitSnippet(item)) btns.push(`<button class="warning" onclick="window.submitSnippetReview('${esc(id)}')">提交审核</button>`);
+          if (!isAdmin && ownsSnippet(item) && status === "reviewing") btns.push(`<button onclick="window.withdrawSnippetReview('${esc(id)}')">撤回</button>`);
+          if (isAdmin && status === "reviewing") {
+            btns.push(`<button class="success" onclick="window.publishSnippet('${esc(id)}')">正式发布</button>`);
+            btns.push(`<button class="danger" onclick="window.rejectSnippetReview('${esc(id)}')">驳回</button>`);
+          }
+          if (isAdmin || ((ownsSnippet(item) || canManage) && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteSnippet('${esc(id)}')">删除</button>`);
         }
-        if (isAdmin || ((ownsSnippet(item) || canManage) && status !== "published")) btns.push(`<button class="danger" onclick="window.deleteSnippet('${esc(id)}')">删除</button>`);
       }
       const buttons = btns.join(" ");
       return `

@@ -70,6 +70,13 @@
     window.renderParams = renderParams;
     window.runTest = runTest;
     window.saveCurrentAsInputExample = saveCurrentAsInputExample;
+    window.openEditorParamConfig = openEditorParamConfig;
+    window.recognizeEditorParams = recognizeEditorParams;
+    window.renderEditorWidgetConfigRows = renderEditorWidgetConfigRows;
+    window.onEditorWidgetOverrideChange = onEditorWidgetOverrideChange;
+    window.onEditorParamExampleChange = onEditorParamExampleChange;
+    window.formatEditorParamExample = formatEditorParamExample;
+    window.saveEditorParamConfig = saveEditorParamConfig;
     window.switchOutput = switchOutput;
     window.generateExampleData = generateExampleData;
     function loadInputExample() {
@@ -89,6 +96,7 @@
     window.saveTemplateDescription = saveTemplateDescription;
     window.editAlgorithmInfo = editAlgorithmInfo;
     window.openAlgorithmInfoModal = openAlgorithmInfoModal;
+    window.loadAlgorithmHistory = loadAlgorithmHistory;
     window.saveAlgorithmInfo = saveAlgorithmInfo;
     window.publishAsComponent = publishAsComponent;
     window.confirmPublishAsComponent = confirmPublishAsComponent;
@@ -243,6 +251,10 @@
     window.insertSnippetById = insertSnippetById;
     window.copyTextToClipboard = copyTextToClipboard;
     window.copySnippet = copySnippet;
+    window.forkSnippet = forkSnippet;
+    window.showSnippetHistory = showSnippetHistory;
+    window.approveSnippetEdit = approveSnippetEdit;
+    window.rejectSnippetEdit = rejectSnippetEdit;
     window.deleteSnippet = deleteSnippet;
     window.confirmDeleteSnippet = confirmDeleteSnippet;
     window.submitSnippetReview = submitSnippetReview;

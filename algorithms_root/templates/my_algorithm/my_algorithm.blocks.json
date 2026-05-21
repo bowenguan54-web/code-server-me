@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "blocks": [
+    {
+      "id": "blk_r9d04c",
+      "order": 1,
+      "title": "步骤 1：算法逻辑",
+      "description": "在此编写核心算法代码",
+      "hint": "定义算法入口函数，设置参数和返回值",
+      "code": "def my_algorithm(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n        \"passed\": passed,\n    }\n",
+      "locked": true
+    }
+  ]
+}

@@ -34,6 +34,50 @@ async def _json_body(request: Request) -> dict[str, Any]:
     return payload
 
 
+def _package_entry(package: Any, registry: AlgorithmRegistry) -> Any | None:
+    """Return the registry entry that belongs to the concrete package root."""
+
+    package_root = Path(package.root_path).resolve()
+    for entry in registry.get_all():
+        if getattr(entry, "package_id", "") != package.package_id:
+            continue
+        entry_root = getattr(entry, "package_root", "")
+        if entry_root and Path(entry_root).resolve() == package_root:
+            return entry
+    for export_name in package.exports:
+        entry = registry.get_by_id(f"{package.namespace}.{export_name}")
+        if entry is not None:
+            return entry
+    return None
+
+
+def _assert_can_modify_package(package_id: str, request: Request, registry: AlgorithmRegistry) -> Any | None:
+    """Ensure the current user may write files inside a package."""
+
+    package = registry.get_package(package_id)
+    if package is None:
+        return None
+    entry = _package_entry(package, registry)
+    owner_id = str(getattr(entry, "owner_id", "system") or "system")
+    try:
+        user = get_current_user(request)
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=403,
+            detail="公有算法不能直接修改，请另存为私有草稿后提交审核",
+        ) from exc
+    if user.get("role") == "admin":
+        return package
+    if owner_id == "system":
+        raise HTTPException(
+            status_code=403,
+            detail="公有算法不能直接修改，请另存为私有草稿后提交审核",
+        )
+    if user.get("id") != owner_id:
+        raise HTTPException(status_code=403, detail="只有算法创建者可以修改")
+    return package
+
+
 @router.get("/packages")
 async def list_packages(registry: AlgorithmRegistry = Depends(get_registry)) -> dict:
     packages = registry.get_packages()
@@ -62,12 +106,12 @@ async def save_package_file(
     request: Request,
     registry: AlgorithmRegistry = Depends(get_registry),
 ) -> dict:
+    package = _assert_can_modify_package(package_id, request, registry)
     payload = await _json_body(request)
     content = payload.get("content")
     if not isinstance(content, str):
         raise HTTPException(status_code=400, detail="Field 'content' must be a string")
-    package = registry.get_package(package_id)
-    if package is not None and filename.strip().replace("\\", "/") == package.entry:
+    if package is not None and filename.strip().replace("\\", "/") == package.entry_file:
         for export_name in package.exports:
             entry = registry.get_by_id(f"{package.namespace}.{export_name}")
             if entry is not None:
@@ -80,11 +124,33 @@ async def save_package_file(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if package is not None:
-        for export_name in package.exports:
-            entry = registry.get_by_id(f"{package.namespace}.{export_name}")
-            if entry is not None:
-                _append_entry_version(entry, "package.file.saved", note=f"Saved {filename}")
-                break
+        entry = _package_entry(package, registry)
+        if entry is not None:
+            _append_entry_version(entry, "package.file.saved", note=f"Saved {filename}")
+            try:
+                from .publish import _append_history
+
+                user = get_current_user(request)
+                operator = str(user.get("id") or user.get("username") or request.headers.get("X-Operator") or "system")
+                operator_name = str(
+                    user.get("display_name")
+                    or user.get("displayName")
+                    or user.get("username")
+                    or operator
+                )
+                clean_filename = filename.strip().replace("\\", "/")
+                _append_history(
+                    entry,
+                    "saved",
+                    operator=operator,
+                    reason=f"代码保存：{clean_filename}",
+                    operator_name=operator_name,
+                    from_version=str(entry.version or ""),
+                    to_version=str(entry.version or ""),
+                    action_type="code_save",
+                )
+            except HTTPException:
+                raise
     return {"success": True, "functions_detected": functions}
 
 
@@ -104,7 +170,7 @@ async def create_package(
     try:
         u = get_current_user(request)
         current_user_id = u.get("id")
-    except Exception:
+    except HTTPException:
         pass
 
     if current_user_id:

@@ -1,16 +1,38 @@
 /*
  * AlgoLib module: 22-snippets.js
- * ???????????????????????????
- * ???? .run/algo-lib-check.js ??????????????????????
+ * 代码片段编辑、复制、审核、贡献历史与快捷插入逻辑。
  */
+
+    function snippetHistoryRows(history) {
+      const rows = Array.isArray(history) ? history.slice().reverse() : [];
+      if (!rows.length) return '<tr><td colspan="5">暂无修改记录</td></tr>';
+      return rows.map(item => {
+        const fromVersion = item.from_version || "";
+        const toVersion = item.to_version || "";
+        const action = item.action || "";
+        const versionText = fromVersion && toVersion && fromVersion !== toVersion
+          ? `v${fromVersion} → v${toVersion}`
+          : (toVersion ? `→ v${toVersion}` : "-");
+        return `
+          <tr>
+            <td>${esc(item.operator_name || item.operator || "system")}</td>
+            <td>${esc(item.timestamp || "")}</td>
+            <td>${esc(action)}</td>
+            <td>${esc(versionText)}</td>
+            <td>${esc(item.note || "")}</td>
+          </tr>
+        `;
+      }).join("");
+    }
 
     async function editSnippet(id, fork = false) {
       let snippet = id ? (await api(`/api/v1/snippets/${safeId(id)}`)).snippet : {
-        name: "", zh_name: "", body: "", language: "python", tags: [], scope: "private", version: "1.0"
+        name: "", zh_name: "", body: "", language: "python", tags: [], scope: "private", version: "1.0", publish_status: "draft"
       };
-      const publishedReadOnly = getStatus(snippet) === "published" && state.currentUser?.role !== "admin";
-      const saveId = (fork || publishedReadOnly) ? "" : id;
-      if (fork || publishedReadOnly) {
+      const status = getStatus(snippet);
+      const publicEdit = status === "published" && !fork;
+      let saveId = id || "";
+      if (fork) {
         snippet = {
           ...snippet,
           id: "",
@@ -18,26 +40,32 @@
           zh_name: `${snippet.zh_name || snippet.name || "代码片段"} 副本`,
           scope: "private",
           owner_id: state.currentUser?.id || "",
-          publish_status: "draft"
+          publish_status: "draft",
+          review_draft: null
         };
+        saveId = "";
       }
-      state.snippetEditing = { id: saveId, snippet };
+      state.snippetEditing = { id: saveId, snippet, publicEdit };
+      const title = publicEdit ? "编辑公有片段（需审核）" : (saveId ? "编辑代码片段" : "新建代码片段");
+      const saveText = publicEdit ? "提交修改" : "保存";
       qs("#main").innerHTML = `
         <div class="editor-view snippet-editor" id="snippetEditorView">
           <div class="editor-top-info">
             <button onclick="window.closeSnippetEditor()">返回</button>
             <span class="breadcrumb">代码片段 / ${esc(snippet.zh_name || snippet.name || "新建片段")}</span>
-            ${saveId ? `<span class="tag ${statusClass(getStatus(snippet))}">${esc(statusLabel(getStatus(snippet)))}</span>` : `<span class="tag warning">私有草稿</span>`}
+            <span class="tag ${publicEdit ? "warning" : statusClass(getStatus(snippet))}">${esc(publicEdit ? "需审核" : statusLabel(getStatus(snippet)))}</span>
+            <strong style="color:var(--text-dim);font-size:13px">${esc(title)}</strong>
             <span class="spacer"></span>
+            <button onclick="window.showSnippetHistory('${esc(id || "")}')">修改记录</button>
             <button onclick="window.copySnippetFromEditor()">复制</button>
-            <button class="primary" onclick="window.saveSnippet('${esc(saveId)}')">保存</button>
+            <button class="primary" onclick="window.saveSnippet('${esc(saveId)}')">${esc(saveText)}</button>
           </div>
           <div class="snippet-meta">
-            <div class="snippet-top-field"><label>触发名</label><input id="snName" value="${esc(snippet.name)}" placeholder="例如 csv_to_records" /></div>
-            <div class="snippet-top-field"><label>中文名</label><input id="snZhName" value="${esc(snippet.zh_name || "")}" placeholder="例如 CSV 转记录片段" /></div>
-            <div class="snippet-top-field"><label>权限</label><input value="私有（审核通过后变为公有）" disabled /></div>
+            <div class="snippet-top-field"><label>触发名</label><input id="snName" value="${esc(snippet.name || "")}" placeholder="csv_to_records" /></div>
+            <div class="snippet-top-field"><label>中文名</label><input id="snZhName" value="${esc(snippet.zh_name || "")}" placeholder="CSV 转记录片段" /></div>
+            <div class="snippet-top-field"><label>权限</label><input value="${publicEdit ? "公有片段修改审核" : "私有（审核通过后变为公有）"}" disabled /></div>
             <div class="snippet-top-field"><label>语言</label><input id="snLanguage" value="${esc(snippet.language || "python")}" /></div>
-            <div class="snippet-top-field"><label>标签</label><input id="snTags" value="${esc((snippet.tags || []).join(","))}" placeholder="逗号分隔，如 CSV,DataFrame" /></div>
+            <div class="snippet-top-field"><label>标签</label><input id="snTags" value="${esc((snippet.tags || []).join(","))}" placeholder="CSV,DataFrame" /></div>
             <div class="snippet-top-field"><label>版本</label><input id="snVersion" value="${esc(snippet.version || "1.0")}" /></div>
           </div>
           <div class="snippet-code-shell">
@@ -65,11 +93,19 @@
         publish_status: id ? (state.snippetEditing?.snippet?.publish_status || state.snippetEditing?.snippet?.publishStatus || "draft") : "draft"
       };
       try {
-        await api(id ? `/api/v1/snippets/${safeId(id)}` : "/api/v1/snippets", {
-          method: id ? "PATCH" : "POST",
-          body: JSON.stringify(payload)
-        });
-        showToast("片段已保存");
+        if (state.snippetEditing?.publicEdit && id) {
+          await api(`/api/v1/snippets/${safeId(id)}/edit-draft`, {
+            method: "POST",
+            body: JSON.stringify(payload)
+          });
+          showToast("公有代码片段修改已提交审核");
+        } else {
+          await api(id ? `/api/v1/snippets/${safeId(id)}` : "/api/v1/snippets", {
+            method: id ? "PATCH" : "POST",
+            body: JSON.stringify(payload)
+          });
+          showToast("代码片段已保存");
+        }
         await loadModuleData("snippets");
         closeSnippetEditor();
       } catch (error) {
@@ -117,8 +153,7 @@
     }
 
     async function copySnippetFromEditor() {
-      const text = state.snippetEditor?.getValue() || "";
-      await copyTextToClipboard(text);
+      await copyTextToClipboard(state.snippetEditor?.getValue() || "");
     }
 
     async function insertSnippetById(id) {
@@ -144,9 +179,7 @@
         document.body.removeChild(el);
       }
       if (navigator.clipboard) {
-        return navigator.clipboard.writeText(value)
-          .then(() => showToast("已复制到剪贴板"))
-          .catch(() => fallbackCopy());
+        return navigator.clipboard.writeText(value).then(() => showToast("已复制到剪贴板")).catch(() => fallbackCopy());
       }
       fallbackCopy();
       return Promise.resolve();
@@ -178,11 +211,15 @@
       }
     }
 
+    async function forkSnippet(id) {
+      await editSnippet(id, true);
+    }
+
     async function deleteSnippet(id) {
       openModal(`
         <div class="modal-card">
           <h3>删除代码片段</h3>
-          <p>确认删除这个私有代码片段？删除后不可恢复。</p>
+          <p>确认删除这个代码片段？删除后不可恢复。</p>
           <div class="modal-actions">
             <button onclick="window.closeModal()">取消</button>
             <button class="danger" onclick="window.confirmDeleteSnippet('${esc(id)}')">确认删除</button>
@@ -195,7 +232,7 @@
       try {
         await api(`/api/v1/snippets/${safeId(id)}`, { method: "DELETE" });
         closeModal();
-        showToast("片段已删除");
+        showToast("代码片段已删除");
         await loadModuleData("snippets");
         renderNav();
         renderCards("snippets");
@@ -259,6 +296,53 @@
       }
     }
 
+    async function approveSnippetEdit(id) {
+      try {
+        await api(`/api/v1/snippets/${safeId(id)}/approve-edit`, { method: "POST" });
+        await refreshSnippetsAfterReview("公有片段修改已通过");
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    async function rejectSnippetEdit(id) {
+      const comment = prompt("请输入驳回原因", "修改说明不足或实现需调整。") || "";
+      try {
+        await api(`/api/v1/snippets/${safeId(id)}/reject-edit`, {
+          method: "POST",
+          body: JSON.stringify({ comment })
+        });
+        await refreshSnippetsAfterReview("公有片段修改已驳回");
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
+    async function showSnippetHistory(id) {
+      if (!id) {
+        showToast("请先保存代码片段");
+        return;
+      }
+      try {
+        const data = await api(`/api/v1/snippets/${safeId(id)}`);
+        const snippet = data.snippet || {};
+        const draft = snippet.review_draft || snippet.reviewDraft || null;
+        openModal(`
+          <div class="modal-card" style="max-width:880px">
+            <h3>修改记录 / ${esc(snippet.zh_name || snippet.name || id)}</h3>
+            ${draft ? `<p class="desc">当前修改草稿：${esc(draft.status || "")}${draft.reject_reason ? `，驳回原因：${esc(draft.reject_reason)}` : ""}</p>` : ""}
+            <table class="api-table">
+              <thead><tr><th>贡献人</th><th>时间</th><th>动作</th><th>版本</th><th>备注</th></tr></thead>
+              <tbody>${snippetHistoryRows(snippet.history || [])}</tbody>
+            </table>
+            <div class="modal-actions"><button onclick="window.closeModal()">关闭</button></div>
+          </div>
+        `);
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+
     function openSnippetOverlay() {
       const overlay = qs("#snippetOverlay");
       overlay.classList.remove("hidden");
@@ -293,8 +377,8 @@
       overlay.classList.remove("hidden");
       overlay.innerHTML = `
         <div class="overlay-card">
-          <div style="color:#94a3b8;font-size:11px;margin-bottom:8px">Ctrl+Alt+I &nbsp;|&nbsp; 搜索算法，回车插入调用代码</div>
-          <input id="algoCallSearchInput" placeholder="搜索算法名称 / 调用前缀…" autocomplete="off" style="width:100%;box-sizing:border-box" />
+          <div style="color:#94a3b8;font-size:11px;margin-bottom:8px">Ctrl+Alt+I | 搜索算法，回车插入调用代码</div>
+          <input id="algoCallSearchInput" placeholder="搜索算法名称 / 调用前缀" autocomplete="off" style="width:100%;box-sizing:border-box" />
           <div id="algoCallResults" style="max-height:320px;overflow-y:auto;margin-top:6px"></div>
         </div>
       `;
@@ -304,16 +388,15 @@
       input.addEventListener("input", () => _renderAlgoCallResults(input.value));
       input.addEventListener("keydown", event => {
         if (event.key === "Escape") { closeOverlay(); }
-        if (event.key === "ArrowDown") { state.algoCallCursor = Math.min(state.algoCallCursor + 1, state.algoCallResults.length - 1); _renderAlgoCallResults(); event.preventDefault(); }
-        if (event.key === "ArrowUp") { state.algoCallCursor = Math.max(state.algoCallCursor - 1, 0); _renderAlgoCallResults(); event.preventDefault(); }
+        if (event.key === "ArrowDown") { state.algoCallCursor = Math.min(state.algoCallCursor + 1, state.algoCallResults.length - 1); _renderAlgoCallResults(input.value); event.preventDefault(); }
+        if (event.key === "ArrowUp") { state.algoCallCursor = Math.max(state.algoCallCursor - 1, 0); _renderAlgoCallResults(input.value); event.preventDefault(); }
         if (event.key === "Enter") {
           const item = state.algoCallResults[state.algoCallCursor];
           if (item) { _insertAlgoCall(item); closeOverlay(); }
         }
       });
-      // 如果补全数据还没加载则先拉取，完成后再渲染结果
       if (!state.completionItems || state.completionItems.length === 0) {
-        qs("#algoCallResults").innerHTML = '<div class="empty" style="color:#94a3b8;padding:12px">数据加载中…</div>';
+        qs("#algoCallResults").innerHTML = '<div class="empty" style="color:#94a3b8;padding:12px">数据加载中...</div>';
         registerCompletionProvider().then(() => _renderAlgoCallResults(input.value || ""));
       } else {
         _renderAlgoCallResults("");
@@ -338,16 +421,17 @@
         const call = item.callPrefix || item.call_prefix || "";
         const desc = item.zhDescription || item.zh_description || "";
         const params = (item.params || []).map(p => p.name || "arg").join(", ");
+        const privacy = isPublicItem(item) ? "公有" : "私有";
         return `
           <div class="snippet-result ${index === state.algoCallCursor ? "active" : ""}" onclick="window._pickAlgoCall(${index})" style="display:flex;flex-direction:column;gap:3px">
             <div style="display:flex;align-items:baseline;gap:10px">
-              <code style="color:#7dd3fc;font:13px/1.4 Consolas,'Courier New',monospace;flex-shrink:0">${esc(call)}</code>
+              <code style="color:#7dd3fc;font:13px/1.4 Consolas,'Courier New',monospace;flex-shrink:0">[${esc(privacy)}] ${esc(call)}</code>
               <span style="color:#94a3b8;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(desc.slice(0, 50))}</span>
             </div>
             ${params ? `<span style="color:#6ee7b7;font:11px/1.3 Consolas,'Courier New',monospace">(${esc(params)})</span>` : ""}
           </div>
         `;
-      }).join("") || '<div class="empty" style="color:#94a3b8;padding:12px">暂无算法（请稍候数据加载）</div>';
+      }).join("") || '<div class="empty" style="color:#94a3b8;padding:12px">暂无算法</div>';
     }
 
     function _insertAlgoCall(item) {
@@ -378,12 +462,15 @@
 
     function renderSnippetResults() {
       const root = qs("#snippetSearchResults");
-      root.innerHTML = state.snippetResults.map((snippet, index) => `
-        <div class="snippet-result ${index === state.snippetCursor ? "active" : ""}" onclick="window.pickSnippet(${index})">
-          <strong>${esc(snippet.zh_name || snippet.name)}</strong>
-          <div class="snippet-preview">${esc(String(snippet.body || "").slice(0, 40))}</div>
-        </div>
-      `).join("") || '<div class="empty">暂无片段</div>';
+      root.innerHTML = state.snippetResults.map((snippet, index) => {
+        const privacy = snippet.publish_status === "published" || snippet.scope === "team" ? "公有" : "私有";
+        return `
+          <div class="snippet-result ${index === state.snippetCursor ? "active" : ""}" onclick="window.pickSnippet(${index})">
+            <strong>[${esc(privacy)}] ${esc(snippet.zh_name || snippet.name)}</strong>
+            <div class="snippet-preview">${esc(String(snippet.body || "").slice(0, 40))}</div>
+          </div>
+        `;
+      }).join("") || '<div class="empty">暂无片段</div>';
     }
 
     function pickSnippet(index) {

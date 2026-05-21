@@ -1,0 +1,15 @@
+INFO:     Will watch for changes in these directories: ['E:\\code-server-me']
+INFO:     Uvicorn running on http://127.0.0.1:18000 (Press CTRL+C to quit)
+INFO:     Started reloader process [18552] using WatchFiles
+INFO:     Started server process [13468]
+INFO:     Waiting for application startup.
+2026-05-21 09:51:03,206 INFO algo_service.main: Scanned E:\code-server-me\algorithms_root ¡ú 118 algorithms
+2026-05-21 09:51:03,256 INFO algo_service.main: Scanned E:\code-server-me\algorithms_root\demo ¡ú 118 algorithms
+2026-05-21 09:51:03,277 INFO algo_service.main: Scanned E:\code-server-me\algorithms_root\library ¡ú 118 algorithms
+2026-05-21 09:51:03,299 INFO algo_service.main: Scanned E:\code-server-me\algorithms_root\users ¡ú 118 algorithms
+2026-05-21 09:51:03,301 INFO algo_service.sdk.file_watcher: Watching: E:\code-server-me\algorithms_root
+2026-05-21 09:51:03,302 INFO algo_service.sdk.file_watcher: Watching: E:\code-server-me\algorithms_root\demo
+2026-05-21 09:51:03,303 INFO algo_service.sdk.file_watcher: Watching: E:\code-server-me\algorithms_root\library
+2026-05-21 09:51:03,304 INFO algo_service.sdk.file_watcher: Watching: E:\code-server-me\algorithms_root\users
+2026-05-21 09:51:03,307 INFO algo_service.sdk.file_watcher: FileWatcher started.
+INFO:     Application startup complete.

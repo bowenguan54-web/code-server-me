@@ -1,10 +1,10 @@
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3JfYWRtaW4iLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc5MzMxMTY2fQ.ysWRGUbSw0J4BL-2pHgzWIYSyiXZhtiko1LEmZiRzo8",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3JfemhhbmdzYW4iLCJ1c2VybmFtZSI6InpoYW5nc2FuIiwicm9sZSI6InVzZXIiLCJleHAiOjE3Nzk0MzcxMzB9.wfNTSSl568YfmuFSaW3H8sZG_-0JrNxV5LNGyo776vE",
   "user": {
-    "id": "usr_admin",
-    "username": "admin",
-    "role": "admin",
-    "display_name": "管理员"
+    "id": "usr_zhangsan",
+    "username": "zhangsan",
+    "role": "user",
+    "display_name": "张三"
   },
-  "updated_at": "2026-05-20T02:39:26.382827+00:00"
+  "updated_at": "2026-05-21T08:05:30.793278+00:00"
 }

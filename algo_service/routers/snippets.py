@@ -11,7 +11,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from ..models.schemas import SnippetCreate, SnippetUpdate
-from ..sdk.auth_utils import get_current_user
+from ..sdk.auth_utils import get_current_user, require_admin
 
 router = APIRouter(prefix="/api/v1", tags=["snippets"])
 
@@ -49,10 +49,10 @@ def _save_store(items: list[dict[str, Any]]) -> None:
         raise HTTPException(status_code=500, detail=f"Cannot write snippets store: {exc}") from exc
 
 
-def _normalize_tags(tags: list[str]) -> list[str]:
+def _normalize_tags(tags: list[str] | None) -> list[str]:
     """Normalize a snippet tag list."""
 
-    return [str(tag).strip() for tag in tags if str(tag).strip()]
+    return [str(tag).strip() for tag in (tags or []) if str(tag).strip()]
 
 
 def _validate_scope(scope: str) -> str:
@@ -81,12 +81,19 @@ def _normalize_snippet(item: dict[str, Any]) -> dict[str, Any]:
     item.setdefault("tags", [])
     item.setdefault("language", "python")
     item.setdefault("version", "1.0")
+    item.setdefault("history", [])
+    item.setdefault("review_draft", None)
+    item["tags"] = _normalize_tags(item.get("tags", []))
     status = str(item.get("publish_status") or "draft")
     if status == "published":
         item["scope"] = "team"
         item["owner_id"] = "system"
     elif item.get("scope") == "team":
         item["scope"] = "private"
+    if item.get("review_draft") is not None and not isinstance(item.get("review_draft"), dict):
+        item["review_draft"] = None
+    if not isinstance(item.get("history"), list):
+        item["history"] = []
     return item
 
 
@@ -105,6 +112,20 @@ def _is_admin(user: dict[str, Any] | None) -> bool:
     return bool(user and user.get("role") == "admin")
 
 
+def _user_id(user: dict[str, Any] | None) -> str:
+    """Return a stable user id for history records."""
+
+    return str((user or {}).get("id") or "system")
+
+
+def _user_name(user: dict[str, Any] | None) -> str:
+    """Return a display name for history records."""
+
+    if not user:
+        return "system"
+    return str(user.get("display_name") or user.get("username") or user.get("id") or "system")
+
+
 def _snippet_visible(snippet: dict[str, Any], user: dict[str, Any] | None) -> bool:
     """Return whether a snippet is visible to the current user."""
 
@@ -116,11 +137,11 @@ def _snippet_visible(snippet: dict[str, Any], user: dict[str, Any] | None) -> bo
         return True
     if user is None:
         return False
-    return bool(user and owner_id == user.get("id"))
+    return owner_id in {"", _user_id(user)}
 
 
 def _can_edit_snippet(snippet: dict[str, Any], user: dict[str, Any] | None) -> bool:
-    """Return whether the current user can mutate a stored snippet."""
+    """Return whether the current user can directly mutate a stored snippet."""
 
     if _is_admin(user):
         return True
@@ -129,7 +150,7 @@ def _can_edit_snippet(snippet: dict[str, Any], user: dict[str, Any] | None) -> b
     if snippet.get("publish_status") == "published":
         return False
     owner_id = str(snippet.get("owner_id", ""))
-    return owner_id in {"", str(user.get("id", ""))}
+    return owner_id in {"", _user_id(user)}
 
 
 def _require_snippet_edit(snippet: dict[str, Any], user: dict[str, Any] | None) -> None:
@@ -156,6 +177,40 @@ def _assert_unique_name(items: list[dict[str, Any]], name: str, current_id: str 
             raise HTTPException(status_code=409, detail=f"Snippet name already exists: {normalized}")
 
 
+def _append_history(
+    snippet: dict[str, Any],
+    action: str,
+    user: dict[str, Any] | None,
+    *,
+    from_version: str = "",
+    to_version: str = "",
+    note: str = "",
+) -> None:
+    """Append a persistent snippet contribution history item."""
+
+    history = snippet.setdefault("history", [])
+    if not isinstance(history, list):
+        history = []
+        snippet["history"] = history
+    history.append(
+        {
+            "operator": _user_id(user),
+            "operator_name": _user_name(user),
+            "timestamp": _now_iso(),
+            "action": action,
+            "from_version": from_version,
+            "to_version": to_version,
+            "note": note,
+        }
+    )
+
+
+def _get_json_body(request: Request) -> dict[str, Any]:
+    """Placeholder for type checkers; async routes parse JSON directly."""
+
+    raise RuntimeError("Use await request.json() inside async routes")
+
+
 @router.get("/snippets")
 async def list_snippets(
     request: Request,
@@ -166,8 +221,7 @@ async def list_snippets(
     """Return snippets filtered by scope, language, and fuzzy keyword."""
 
     user = _optional_current_user(request)
-    items = _load_store()
-    items = [item for item in items if _snippet_visible(item, user)]
+    items = [item for item in _load_store() if _snippet_visible(item, user)]
     if scope:
         items = [item for item in items if item.get("scope") == scope]
     if language:
@@ -186,13 +240,12 @@ async def list_snippets(
 
 @router.post("/snippets")
 async def create_snippet(payload: SnippetCreate, request: Request) -> dict[str, Any]:
-    """Create a new snippet with a globally unique trigger name."""
+    """Create a new private snippet with a globally unique trigger name."""
 
     user = _optional_current_user(request)
     items = _load_store()
     _assert_unique_name(items, payload.name)
     now = _now_iso()
-    status = "draft"
     snippet = {
         "id": f"snip_{uuid4().hex[:8]}",
         "name": payload.name.strip(),
@@ -202,11 +255,14 @@ async def create_snippet(payload: SnippetCreate, request: Request) -> dict[str, 
         "tags": _normalize_tags(payload.tags),
         "scope": "private",
         "version": payload.version or "1.0",
-        "owner_id": str(user.get("id")) if user else "system",
-        "publish_status": status,
+        "owner_id": _user_id(user),
+        "publish_status": "draft",
+        "history": [],
+        "review_draft": None,
         "created_at": now,
         "updated_at": now,
     }
+    _append_history(snippet, "create", user, to_version=str(snippet["version"]), note="创建私有代码片段")
     items.append(snippet)
     _save_store(items)
     return {"success": True, "snippet": snippet}
@@ -214,7 +270,7 @@ async def create_snippet(payload: SnippetCreate, request: Request) -> dict[str, 
 
 @router.get("/snippets/{snippet_id}")
 async def get_snippet(snippet_id: str, request: Request) -> dict[str, Any]:
-    """Return one snippet including its raw body."""
+    """Return one snippet including its raw body and history."""
 
     user = _optional_current_user(request)
     items = _load_store()
@@ -228,7 +284,7 @@ async def get_snippet(snippet_id: str, request: Request) -> dict[str, Any]:
 
 @router.patch("/snippets/{snippet_id}")
 async def update_snippet(snippet_id: str, payload: SnippetUpdate, request: Request) -> dict[str, Any]:
-    """Update a snippet and refresh its updated timestamp."""
+    """Update a directly editable snippet and refresh its updated timestamp."""
 
     user = _optional_current_user(request)
     items = _load_store()
@@ -237,20 +293,29 @@ async def update_snippet(snippet_id: str, payload: SnippetUpdate, request: Reque
         raise HTTPException(status_code=404, detail=f"Snippet not found: {snippet_id}")
     _require_snippet_edit(snippet, user)
 
-    update = payload.model_dump(exclude_unset=True)
+    update = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
+    before_version = str(snippet.get("version") or "1.0")
     if "name" in update and update["name"] is not None:
         _assert_unique_name(items, str(update["name"]), current_id=snippet_id)
         snippet["name"] = str(update["name"]).strip()
-    if "scope" in update and update["scope"] is not None and user and user.get("role") == "admin":
+    if "scope" in update and update["scope"] is not None and _is_admin(user):
         snippet["scope"] = _validate_scope(str(update["scope"]))
     if "tags" in update and update["tags"] is not None:
         snippet["tags"] = _normalize_tags(update["tags"])
-    if "publish_status" in update and update["publish_status"] is not None and user and user.get("role") == "admin":
+    if "publish_status" in update and update["publish_status"] is not None and _is_admin(user):
         snippet["publish_status"] = _validate_status(str(update["publish_status"]))
     for key in ("zh_name", "body", "language", "version"):
         if key in update and update[key] is not None:
             snippet[key] = update[key]
     snippet["updated_at"] = _now_iso()
+    _append_history(
+        snippet,
+        "update",
+        user,
+        from_version=before_version,
+        to_version=str(snippet.get("version") or before_version),
+        note="更新代码片段",
+    )
     _save_store(items)
     return {"success": True, "snippet": snippet}
 
@@ -267,8 +332,6 @@ async def delete_snippet(snippet_id: str, request: Request) -> dict[str, Any]:
     if snippet.get("publish_status") == "published" and not _is_admin(user):
         raise HTTPException(status_code=403, detail="公有代码片段不能由普通用户删除")
     _require_snippet_edit(snippet, user)
-    if user and not snippet.get("owner_id") and snippet.get("scope") == "private":
-        snippet["owner_id"] = str(user.get("id", ""))
     remaining = [item for item in items if item.get("id") != snippet_id]
     _save_store(remaining)
     return {"success": True, "deleted": snippet_id}
@@ -297,8 +360,7 @@ def _transition_snippet_status(
     current = str(snippet.get("publish_status", "draft"))
     if current not in allowed_from:
         raise HTTPException(status_code=400, detail=f"当前状态 {current} 不允许执行该操作")
-    if user and not snippet.get("owner_id") and snippet.get("scope") == "private":
-        snippet["owner_id"] = str(user.get("id", ""))
+    before_version = str(snippet.get("version") or "1.0")
     snippet["publish_status"] = _validate_status(target_status)
     if target_status == "published":
         snippet["scope"] = "team"
@@ -306,6 +368,14 @@ def _transition_snippet_status(
     if comment:
         snippet["review_comment"] = comment
     snippet["updated_at"] = _now_iso()
+    _append_history(
+        snippet,
+        target_status,
+        user,
+        from_version=before_version,
+        to_version=str(snippet.get("version") or before_version),
+        note=comment,
+    )
     _save_store(items)
     return {"success": True, "snippet": snippet}
 
@@ -328,13 +398,7 @@ async def withdraw_snippet(snippet_id: str, request: Request) -> dict[str, Any]:
 async def approve_snippet(snippet_id: str, request: Request) -> dict[str, Any]:
     """Mark a snippet review as approved. Admin only."""
 
-    return _transition_snippet_status(
-        snippet_id,
-        request,
-        "approved",
-        allowed_from={"reviewing"},
-        admin_only=True,
-    )
+    return _transition_snippet_status(snippet_id, request, "approved", allowed_from={"reviewing"}, admin_only=True)
 
 
 @router.post("/snippets/{snippet_id}/reject")
@@ -344,7 +408,7 @@ async def reject_snippet(snippet_id: str, request: Request) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     try:
         payload = await request.json()
-    except ValueError:
+    except json.JSONDecodeError:
         payload = {}
     return _transition_snippet_status(
         snippet_id,
@@ -367,3 +431,135 @@ async def publish_snippet(snippet_id: str, request: Request) -> dict[str, Any]:
         allowed_from={"approved", "reviewing"},
         admin_only=True,
     )
+
+
+@router.get("/snippets/{snippet_id}/edit-draft")
+async def get_snippet_edit_draft(snippet_id: str, request: Request) -> dict[str, Any]:
+    """Return the current pending public-snippet edit draft."""
+
+    user = _optional_current_user(request)
+    items = _load_store()
+    snippet = _find_snippet(items, snippet_id)
+    if snippet is None:
+        raise HTTPException(status_code=404, detail=f"Snippet not found: {snippet_id}")
+    draft = snippet.get("review_draft")
+    if not draft:
+        return {"success": True, "draft": None}
+    allowed = _is_admin(user) or _user_id(user) in {str(draft.get("submitter_id", "")), str(snippet.get("owner_id", ""))}
+    if not allowed:
+        raise HTTPException(status_code=403, detail="无权查看该修改草稿")
+    return {"success": True, "draft": draft}
+
+
+@router.post("/snippets/{snippet_id}/edit-draft")
+async def submit_snippet_edit_draft(snippet_id: str, request: Request) -> dict[str, Any]:
+    """Submit a public snippet edit draft without mutating the published snippet."""
+
+    user = get_current_user(request)
+    items = _load_store()
+    snippet = _find_snippet(items, snippet_id)
+    if snippet is None:
+        raise HTTPException(status_code=404, detail=f"Snippet not found: {snippet_id}")
+    if snippet.get("publish_status") != "published":
+        raise HTTPException(status_code=400, detail="只有公有代码片段需要提交修改审核")
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="请求体必须是 JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="请求体必须是对象")
+    new_name = str(payload.get("name") or snippet.get("name") or "").strip()
+    _assert_unique_name(items, new_name, current_id=snippet_id)
+    base_version = str(snippet.get("version") or "1.0")
+    raw_tags = payload.get("tags", snippet.get("tags", []))
+    if isinstance(raw_tags, str):
+        raw_tags = raw_tags.split(",")
+    metadata = {
+        "name": new_name,
+        "zh_name": str(payload.get("zh_name") or snippet.get("zh_name") or ""),
+        "language": str(payload.get("language") or snippet.get("language") or "python"),
+        "tags": _normalize_tags(raw_tags if isinstance(raw_tags, list) else []),
+        "version": str(payload.get("version") or base_version),
+    }
+    draft = {
+        "body": str(payload.get("body") if payload.get("body") is not None else snippet.get("body") or ""),
+        "metadata": metadata,
+        "submitter_id": _user_id(user),
+        "submitter_name": _user_name(user),
+        "status": "reviewing",
+        "submitted_at": _now_iso(),
+        "base_version": base_version,
+        "reject_reason": "",
+    }
+    snippet["review_draft"] = draft
+    snippet["updated_at"] = _now_iso()
+    _append_history(snippet, "edit_submitted", user, from_version=base_version, to_version=metadata["version"], note="提交公有片段修改")
+    _save_store(items)
+    return {"success": True, "snippet": snippet, "draft": draft}
+
+
+@router.post("/snippets/{snippet_id}/approve-edit")
+async def approve_snippet_edit_draft(snippet_id: str, request: Request) -> dict[str, Any]:
+    """Apply a pending public-snippet edit draft. Admin only."""
+
+    user = require_admin(get_current_user(request))
+    items = _load_store()
+    snippet = _find_snippet(items, snippet_id)
+    if snippet is None:
+        raise HTTPException(status_code=404, detail=f"Snippet not found: {snippet_id}")
+    draft = snippet.get("review_draft")
+    if not isinstance(draft, dict) or draft.get("status") not in {"pending", "reviewing"}:
+        raise HTTPException(status_code=400, detail="没有待审核的片段修改")
+    before_version = str(snippet.get("version") or "1.0")
+    metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+    snippet["body"] = str(draft.get("body") or "")
+    for key in ("name", "zh_name", "language", "version"):
+        if key in metadata:
+            snippet[key] = metadata[key]
+    if isinstance(metadata.get("tags"), list):
+        snippet["tags"] = _normalize_tags(metadata["tags"])
+    snippet["publish_status"] = "published"
+    snippet["scope"] = "team"
+    snippet["owner_id"] = "system"
+    snippet["updated_at"] = _now_iso()
+    _append_history(
+        snippet,
+        "edit_approved",
+        user,
+        from_version=before_version,
+        to_version=str(snippet.get("version") or before_version),
+        note=f"通过 {draft.get('submitter_name') or draft.get('submitter_id') or '用户'} 的修改",
+    )
+    snippet["review_draft"] = None
+    _save_store(items)
+    return {"success": True, "snippet": snippet}
+
+
+@router.post("/snippets/{snippet_id}/reject-edit")
+async def reject_snippet_edit_draft(snippet_id: str, request: Request) -> dict[str, Any]:
+    """Reject a pending public-snippet edit draft. Admin only."""
+
+    user = require_admin(get_current_user(request))
+    items = _load_store()
+    snippet = _find_snippet(items, snippet_id)
+    if snippet is None:
+        raise HTTPException(status_code=404, detail=f"Snippet not found: {snippet_id}")
+    draft = snippet.get("review_draft")
+    if not isinstance(draft, dict) or draft.get("status") not in {"pending", "reviewing"}:
+        raise HTTPException(status_code=400, detail="没有待审核的片段修改")
+    payload: dict[str, Any] = {}
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        payload = {}
+    reason = str(payload.get("comment") or payload.get("reason") or "")
+    draft["status"] = "rejected"
+    draft["reviewed_at"] = _now_iso()
+    draft["reviewer_id"] = _user_id(user)
+    draft["reviewer_name"] = _user_name(user)
+    draft["reject_reason"] = reason
+    snippet["review_draft"] = draft
+    snippet["updated_at"] = _now_iso()
+    _append_history(snippet, "edit_rejected", user, from_version=str(snippet.get("version") or "1.0"), note=reason)
+    _save_store(items)
+    return {"success": True, "snippet": snippet, "draft": draft}
