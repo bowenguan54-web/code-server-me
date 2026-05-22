@@ -1,7 +1,7 @@
 /*
  * AlgoLib module: 14-editor-save-namespace.js
- * ????????????????????????????
- * ???? .run/algo-lib-check.js ??????????????????????
+ * 编辑器保存、命名空间更新和私有草稿另存逻辑。
+ * 修改后请运行 .run/build-algo-lib.sh 重新合并。
  */
 
     async function reloadEditorListData(page) {
@@ -37,6 +37,13 @@
       const funcName = requestedName;
       const category = algo.namespace || "custom";
       const moduleKind = state.editing.page === "templates" ? "template" : "component";
+      const originalCallPrefix = algo.callPrefix || algo.displayNamespace || "";
+      const namespaceChanged = funcName !== oldFuncName;
+      const publicSource = typeof isPublicItem === "function"
+        ? isPublicItem(algo)
+        : String(algo.ownerId || algo.owner_id || "system") === "system";
+      const targetPublicId = (!namespaceChanged && publicSource) ? (algo.registryId || algo.id || "") : "";
+      const targetPublicCallPrefix = targetPublicId ? originalCallPrefix : "";
       const entryFile = files.find(file => file.isEntry) || files.find(file => file.filename === state.currentFile) || files[0];
       const escapeRegExp = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const renameEntryFunction = (code, fromName, toName) => {
@@ -67,6 +74,8 @@
               publish_status: "draft",
               input_example: algo.inputExample || "",
               widget_overrides: algo.widgetOverrides || algo.widget_overrides || {},
+              target_public_id: targetPublicId,
+              target_public_call_prefix: targetPublicCallPrefix,
               files: packageFiles
             })
           });
@@ -86,7 +95,8 @@
             state.highlightId = newAlgo.id;
             state.editing.id = newAlgo.id;
             state.editing.algo = newAlgo;
-            await openEditor(newAlgo, state.editing.page);
+            state.editing.package = newPackage || state.editing.package;
+            refreshEditorStatusButtons();
           } else {
             state.editing.package = newPackage || state.editing.package;
             showToast("✅ 已另存为您的私有草稿（多文件）");
@@ -112,7 +122,9 @@
             code: entryContent,
             module_kind: moduleKind,
             publish_status: "draft",
-            input_example: algo.inputExample || ""
+            input_example: algo.inputExample || "",
+            target_public_id: targetPublicId,
+            target_public_call_prefix: targetPublicCallPrefix
           })
         });
         const newAlgo = result.algorithm;
@@ -133,7 +145,6 @@
           // Update namespace display to new algo
           const nsInput = qs("#nsInput");
           if (nsInput) nsInput.value = namespaceFunction(newAlgo);
-          await openEditor(newAlgo, state.editing.page);
         }
       } catch (err) {
         showToast(err.message);

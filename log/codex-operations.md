@@ -504,3 +504,24 @@ ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接�
 - 修改 `.run/algo-modules/14-editor-save-namespace.js`：关闭编辑器时延迟恢复滚动位置，让 `switchPage()` 完成异步渲染后再恢复，减少返回后页面卡在加载态的问题。
 - 修改 `.run/algo-modules/17-algo-info-admin-publish.js`：正式发布后按当前页父级刷新列表，支持在分类子页中正确重绘卡片。
 - 验证：已运行 `python -m py_compile algo_service/routers/algorithms.py`、`node --check` 检查相关模块和两个 bundle；已运行 `bash .run/build-algo-lib.sh all` 完成构建并注入 `src/browser/pages/algo-lib.html`；确认 `publish-history` 路由注册顺序位于通配详情路由之前。
+
+## 2026-05-21 20:53:42 +08:00 - 完成公有算法另存私有草稿与版本迭代关联
+- 后端 `algo_service/routers/algorithms.py`：`AlgorithmCreateRequest` 新增 `target_public_id/target_public_call_prefix`，认证用户新建或另存算法一律写入 `algorithms_root/users/{user_id}/{namespace}_{funcName}/`，并禁止同一用户重复创建同名私有草稿，避免覆盖公有目录。
+- 后端 `algo_service/routers/algorithms.py`：`_entry_dict()` 返回 `targetPublicId/targetPublicCallPrefix`；提交审核时优先读取私有草稿中的目标公有算法信息，自动识别“版本迭代”类型；发布版本迭代后会把私有草稿代码应用到目标公有算法，并清理私有草稿目录。
+- 后端 `algo_service/routers/algorithms.py`：新增 `/api/v1/algorithms/check-duplicate`，用于按 owner 范围检查同名算法；新建发布时如已有同名公有算法会返回冲突提示。
+- 后端 `algo_service/sdk/registry.py`：私有 package 继续使用扁平目录，并在 `algopack.json` 中保留 `target_public_id/target_public_call_prefix`，支持多文件算法版本迭代关联。
+- 后端 `algo_service/routers/packages.py`：确认 package 文件保存使用 `package.entry_file`，并保留公有 package 普通用户禁止直写、私有 package 仅 owner/admin 可写的权限校验。
+- 前端 `.run/algo-modules/14-editor-save-namespace.js`：普通用户保存公有算法时会另存为私有草稿；若函数名未变，会向后端传入原公有算法 id 和调用前缀作为版本迭代关联；另存后不再重新打开编辑器，避免返回列表时卡在骨架屏。
+- 前端 `.run/algo-modules/10-workspace-monaco-save.js`：新建算法保存前增加后端同 owner 重名检查，允许公有与私有同名共存，但禁止同一用户私有空间同名。
+- 构建与验证：已运行 `python -m py_compile algo_service/routers/algorithms.py algo_service/routers/packages.py algo_service/sdk/registry.py algo_service/models/schemas.py`；已运行 `node --check` 检查修改模块和两个 bundle；已运行 `bash .run/build-algo-lib.sh all` 完成构建并注入 `src/browser/pages/algo-lib.html`。
+
+## 2026-05-21 21:04:43 +08:00 - 恢复审核相关弹窗中文
+- 修复 `.run/algo-modules/20-review-submit.js`：恢复提交审核、版本迭代提示、驳回记录查看、撤回/放弃修改等弹窗中文，保留 `targetPublicId/targetPublicCallPrefix` 自动识别版本迭代的逻辑。
+- 修复 `.run/algo-modules/21-review-admin-actions.js`：恢复管理员审核通过、版本选择、代码对比、驳回、发布、版本历史、API 文档、删除确认等弹窗中文。
+- 构建与验证：已运行 `node --check .run/algo-modules/20-review-submit.js`、`node --check .run/algo-modules/21-review-admin-actions.js`、`python -m py_compile algo_service/routers/algorithms.py algo_service/routers/packages.py algo_service/sdk/registry.py algo_service/models/schemas.py`；已运行 `bash .run/build-algo-lib.sh all` 完成构建注入，并通过两个 bundle 的 `node --check`；已用 `rg` 确认构建产物中不再包含本次相关中文乱码片段。
+
+## 2026-05-21 21:42:12 +08:00 - 继续公有算法另存私有草稿任务收尾
+- 复查公有算法编辑保护链路：前端 `14-editor-save-namespace.js` 中非 owner 保存会走 `_saveAsPrivateDraft()`，不会直接写公有单文件或 package；同名未改时会提交 `target_public_id/target_public_call_prefix` 用于后续版本迭代。
+- 复查后端链路：`algorithms.py` 已支持私有草稿物理隔离、同 owner 重名检查、`check-duplicate`、版本迭代审核与发布；`packages.py` 已使用 `package.entry_file`，未发现 `package.entry` 误用。
+- 复查乱码：`20-review-submit.js`、`21-review-admin-actions.js` 和 `17-algo-info-admin-publish.js` 未发现连续问号界面文案；构建产物中剩余的 `????` 位于模块头部注释，不影响页面显示。
+- 验证：已运行 `node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`、`python -m py_compile algo_service/routers/algorithms.py algo_service/routers/packages.py algo_service/sdk/registry.py algo_service/models/schemas.py`；已重新运行 `bash .run/build-algo-lib.sh all` 完成构建并注入 `src/browser/pages/algo-lib.html`。

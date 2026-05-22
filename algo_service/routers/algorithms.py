@@ -124,11 +124,28 @@ def _entry_publish_history(entry: AlgorithmEntry) -> list[dict[str, Any]]:
     return raw if isinstance(raw, list) else []
 
 
+def _entry_target_public(entry: AlgorithmEntry) -> dict[str, str]:
+    """Read version-iteration target metadata from the owning manifest."""
+
+    try:
+        config_path = _entry_config_path(entry)
+        if not config_path.exists():
+            return {"target_public_id": "", "target_public_call_prefix": ""}
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"target_public_id": "", "target_public_call_prefix": ""}
+    return {
+        "target_public_id": str(config.get("target_public_id") or ""),
+        "target_public_call_prefix": str(config.get("target_public_call_prefix") or ""),
+    }
+
+
 def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
     publish_status = _read_entry_publish_status(entry)
     display_namespace = entry.call_prefix or f"alg.{entry.namespace}.{entry.func_name}"
     category = _read_entry_category(entry)
     review_draft = _load_review_draft(entry)
+    target_public = _entry_target_public(entry)
     return {
         "id": _entry_client_id(entry),
         "registryId": entry.id,
@@ -163,7 +180,8 @@ def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
         "contributors": _entry_contributors(entry),
         "rejectReason": review_draft.get("reject_reason", "") if review_draft else "",
         "reviewKind": review_draft.get("review_kind", "") if review_draft else "",
-        "targetPublicCallPrefix": review_draft.get("target_public_call_prefix", "") if review_draft else "",
+        "targetPublicId": review_draft.get("target_public_id", "") if review_draft else target_public.get("target_public_id", ""),
+        "targetPublicCallPrefix": review_draft.get("target_public_call_prefix", "") if review_draft else target_public.get("target_public_call_prefix", ""),
     }
 
 
@@ -1767,7 +1785,7 @@ async def create_algorithm(
         target_file = target_folder / f"{func_name}.py"
 
     if current_user_id and target_folder.exists():
-        # 只允许覆盖当前用户自己的私有草稿目录；任何其他 owner 都不能被触碰。
+        # 同一用户私有空间内不允许创建同名算法；后续编辑应走保存文件接口。
         owner_cfg = target_folder / "folder_config.json"
         existing_owner_id: str | None = None
         try:
@@ -1777,6 +1795,7 @@ async def create_algorithm(
             existing_owner_id = None
         if existing_owner_id != current_user_id:
             raise HTTPException(status_code=409, detail="目标私有草稿目录已存在但不属于当前用户，请换一个函数名")
+        raise HTTPException(status_code=409, detail="您已有同名私有算法草稿，请修改函数名或所属分类")
     elif target_file.exists():
         # 未认证/系统级创建沿用原有公有目录逻辑，禁止覆盖已有公有文件。
         owner_cfg = target_folder / "folder_config.json"
@@ -1812,6 +1831,14 @@ async def create_algorithm(
                 cfg = {}
             cfg["owner_id"] = current_user_id
             cfg["name"] = func_name
+            target_public_id = str(payload.target_public_id or "").strip()
+            target_public_call_prefix = str(payload.target_public_call_prefix or "").strip()
+            if target_public_id and target_public_call_prefix:
+                cfg["target_public_id"] = target_public_id
+                cfg["target_public_call_prefix"] = target_public_call_prefix
+            else:
+                cfg.pop("target_public_id", None)
+                cfg.pop("target_public_call_prefix", None)
             cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
         source = _upsert_algo_meta(
             payload.code,
@@ -1851,6 +1878,26 @@ async def create_algorithm(
     _append_entry_version(entry, "created", note="Created from frontend")
     sse_manager.broadcast({"event": "updated", "file": str(target_file), "algorithms": registry.to_completion_json()})
     return {"success": True, "algorithm": _entry_dict(entry)}
+
+
+@router.get("/algorithms/check-duplicate")
+async def check_algorithm_duplicate(
+    name: str = Query(...),
+    namespace: str = Query(...),
+    owner_id: str | None = Query(None),
+    registry: AlgorithmRegistry = Depends(get_registry),
+) -> dict[str, Any]:
+    """Check duplicate algorithm id within the same visibility scope."""
+
+    func_name = _validate_identifier(name, "name")
+    normalized_namespace = _normalize_category(namespace)
+    owner = (owner_id or "system").strip() or "system"
+    conflict = _entry_by_owner(registry, f"{normalized_namespace}.{func_name}", owner)
+    return {
+        "success": True,
+        "exists": conflict is not None,
+        "conflictItem": _entry_dict(conflict) if conflict is not None else None,
+    }
 
 
 @router.get("/categories")
@@ -2523,8 +2570,16 @@ async def submit_algorithm_review(
     if not existing.get("files"):
         snap_files = _folder_files_for_entry(entry)
         existing["files"] = [{"filename": f["filename"], "relative_path": f["relative_path"], "content": f["content"]} for f in snap_files]
-    public_entry = _public_conflict_for_entry(registry, entry)
-    is_version_iteration = bool(body.get("is_version_iteration"))
+    target_public = _entry_target_public(entry)
+    explicit_target_id = target_public.get("target_public_id", "")
+    explicit_public_entry = None
+    if explicit_target_id:
+        explicit_public_entry = _entry_by_owner(registry, explicit_target_id, "system") or registry.get_by_id(explicit_target_id)
+        if explicit_public_entry is None:
+            raise HTTPException(status_code=404, detail="没有找到关联的公有算法，请重新另存草稿后提交")
+    public_entry = explicit_public_entry or _public_conflict_for_entry(registry, entry)
+    is_version_iteration = bool(body.get("is_version_iteration")) or explicit_public_entry is not None
+    review_kind = "version_iteration" if public_entry is not None and is_version_iteration else "new_publish"
     if public_entry is not None and not is_version_iteration:
         raise HTTPException(
             status_code=409,
@@ -2537,7 +2592,7 @@ async def submit_algorithm_review(
         )
     bump_type = str(body.get("version_bump_type") or "patch")
     version_bump = str(body.get("version_bump") or "")
-    if public_entry is not None and not version_bump:
+    if review_kind == "version_iteration" and public_entry is not None and not version_bump:
         version_bump = _bump_semver(public_entry.version, bump_type)
 
     draft: dict[str, Any] = {
@@ -2545,10 +2600,10 @@ async def submit_algorithm_review(
         "call_prefix": entry.call_prefix,
         "base_status": existing.get("base_status") or current,
         "status": "reviewing",
-        "review_kind": "version_iteration" if public_entry is not None else "new_publish",
-        "target_public_id": public_entry.id if public_entry is not None else "",
-        "target_public_call_prefix": public_entry.call_prefix if public_entry is not None else "",
-        "base_public_version": public_entry.version if public_entry is not None else "",
+        "review_kind": review_kind,
+        "target_public_id": public_entry.id if review_kind == "version_iteration" and public_entry is not None else "",
+        "target_public_call_prefix": public_entry.call_prefix if review_kind == "version_iteration" and public_entry is not None else "",
+        "base_public_version": public_entry.version if review_kind == "version_iteration" and public_entry is not None else "",
         "version_bump_type": bump_type,
         "version_bump": version_bump,
         "metadata": body.get("metadata") if isinstance(body.get("metadata"), dict) else {},
@@ -2750,8 +2805,20 @@ async def _do_publish_algorithm(
                 registry.scan_directory(str(pkg_root.parent))
             else:
                 src = Path(entry.source_file).resolve()
-                src.unlink(missing_ok=True)
-                registry.unregister_by_file(str(src))
+                draft_folder = src.parent
+                users_root = (_ALGORITHMS_ROOT / "users").resolve()
+                try:
+                    is_private_folder = draft_folder.resolve().is_relative_to(users_root)
+                except AttributeError:
+                    is_private_folder = str(draft_folder.resolve()).startswith(str(users_root))
+                if is_private_folder and draft_folder.exists():
+                    for old_file in draft_folder.glob("*.py"):
+                        registry.unregister_by_file(str(old_file))
+                    shutil.rmtree(draft_folder, ignore_errors=True)
+                    registry.scan_directory(str(draft_folder.parent))
+                else:
+                    src.unlink(missing_ok=True)
+                    registry.unregister_by_file(str(src))
         except Exception:
             pass  # Non-fatal: public entry already published
         _append_entry_version(public_entry, "version.iterated", note=f"Version iteration from {entry.call_prefix}")
@@ -2761,6 +2828,12 @@ async def _do_publish_algorithm(
     # If private algorithm (has owner_id), promote to public.
     owner_id = getattr(entry, "owner_id", None) or "system"
     if owner_id != "system":
+        conflict = _public_conflict_for_entry(registry, entry)
+        if conflict is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"已存在同名公有算法 {conflict.call_prefix}，请修改命名空间后重新提交",
+            )
         config_path = _entry_config_path(entry)
         source_dir = Path(entry.package_root) if getattr(entry, "package_root", None) else Path(entry.source_file).parent
         if not config_path.exists():
@@ -2773,6 +2846,11 @@ async def _do_publish_algorithm(
                 current_folder = config_path.parent
                 namespace_parts = entry.namespace.split(".")
                 global_folder = _ALGORITHMS_ROOT.joinpath(*namespace_parts, entry.func_name)
+                if global_folder.exists() and current_folder != global_folder:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"已存在同名公有算法 alg.{entry.namespace}.{entry.func_name}，请修改命名空间后重新提交",
+                    )
                 moved = False
                 if not global_folder.exists() and current_folder != global_folder:
                     try:

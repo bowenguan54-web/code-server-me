@@ -1,7 +1,7 @@
 /*
  * AlgoLib module: 20-review-submit.js
- * ???????????????????????????
- * ???? .run/algo-lib-check.js ??????????????????????
+ * 提交审核、驳回记录查看与撤销相关交互。
+ * 从 .run/algo-lib-check.js 拆分，保持全局函数调用方式。
  */
 
     async function submitReview(id) { return openSubmitModal(id); }
@@ -24,13 +24,16 @@
         showToast(error.message);
         return;
       }
+      const isLinkedIteration = !!(item.targetPublicId || item.targetPublicCallPrefix || submitCheck.isVersionIteration);
       const currentVer = submitCheck.baseVersion || item.version || "1.0.0";
       const vOpts = submitCheck.versionOptions || versionUpgradeOptions(currentVer);
-      const conflictHtml = submitCheck.hasConflict ? `
+      const conflictHtml = submitCheck.hasConflict || isLinkedIteration ? `
         <div class="form-row" style="grid-column:1/-1">
-          <label>命名空间冲突</label>
+          <label>${isLinkedIteration ? "版本迭代" : "命名空间冲突"}</label>
           <div class="notice warning" style="margin:0">
-            该命名空间已被公有算法占用。若这是对现有公有算法的升级，请选择“作为版本迭代提交”；否则请先返回编辑界面修改命名空间。
+            ${isLinkedIteration
+              ? `这是对现有公有算法 ${esc(item.targetPublicCallPrefix || submitCheck.publicAlgorithm?.callPrefix || "")} 的版本迭代提交。`
+              : "该命名空间已被公有算法占用。若这是对现有公有算法的升级，请选择“作为版本迭代提交”；否则请先返回编辑界面修改命名空间。"}
           </div>
           <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
             <input id="srIsVersionIteration" type="checkbox" checked />
@@ -55,7 +58,7 @@
           </div>
           <div class="modal-actions">
             <button onclick="window.closeModal()">取消</button>
-            <button class="warning" onclick="window.confirmSubmitReview('${esc(id)}', ${submitCheck.hasConflict ? "true" : "false"})">确认提交审核</button>
+            <button class="warning" onclick="window.confirmSubmitReview('${esc(id)}', ${submitCheck.hasConflict || isLinkedIteration ? "true" : "false"})">确认提交审核</button>
           </div>
         </div>
       `;
@@ -123,7 +126,7 @@
             ${filesHtml || "<p>无文件记录</p>"}
             <div class="modal-actions">
               <button onclick="window.closeModal()">关闭</button>
-              <button class="ghost" onclick="window.discardRejectedDraft('${esc(id)}');window.closeModal()">放弃修改，恢复原状</button>
+              <button class="ghost" onclick="window.discardRejectedDraft('${esc(id)}');window.closeModal()">放弃修改，恢复原状态</button>
             </div>
           </div>
         `;

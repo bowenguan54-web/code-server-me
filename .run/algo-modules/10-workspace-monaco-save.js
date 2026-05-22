@@ -1,7 +1,7 @@
 /*
  * AlgoLib module: 10-workspace-monaco-save.js
- * ???????? Monaco ???????????????
- * ???? .run/algo-lib-check.js ??????????????????????
+ * 新建算法工作区的 Monaco 初始化、测试和保存逻辑。
+ * 修改后请运行 .run/build-algo-lib.sh 重新合并。
  */
 
     async function initWorkspaceMonaco(moduleKind = "") {
@@ -262,7 +262,7 @@
         const catName = qs("#wsCategoryName")?.value.trim();
         const catNs = qs("#wsCategoryNs")?.value.trim();
         if (!catName || !catNs) { showToast("请填写新分类名称和命名空间"); return; }
-        if (/[\u4e00-\u9fff]/.test(catNs) || !/^[a-z_][a-z0-9_.]*$/.test(catNs)) { showToast("分类命名空间只能使用小写字母、数字和下划线"); return; }
+        if (/[\u4e00-\u9fff]/.test(catNs) || !/^[a-z_][a-z0-9_.]*$/.test(catNs)) { showToast("分类命名空间只能使用小写字母、数字、下划线和点号"); return; }
         try {
           await api("/api/v1/categories", { method: "POST", body: JSON.stringify({ namespace: catNs, zh_name: catName, module_kind: moduleKind }) });
           catValue = catNs;
@@ -271,18 +271,29 @@
 
       const namespace = catValue.trim().replace(/^alg\./, "");
       if (!namespace) { showToast("命名空间不能为空"); return; }
-      if (/[\u4e00-\u9fff\uff00-\uffef\u3000-\u303f]/.test(namespace)) { showToast("命名空间不能包含中文字符，请使用英文字母、数字和下划线"); return; }
+      if (/[\u4e00-\u9fff\uff00-\uffef\u3000-\u303f]/.test(namespace)) { showToast("命名空间不能包含中文字符，请使用英文字母、数字、下划线和点号"); return; }
       if (!/^[a-z_][a-z0-9_.]*$/.test(namespace)) { showToast("命名空间只能使用小写字母、数字、下划线和点号"); return; }
       const inputExample = JSON.stringify(typeof collectWorkspaceParamExamples === "function" ? collectWorkspaceParamExamples() : {});
 
-      // 重复命名空间检测
       const allItems = [...(state.data.components || []), ...(state.data.templates || [])];
       const fullId = `${namespace}.${name}`;
       const duplicate = allItems.find(item => {
         const itemId = item.id || `${item.namespace || ""}.${item.name || item.funcName || ""}`;
-        return itemId === fullId;
+        const itemRegistryId = item.registryId || item.registry_id || itemId;
+        const itemOwner = item.ownerId || item.owner_id || "system";
+        return (itemId === fullId || itemRegistryId === fullId) && itemOwner === state.currentUser?.id;
       });
-      if (duplicate) { showToast(`命名空间 "${fullId}" 已存在，请修改函数名或所属类别`); return; }
+      if (duplicate) { showToast("您已有同名私有算法，请修改函数名或所属分类"); return; }
+      try {
+        const ownerId = state.currentUser?.id || "";
+        const duplicateResp = await api(`/api/v1/algorithms/check-duplicate?namespace=${encodeURIComponent(namespace)}&name=${encodeURIComponent(name)}&owner_id=${encodeURIComponent(ownerId)}`);
+        if (duplicateResp?.exists) {
+          showToast("您已有同名私有算法，请修改函数名或所属分类");
+          return;
+        }
+      } catch (err) {
+        console.warn("duplicate check failed", err);
+      }
       const widgetOverrides = collectWorkspaceWidgetOverrides();
 
       try {

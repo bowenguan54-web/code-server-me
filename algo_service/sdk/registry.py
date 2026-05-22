@@ -431,7 +431,7 @@ class AlgorithmRegistry:
         root_path = Path(root_dir).resolve()
         owner_id = str(manifest.get("owner_id", "system")).strip() or "system"
         if owner_id and owner_id != "system":
-            # 私有 package 使用扁平目录，避免与已发布的同命名空间公有目录发生物理路径冲突。
+            # 私有 package 使用扁平目录，避免与同命名空间的公有目录发生物理路径冲突。
             package_root = root_path / f"{namespace.replace('.', '_')}_{name}"
         else:
             package_root = root_path.joinpath(*namespace.split("."), name)
@@ -455,6 +455,10 @@ class AlgorithmRegistry:
         }
         if owner_id and owner_id != "system":
             manifest_payload["owner_id"] = owner_id
+        for optional_key in ("target_public_id", "target_public_call_prefix"):
+            optional_value = str(manifest.get(optional_key, "") or "").strip()
+            if optional_value:
+                manifest_payload[optional_key] = optional_value
         (package_root / "algopack.json").write_text(
             json.dumps(manifest_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",

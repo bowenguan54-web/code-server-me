@@ -6,7 +6,7 @@
     "version": "1.0.1",
     "action": "package.created",
     "operator": "system",
-    "timestamp": "2026-05-21T02:45:49.659143+00:00",
+    "timestamp": "2026-05-22T02:28:31.596138+00:00",
     "note": "Created multi-file package",
     "files": [
       {
@@ -67,7 +67,8 @@
       "contributors": [],
       "rejectReason": "",
       "reviewKind": "",
-      "targetPublicCallPrefix": ""
+      "targetPublicId": "custom.my_algorith",
+      "targetPublicCallPrefix": "alg.custom.my_algorith"
     }
   }
 ]

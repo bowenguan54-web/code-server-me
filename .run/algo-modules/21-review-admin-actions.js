@@ -1,7 +1,7 @@
 /*
  * AlgoLib module: 21-review-admin-actions.js
- * ?????????????????????????? API ???
- * ???? .run/algo-lib-check.js ??????????????????????
+ * 审核、发布、版本历史和 API 文档等管理员操作。
+ * 从 .run/algo-lib-check.js 拆分，保持全局函数调用方式。
  */
 
     async function withdrawReview(id) {
@@ -27,7 +27,6 @@
       const isIteration = draft?.review_kind === "version_iteration";
       const baseVer = draft?.base_public_version || "1.0.0";
 
-      // Version options for version_iteration: patch/minor/major only (no "keep")
       const bumpV = (ver, type) => {
         const [ma, mi, pa] = parseVersion(ver);
         if (type === "major") return `${ma + 1}.0.0`;
@@ -40,7 +39,6 @@
         { type: "major", value: bumpV(baseVer, "major"), label: `主版本：${baseVer} → ${bumpV(baseVer, "major")}` },
       ] : [];
 
-      // Load public algorithm files for side-by-side comparison
       if (isIteration && draft.target_public_id) {
         try {
           const src = await api(`/api/v1/algorithm-source/${safeId(draft.target_public_id)}`);
@@ -48,7 +46,6 @@
         } catch (_) { /* ignore */ }
       }
 
-      // Build diff HTML
       let diffHtml = "";
       if (isIteration) {
         const draftFiles = draft.files || [];
@@ -60,11 +57,11 @@
               <label>代码对比 <span style="color:var(--text-dim);font-size:12px">左：当前公有版本 v${esc(baseVer)} &nbsp;|&nbsp; 右：新提交版本</span></label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:340px">
                 <div>
-                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryPublic?.relative_path || entryPublic?.filename) || "(无)")}</div>
+                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryPublic?.relative_path || entryPublic?.filename) || "（无）")}</div>
                   <pre style="margin:0;padding:10px;background:var(--bg-deep);border-radius:6px;font-size:11px;overflow:auto;max-height:310px;border:1px solid var(--line)">${esc(entryPublic?.content || "（无文件）")}</pre>
                 </div>
                 <div>
-                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryDraft?.relative_path || entryDraft?.filename) || "(无)")}</div>
+                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryDraft?.relative_path || entryDraft?.filename) || "（无）")}</div>
                   <pre style="margin:0;padding:10px;background:var(--bg-deep);border-radius:6px;font-size:11px;overflow:auto;max-height:310px;border:1px solid rgba(88,166,255,.5)">${esc(entryDraft?.content || "（无文件）")}</pre>
                 </div>
               </div>
