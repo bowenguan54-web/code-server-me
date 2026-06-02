@@ -1,7 +1,7 @@
 {
   "name": "my_algorithm",
   "zh_name": "复杂算法示例",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "namespace": "custom",
   "entry": "main.py",
   "exports": [
@@ -16,5 +16,9 @@
   "published": false,
   "publish_status": "reviewing",
   "module_kind": "component",
-  "owner_id": "usr_zhangsan"
+  "owner_id": "usr_zhangsan",
+  "target_public_id": "custom.my_algorithm",
+  "target_public_call_prefix": "alg.custom.my_algorithm",
+  "input_example": "",
+  "widget_overrides": {}
 }

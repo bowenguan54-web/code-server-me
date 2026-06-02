@@ -8,6 +8,16 @@
       return `<div class="folder-body">${Array.from({ length: 8 }, () => '<div class="skeleton"></div>').join("")}</div>`;
     }
 
+    function withLoadTimeout(promise, label, ms = 15000) {
+      let timer = null;
+      const timeout = new Promise((_, reject) => {
+        timer = window.setTimeout(() => reject(new Error(`${label || "数据加载"}超时，请稍后重试`)), ms);
+      });
+      return Promise.race([promise, timeout]).finally(() => {
+        if (timer) window.clearTimeout(timer);
+      });
+    }
+
     async function loadModuleData(page) {
       // Sub-pages share data with their parent page
       const parentP = parentPageOf(page);
@@ -18,7 +28,7 @@
         return result;
       }
       if (page === "snippets") {
-        const data = await api("/api/v1/snippets");
+        const data = await withLoadTimeout(api("/api/v1/snippets"), "代码片段加载");
         state.data.snippets = normalizeListPayload(data, "snippets");
         const catSet = new Set(state.data.snippets.map(item => groupKey(item, "snippets")).filter(Boolean));
         state.categories["snippets"] = [...catSet].sort().map(ns => ({ namespace: ns, zh_name: ns }));
@@ -26,8 +36,8 @@
       }
       if (page === "my-algos") {
         const [data, folderData] = await Promise.all([
-          api("/api/v1/user/algorithms"),
-          api("/api/v1/user/folders").catch(() => ({ folders: [] }))
+          withLoadTimeout(api("/api/v1/user/algorithms"), "我的算法加载"),
+          withLoadTimeout(api("/api/v1/user/folders").catch(() => ({ folders: [] })), "我的文件夹加载")
         ]);
         state.data["my-algos"] = normalizeListPayload(data, "algorithms");
         const categories = {};
@@ -43,8 +53,8 @@
         return state.data["my-algos"];
       }
       const [data, categoryData] = await Promise.all([
-        api(`/api/v1/algorithms?module_kind=${currentModuleKind(page)}`),
-        api(`/api/v1/categories?module_kind=${currentModuleKind(page)}`)
+        withLoadTimeout(api(`/api/v1/algorithms?module_kind=${currentModuleKind(page)}`), "算法列表加载"),
+        withLoadTimeout(api(`/api/v1/categories?module_kind=${currentModuleKind(page)}`), "分类加载")
       ]);
       state.data[page] = normalizeListPayload(data, "algorithms");
       state.categories[page] = normalizeListPayload(categoryData, "categories");
@@ -52,6 +62,8 @@
     }
 
     function renderModulePage(page) {
+      const renderToken = `${page}:${Date.now()}:${Math.random()}`;
+      state._moduleRenderToken = renderToken;
       qs("#main").innerHTML = `
         <h1>${pageTitle(page)}</h1>
         <div class="toolbar">
@@ -77,14 +89,30 @@
         <section id="stats" class="stat-bar"></section>
         <section id="list">${skeletonHtml()}</section>
       `;
-      loadModuleData(page).then(() => {
-        renderNav();
-        hydrateFilters(page);
-        restoreListViewState(page);
-        renderCards(page);
-      }).catch(error => {
-        qs("#list").innerHTML = `<div class="empty">${esc(error.message)}</div>`;
-      });
+      withTimeout(loadModuleData(page), 15000, "数据加载超时，请刷新页面重试")
+        .then(() => {
+          if (state._moduleRenderToken !== renderToken || state.page !== page) return;
+          try {
+            renderNav();
+            hydrateFilters(page);
+            restoreListViewState(page);
+            if (state._moduleRenderToken !== renderToken || state.page !== page) return;
+            renderCards(page);
+            const listEl = qs("#list");
+            if (listEl && !listEl.querySelector(".card, .folder-section, .empty")) {
+              listEl.innerHTML = '<div class="empty">当前分类下暂无算法</div>';
+            }
+          } catch (renderError) {
+            console.error("renderCards error", renderError);
+            const listEl = qs("#list");
+            if (listEl) listEl.innerHTML = `<div class="empty">页面渲染出错：${esc(renderError.message || renderError)}</div>`;
+          }
+        })
+        .catch(error => {
+          if (state._moduleRenderToken !== renderToken || state.page !== page) return;
+          const listEl = qs("#list");
+          if (listEl) listEl.innerHTML = `<div class="empty">${esc(error.message || error)}</div>`;
+        });
     }
 
     function hydrateFilters(page) {

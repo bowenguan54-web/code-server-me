@@ -18,5 +18,5 @@ def my_algorithm(data: list[float], threshold: float = 0.5) -> dict:
         "valid_count": len(values),
         "scores": scores,
         "passed": passed,
-        "threshold": threshold,
+
     }

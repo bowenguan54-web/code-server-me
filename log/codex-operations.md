@@ -525,3 +525,78 @@ ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接�
 - 复查后端链路：`algorithms.py` 已支持私有草稿物理隔离、同 owner 重名检查、`check-duplicate`、版本迭代审核与发布；`packages.py` 已使用 `package.entry_file`，未发现 `package.entry` 误用。
 - 复查乱码：`20-review-submit.js`、`21-review-admin-actions.js` 和 `17-algo-info-admin-publish.js` 未发现连续问号界面文案；构建产物中剩余的 `????` 位于模块头部注释，不影响页面显示。
 - 验证：已运行 `node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`、`python -m py_compile algo_service/routers/algorithms.py algo_service/routers/packages.py algo_service/sdk/registry.py algo_service/models/schemas.py`；已重新运行 `bash .run/build-algo-lib.sh all` 完成构建并注入 `src/browser/pages/algo-lib.html`。
+
+## 2026-05-22 10:49:26
+- 修改 `algo_service/sdk/registry.py`：将 `AlgorithmRegistry._store` 从单 entry 字典改为 `dict[str, list[AlgorithmEntry]]`，支持同一 namespace/function 下公有 `system` 与用户私有算法共存。
+- 新增/调整注册与查询语义：同 id 同 owner 替换、不同 owner 追加；`get_by_id()` 公有优先；新增 `get_by_id_and_owner()`；`get_all()` 展平返回全部。
+- 为 `AlgorithmPackage` 增加 `owner_id`，package 重扫时只替换同 package、同 owner 的 entries，避免覆盖其他 owner 的同名算法。
+- 验证：`python -m py_compile algo_service/sdk/registry.py` 通过；最小脚本验证公私同名共存、owner 查询、替换、删除通过。
+
+## 2026-05-22 11:18:00
+- 复查并补齐 `algo_service/routers/publish.py` 的提交审核快照逻辑：`ReasonBody` 支持 `is_version_iteration`，`submit_algorithm()` 会在进入 `reviewing` 前保存 `.review_draft_*.json`，包含文件快照、元数据、版本迭代目标和基础公有版本。
+- 修复 `publish.py` 中 `_get_entry()` / `_find_history_entry()`：支持解析前端私有算法 id 的 `@@owner_id` 后缀，避免私有草稿提交审核时误定位到公有算法或 404。
+- 验证：`python -m py_compile algo_service/routers/publish.py` 通过；脚本验证 `ReasonBody(is_version_iteration=True)` 可正常解析。
+
+## 2026-05-22 11:37:00
+- 修改 `algo_service/routers/publish.py`：重写 `approve_algorithm()` 的有审核草稿路径，审核通过后直接发布并返回 `autoPublished: true`。
+- 版本迭代审核：读取 `review_draft.target_public_id`，将草稿文件应用到目标公有算法，更新版本和发布状态，记录 `iteration` 历史，删除私有草稿目录并全量重扫 registry。
+- 新发布审核：将草稿文件应用到当前私有算法，检查同名公有冲突后移动到公有目录，移除 `owner_id/target_public_*`，设置 `publish_status=published` 并记录 `new_publish` 历史。
+- 验证：`python -m py_compile algo_service/routers/publish.py` 通过；导入脚本确认新增 approve helper 均可加载。
+## 2026-05-22 15:21:15
+- 修改 `.run/algo-modules/14-editor-save-namespace.js`：`_saveAsPrivateDraft(skipReload)` 支持保存并返回时跳过编辑器内列表预刷新；`saveCurrentFile(forClose)` 与 `saveAndCloseEditor()` 使用该路径，避免另存私有草稿后又立即触发第二次列表加载。
+- 修改 `.run/algo-modules/05-data-loading.js`：列表数据加载增加 15 秒超时保护；卡片渲染后若仍为空或停留在骨架屏，显示空状态/错误信息，避免永久骨架屏。
+- 已执行 `bash .run/build-algo-lib.sh all`，完成合并与注入到 `src/browser/pages/algo-lib.html`；已执行 `node --check .run/algo-lib-check.js` 和 `node --check .run/algo-lib-inline-check.js`。
+
+## 2026-05-22 16:40:06
+- 修复提交审核弹窗的后端检查接口：`algo_service/routers/publish.py` 新增 `/api/v1/algorithms/{algorithm_id}/submit-check`，并抽出 `_submit_check_payload()` 返回前端需要的冲突信息、版本迭代判断、公有算法信息和版本选项。
+- 兼容当前路由加载顺序：由于 `algo_service/main.py` 先注册 `algorithms.py` 的通配 GET 路由，`algo_service/routers/algorithms.py` 中原有 `algorithm_id.endswith("/submit-check")` 分支也同步改成同样的返回结构，避免继续被通配路由截获后返回旧数据。
+- 确认 `ReasonBody.is_version_iteration` 已存在且提交审核快照逻辑会读取该字段，用于写入 `review_kind=version_iteration/new_publish`。
+- 验证：`python -m py_compile algo_service/routers/publish.py algo_service/routers/algorithms.py` 通过；脚本检查确认路由表中存在显式 `submit-check` 路由，同时当前通配路由兼容该路径。
+
+## 2026-05-22 16:56:40
+- 修改 `.run/algo-modules/21-review-admin-actions.js`：管理员点击“通过审核”时会同时读取 `review-draft` 和 `submit-check`，弹窗明确显示审核类型（版本迭代/新建发布）。
+- 版本迭代场景：保留代码对比，版本下拉优先使用后端 `versionOptions`；新建发布场景：新增发布版本输入框，默认 `1.0.0` 或审核草稿元数据版本。
+- 新建发布且存在同名公有算法冲突时：弹窗显示红色警告并禁用“确认通过”，避免管理员误把冲突草稿直接发布。
+- `confirmApproveReview()` 现在发送 `version_bump/version_bump_type/reason`，并在后端返回 `autoPublished` 时显示“审核已通过并自动发布”，同时刷新组件数据和审核页。
+- 已运行 `bash .run/build-algo-lib.sh all` 完成 bundle 构建与 HTML 注入；已运行 `node --check .run/algo-modules/21-review-admin-actions.js`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-05-25 10:27:12
+- 修改 `.run/algo-modules/17-algo-info-admin-publish.js`：基本信息弹窗的“修改记录”表格改为 5 列（操作人、时间、动作、版本变化、备注），异步读取 `/publish-history` 后按时间倒序显示最近 50 条。
+- 补齐动作映射：`code_save` 显示“保存代码”，`draft_save` 显示“保存草稿”，并将备注截断到 30 字符。
+- 修改 `algo_service/routers/algorithms.py`：`PATCH /api/v1/algorithm-source/{id}` 的单文件保存入口也写入 `publish_history.json`；草稿保存记录 `draft_save`，正常保存记录 `code_save`。
+- 同步改进单文件/文件级保存入口的 entry 解析，优先支持前端私有算法 id 的 `@@owner` 后缀，避免同名公私算法误定位。
+- 已运行 `python -m py_compile algo_service/routers/algorithms.py`、`node --check .run/algo-modules/17-algo-info-admin-publish.js`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-05-25 10:51:58
+- 修改 `.run/algo-modules/14-editor-save-namespace.js`：`_saveAsPrivateDraft(skipReload)` 创建私有草稿前会先在当前页面、父页面、`my-algos`、components/templates 缓存中查找当前用户同 namespace/function 的私有草稿。
+- 若同名私有草稿已存在，不再调用 `/algorithms/create` 或 `/packages/create`，而是逐文件保存到既有草稿；单文件缺失的额外文件会回退到 `add-file`。
+- 更新既有草稿后会调用 `bumpVersionAfterCodeSave()`，更新 `state.editing` 指向该草稿并提示“私有草稿已更新”；`skipReload` 行为保留，保存并返回时不额外刷新列表。
+- 已运行 `node --check .run/algo-modules/14-editor-save-namespace.js`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-05-25 11:18:00
+- 补齐同名算法的权限级别校验：`algo_service/routers/algorithms.py` 的 `/algorithms/create` 在写文件前按 `owner_id` 查重，私有只拦当前用户同名草稿，公有只拦已存在的同名公有算法。
+- 修改 `algo_service/routers/packages.py` 的 `/packages/create`，多文件算法同样按 owner 范围查重，并支持管理员显式 `publish_status=published` 时创建公有包。
+- 修改 `algo_service/routers/publish.py` 的新发布审核分支：仅当已有同名且已发布的公有算法时返回 409，提示用户修改命名空间后重新提交。
+- 修改 `.run/algo-modules/10-workspace-monaco-save.js`：新建工作区的前端重复校验区分公有/私有作用域，允许普通用户创建与公有同名的私有草稿，但阻止自己的同名私有重复。
+- 已运行 `python -m py_compile algo_service/routers/algorithms.py algo_service/routers/packages.py algo_service/routers/publish.py`、`node --check .run/algo-modules/10-workspace-monaco-save.js`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-05-25 11:31:00
+- 修改 `.run/algo-modules/14-editor-save-namespace.js`：`saveCurrentFile(forClose)` 现在返回保存结果；非 owner 触发 `_saveAsPrivateDraft()` 时返回 `savedAsPrivateDraft: true`。
+- `saveEditorAll()` 检测到本次保存已经另存为私有草稿后，直接跳过后续 `saveNamespace()`，避免保存公有算法时重复另存或紧接着 PATCH 新草稿命名空间。
+- 保持 owner 私有草稿流程不变：用户编辑自己的私有草稿并修改调用名时，普通保存仍会继续执行 `saveNamespace()`。
+- 已运行 `node --check .run/algo-modules/14-editor-save-namespace.js`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-05-25 11:42:00
+- 修改 `.run/algo-modules/02-utils.js`：新增通用 `withTimeout(promise, ms, message)` 工具，用于给前端异步流程添加明确超时。
+- 修改 `.run/algo-modules/05-data-loading.js`：`renderModulePage()` 现在用 `withTimeout(loadModuleData(...), 15000, "数据加载超时，请刷新页面重试")` 包装列表加载。
+- 列表页渲染阶段新增 try/catch：`renderCards()`、筛选恢复等渲染异常会显示“页面渲染出错：...”而不是白屏或永久骨架屏；渲染后无卡片/分组/空态时显示“当前分类下暂无算法”。
+- 修改 `.run/algo-modules/41-init-exports.js`：导出 `window.withTimeout`。
+- 已运行 `node --check .run/algo-modules/02-utils.js`、`node --check .run/algo-modules/05-data-loading.js`、`node --check .run/algo-modules/41-init-exports.js`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-05-25 17:20:00
+- 排查前端“点击按钮后没反应/必须刷新”：发现列表页异步加载缺少渲染令牌，旧的 `loadModuleData()` 请求晚返回时可能覆盖当前页面 DOM；`api()` 也直接依赖 `AbortSignal.timeout()`，在部分浏览器环境会抛错并中断按钮链路。
+- 修改 `.run/algo-modules/05-data-loading.js`：`renderModulePage()` 增加 `state._moduleRenderToken`，只允许最后一次页面渲染落地，旧请求返回后直接丢弃；保留超时、渲染异常、空列表提示。
+- 修改 `.run/algo-modules/02-utils.js`：`api()` 增加 `AbortController` 超时降级，兼容不支持 `AbortSignal.timeout()` 的浏览器，避免请求初始化阶段直接抛错。
+- 排查 uvicorn Ctrl+C 停不掉：当前 8000 端口进程命令行为 `uvicorn ... --reload`；Windows 下 reload 父子进程叠加项目自身 watchdog，容易出现子进程残留或 shutdown 卡顿。
+- 修改 `algo_service/main.py`：显式保存并在 shutdown 时取消临时上传清理后台任务；修改 `algo_service/sdk/file_watcher.py`：watchdog observer 停止时 join 最多等待 5 秒，避免 Ctrl+C 被文件监听线程无限阻塞。
+- 已运行 `node --check .run/algo-modules/02-utils.js`、`node --check .run/algo-modules/05-data-loading.js`、`python -m py_compile algo_service/main.py algo_service/sdk/file_watcher.py`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。

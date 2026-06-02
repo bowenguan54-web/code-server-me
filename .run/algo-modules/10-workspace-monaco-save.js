@@ -277,18 +277,29 @@
 
       const allItems = [...(state.data.components || []), ...(state.data.templates || [])];
       const fullId = `${namespace}.${name}`;
+      const publishStatus = "draft";
+      const creatingPublic = state.currentUser?.role === "admin" && publishStatus === "published";
       const duplicate = allItems.find(item => {
         const itemId = item.id || `${item.namespace || ""}.${item.name || item.funcName || ""}`;
         const itemRegistryId = item.registryId || item.registry_id || itemId;
-        const itemOwner = item.ownerId || item.owner_id || "system";
-        return (itemId === fullId || itemRegistryId === fullId) && itemOwner === state.currentUser?.id;
+        const baseId = String(itemId || "").split("@@")[0];
+        const baseRegistryId = String(itemRegistryId || "").split("@@")[0];
+        if (baseId !== fullId && baseRegistryId !== fullId) return false;
+        const itemIsPublic = typeof isPublicItem === "function" ? isPublicItem(item) : ((item.ownerId || item.owner_id || "system") === "system");
+        if (creatingPublic) return itemIsPublic;
+        return typeof ownsAlgorithm === "function"
+          ? ownsAlgorithm(item)
+          : ((item.ownerId || item.owner_id || "") === state.currentUser?.id);
       });
-      if (duplicate) { showToast("您已有同名私有算法，请修改函数名或所属分类"); return; }
+      if (duplicate) {
+        showToast(creatingPublic ? "同名公有算法已存在" : "您已有同名算法，请在已有版本上修改");
+        return;
+      }
       try {
-        const ownerId = state.currentUser?.id || "";
+        const ownerId = creatingPublic ? "system" : (state.currentUser?.id || "");
         const duplicateResp = await api(`/api/v1/algorithms/check-duplicate?namespace=${encodeURIComponent(namespace)}&name=${encodeURIComponent(name)}&owner_id=${encodeURIComponent(ownerId)}`);
         if (duplicateResp?.exists) {
-          showToast("您已有同名私有算法，请修改函数名或所属分类");
+          showToast(creatingPublic ? "同名公有算法已存在" : "您已有同名算法，请在已有版本上修改");
           return;
         }
       } catch (err) {

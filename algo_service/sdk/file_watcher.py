@@ -198,6 +198,8 @@ class FileWatcher:
             self._handler.cancel_timers()
         if self._started:
             self._observer.stop()
-            self._observer.join()
+            self._observer.join(timeout=5)
+            if self._observer.is_alive():
+                logger.warning("FileWatcher observer did not stop within 5 seconds.")
             self._started = False
             logger.info("FileWatcher stopped.")

@@ -1590,7 +1590,7 @@ async def publish_template_as_component(
     except HTTPException:
         pass
 
-    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    entry = _entry_from_client_id(registry, algorithm_id) or registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     if entry.type != "template":
@@ -1767,24 +1767,46 @@ async def create_algorithm(
 
     # Determine owner: if a user is authenticated, create in their private directory
     # so they retain ownership and can submit the algorithm for review later.
+    current_user: dict[str, Any] | None = None
     current_user_id: str | None = None
     try:
-        u = get_current_user(request)
-        current_user_id = u.get("id")
+        current_user = get_current_user(request)
+        current_user_id = current_user.get("id")
     except Exception:
         pass
+    creating_public = bool(
+        current_user
+        and current_user.get("role") == "admin"
+        and str(payload.publish_status or "draft").strip().lower() == "published"
+    )
+    owner_id = "system" if creating_public or not current_user_id else current_user_id
 
-    if current_user_id:
+    entry_id = f"{namespace}.{func_name}"
+    existing_same_owner = _entry_by_owner(registry, entry_id, owner_id)
+    if existing_same_owner is not None:
+        if owner_id == "system":
+            raise HTTPException(status_code=409, detail="同名公有算法已存在")
+        raise HTTPException(status_code=409, detail="您已有同名算法，请在已有版本上修改")
+    if owner_id == "system":
+        public_existing = registry.get_by_id(entry_id)
+        if (
+            public_existing is not None
+            and str(getattr(public_existing, "owner_id", "system") or "system") == "system"
+            and _read_entry_publish_status(public_existing) == "published"
+        ):
+            raise HTTPException(status_code=409, detail="同名公有算法已存在")
+
+    if owner_id != "system":
         # 认证用户创建/另存算法时必须落到用户私有目录，不能复用或覆盖公有目录。
         private_folder_name = f"{namespace.replace('.', '_')}_{func_name}"
-        target_folder = _ALGORITHMS_ROOT / "users" / current_user_id / private_folder_name
+        target_folder = _ALGORITHMS_ROOT / "users" / owner_id / private_folder_name
         target_file = target_folder / f"{func_name}.py"
     else:
         root = _default_algorithm_root(registry)
         target_folder = root.joinpath(*namespace.split("."))
         target_file = target_folder / f"{func_name}.py"
 
-    if current_user_id and target_folder.exists():
+    if owner_id != "system" and target_folder.exists():
         # 同一用户私有空间内不允许创建同名算法；后续编辑应走保存文件接口。
         owner_cfg = target_folder / "folder_config.json"
         existing_owner_id: str | None = None
@@ -1793,9 +1815,9 @@ async def create_algorithm(
             existing_owner_id = existing_cfg.get("owner_id")
         except (OSError, json.JSONDecodeError):
             existing_owner_id = None
-        if existing_owner_id != current_user_id:
+        if existing_owner_id != owner_id:
             raise HTTPException(status_code=409, detail="目标私有草稿目录已存在但不属于当前用户，请换一个函数名")
-        raise HTTPException(status_code=409, detail="您已有同名私有算法草稿，请修改函数名或所属分类")
+        raise HTTPException(status_code=409, detail="您已有同名算法，请在已有版本上修改")
     elif target_file.exists():
         # 未认证/系统级创建沿用原有公有目录逻辑，禁止覆盖已有公有文件。
         owner_cfg = target_folder / "folder_config.json"
@@ -1805,7 +1827,7 @@ async def create_algorithm(
             existing_owner_id = existing_cfg.get("owner_id")
         except (OSError, json.JSONDecodeError):
             existing_owner_id = None
-        if current_user_id and existing_owner_id == current_user_id:
+        if owner_id != "system" and existing_owner_id == owner_id:
             pass
         else:
             raise HTTPException(status_code=409, detail=f"算法文件已存在：{target_file.name}，请换一个函数名")
@@ -1823,13 +1845,13 @@ async def create_algorithm(
         _write_folder_config(target_folder, namespace, module_kind, payload.publish_status or "draft", payload.category_zh_name or "")
         _write_widget_overrides_to_manifest(target_folder / "folder_config.json", payload.widget_overrides)
         # Write owner_id into folder_config.json when user is authenticated
-        if current_user_id:
+        if owner_id != "system":
             cfg_path = target_folder / "folder_config.json"
             try:
                 cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 cfg = {}
-            cfg["owner_id"] = current_user_id
+            cfg["owner_id"] = owner_id
             cfg["name"] = func_name
             target_public_id = str(payload.target_public_id or "").strip()
             target_public_call_prefix = str(payload.target_public_call_prefix or "").strip()
@@ -1857,12 +1879,12 @@ async def create_algorithm(
             blocks_path = target_folder / f"{func_name}.blocks.json"
             blocks_payload = {"schema_version": "1.0", "blocks": payload.blocks}
             blocks_path.write_text(json.dumps(blocks_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        scan_root = str(_ALGORITHMS_ROOT / "users" / current_user_id) if current_user_id else str(target_folder)
+        scan_root = str(_ALGORITHMS_ROOT / "users" / owner_id) if owner_id != "system" else str(target_folder)
         registry.scan_directory(scan_root)
     except (OSError, SyntaxError) as exc:
         raise HTTPException(status_code=500, detail=f"创建算法失败：{exc}") from exc
 
-    entry = _entry_by_owner(registry, f"{namespace}.{func_name}", current_user_id or "system") or registry.get_by_id(f"{namespace}.{func_name}")
+    entry = _entry_by_owner(registry, f"{namespace}.{func_name}", owner_id) or registry.get_by_id(f"{namespace}.{func_name}")
     if entry is None:
         raise HTTPException(status_code=500, detail="算法文件已创建但无法注册，请刷新页面重试")
     # Write per-algorithm status file immediately so this entry's status is
@@ -2133,7 +2155,7 @@ async def list_algorithm_versions(
 ) -> dict[str, Any]:
     """Return version history for a component, template, or package entry."""
 
-    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    entry = _entry_from_client_id(registry, algorithm_id) or registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     history = _load_version_history(_version_history_path_for_entry(entry))
@@ -2148,7 +2170,7 @@ async def snapshot_algorithm_version(
 ) -> dict[str, Any]:
     """Create a manual version snapshot."""
 
-    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    entry = _entry_from_client_id(registry, algorithm_id) or registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     payload = await request.json()
@@ -2190,17 +2212,35 @@ async def get_algorithm(
             raise HTTPException(status_code=404, detail=f"算法不存在：{base_id}")
         if current_user.get("role") != "admin" and getattr(entry_for_check, "owner_id", "system") != current_user["id"]:
             raise HTTPException(status_code=403, detail="无权提交他人的算法审核")
-        public_entry = _public_conflict_for_entry(registry, entry_for_check)
+        target_public = _entry_target_public(entry_for_check)
+        target_public_id = str(target_public.get("target_public_id") or "")
+        public_entry = None
+        is_version_iteration = False
+        if target_public_id:
+            public_entry = _entry_by_owner(registry, target_public_id, "system") or _entry_from_client_id(registry, target_public_id)
+            if public_entry is not None and str(getattr(public_entry, "owner_id", "system") or "system") == "system":
+                is_version_iteration = True
+            else:
+                public_entry = None
         if public_entry is None:
-            return {"success": True, "hasConflict": False, "isVersionIteration": False}
+            public_entry = _public_conflict_for_entry(registry, entry_for_check)
+        if public_entry is None:
+            base_version = str(entry_for_check.version or "1.0.0")
+            return {
+                "success": True,
+                "hasConflict": False,
+                "isVersionIteration": False,
+                "publicAlgorithm": None,
+                "baseVersion": base_version,
+                "versionOptions": _version_bump_options(base_version),
+            }
         return {
             "success": True,
             "hasConflict": True,
-            "isVersionIteration": True,
+            "isVersionIteration": is_version_iteration,
             "publicAlgorithm": _entry_dict(public_entry),
             "baseVersion": public_entry.version,
             "versionOptions": _version_bump_options(public_entry.version),
-            "message": "该命名空间已被公有算法占用，可作为现有公有算法的版本迭代提交审核；如果不是版本迭代，请先修改命名空间。",
         }
     if algorithm_id.endswith("/review-draft"):
         base_id = algorithm_id[: -len("/review-draft")]
@@ -3143,7 +3183,7 @@ async def save_algorithm_folder_file(
     """Save one Python file in an algorithm folder."""
 
     current_user = get_current_user(request)
-    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    entry = _entry_from_client_id(registry, algorithm_id) or registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
@@ -3322,7 +3362,7 @@ async def save_algorithm_source(
     """Save the source file for a single-file algorithm entry."""
 
     current_user = get_current_user(request)
-    entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
+    entry = _entry_from_client_id(registry, algorithm_id) or registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
     if current_user.get("role") != "admin" and getattr(entry, "owner_id", "system") != current_user["id"]:
@@ -3352,6 +3392,33 @@ async def save_algorithm_source(
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         _save_review_draft(entry, draft)
+        try:
+            from .publish import _append_history
+
+            operator = str(
+                current_user.get("id")
+                or current_user.get("username")
+                or request.headers.get("X-Operator")
+                or "system"
+            )
+            operator_name = str(
+                current_user.get("display_name")
+                or current_user.get("displayName")
+                or current_user.get("username")
+                or operator
+            )
+            _append_history(
+                entry,
+                "saved",
+                operator=operator,
+                reason=f"代码保存：{filename}",
+                operator_name=operator_name,
+                from_version=str(entry.version or ""),
+                to_version=str(entry.version or ""),
+                action_type="draft_save",
+            )
+        except HTTPException:
+            raise
         return {
             "success": True,
             "algorithm": _entry_dict(entry),
@@ -3363,8 +3430,36 @@ async def save_algorithm_source(
         registry.rescan_file(str(source_path))
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"保存源码失败：{exc}") from exc
-    updated = registry.get_by_id(entry.id) or registry.get_by_id(f"{entry.namespace}.{entry.func_name}")
+    updated = _entry_by_owner(registry, entry.id, getattr(entry, "owner_id", "system")) or registry.get_by_id(entry.id) or registry.get_by_id(f"{entry.namespace}.{entry.func_name}")
     _append_entry_version(updated or entry, "source.saved", note="Source saved")
+    try:
+        from .publish import _append_history
+
+        history_entry = updated or entry
+        operator = str(
+            current_user.get("id")
+            or current_user.get("username")
+            or request.headers.get("X-Operator")
+            or "system"
+        )
+        operator_name = str(
+            current_user.get("display_name")
+            or current_user.get("displayName")
+            or current_user.get("username")
+            or operator
+        )
+        _append_history(
+            history_entry,
+            "saved",
+            operator=operator,
+            reason=f"代码保存：{source_path.name}",
+            operator_name=operator_name,
+            from_version=str(history_entry.version or ""),
+            to_version=str(history_entry.version or ""),
+            action_type="code_save",
+        )
+    except HTTPException:
+        raise
     sse_manager.broadcast({"event": "updated", "file": str(source_path), "algorithms": registry.to_completion_json()})
     return {
         "success": True,

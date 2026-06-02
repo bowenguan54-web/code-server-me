@@ -117,16 +117,39 @@
       qs("#_confirmCancelBtn").addEventListener("click", close);
       qs("#_confirmOkBtn").addEventListener("click", () => { close(); onOk(); });
     }
+    function withTimeout(promise, ms, message) {
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = window.setTimeout(() => reject(new Error(message || "请求超时，请刷新页面重试")), ms);
+      });
+      return Promise.race([promise, timeout]).finally(() => {
+        if (timer) window.clearTimeout(timer);
+      });
+    }
     async function api(path, options = {}) {
       const headers = { ...(options.headers || {}) };
       if (options.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
       const token = localStorage.getItem("algolib_token");
       if (token) headers["Authorization"] = `Bearer ${token}`;
       let response;
+      let timeoutId = null;
+      const fetchOptions = { ...options, headers };
+      if (!fetchOptions.signal) {
+        if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+          fetchOptions.signal = AbortSignal.timeout(30000);
+        } else if (typeof AbortController !== "undefined") {
+          const controller = new AbortController();
+          timeoutId = window.setTimeout(() => controller.abort(), 30000);
+          fetchOptions.signal = controller.signal;
+        }
+      }
       try {
-        response = await fetch(BASE + path, { ...options, headers, signal: AbortSignal.timeout(30000) });
+        response = await fetch(BASE + path, fetchOptions);
       } catch (error) {
-        throw new Error(error.name === "TimeoutError" ? "请求超时，请检查服务是否正常运行" : (error.message || "网络错误"));
+        const isTimeout = error.name === "TimeoutError" || error.name === "AbortError";
+        throw new Error(isTimeout ? "\u8bf7\u6c42\u8d85\u65f6\uff0c\u8bf7\u68c0\u67e5\u670d\u52a1\u662f\u5426\u6b63\u5e38\u8fd0\u884c" : (error.message || "\u7f51\u7edc\u9519\u8bef"));
+      } finally {
+        if (timeoutId) window.clearTimeout(timeoutId);
       }
       let data = null;
       try { data = await response.json(); } catch (error) { data = { detail: response.statusText }; }
@@ -135,7 +158,7 @@
         localStorage.removeItem("algolib_user");
         state.currentUser = null;
         showLoginPage();
-        throw new Error("登录已过期，请重新登录");
+        throw new Error("\u767b\u5f55\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55");
       }
       if (!response.ok) throw new Error(data.detail || data.error || response.statusText);
       return data;

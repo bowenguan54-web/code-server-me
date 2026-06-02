@@ -8,7 +8,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from .algorithms import _append_entry_version, _upsert_algo_meta, _upsert_entry_algo_meta, get_registry
+from .algorithms import (
+    _append_entry_version,
+    _entry_by_owner,
+    _read_entry_publish_status,
+    _upsert_algo_meta,
+    _upsert_entry_algo_meta,
+    get_registry,
+)
 from ..sdk.auth_utils import get_current_user
 from ..sdk.registry import AlgorithmRegistry
 
@@ -165,23 +172,50 @@ async def create_package(
     if not isinstance(files, list):
         raise HTTPException(status_code=400, detail="Field 'files' must be a list")
 
-    # Determine owner: if a user is authenticated, create in their private directory
+    # Determine owner: authenticated users create private drafts by default.
+    # Admins may create public packages directly only when explicitly publishing.
+    current_user: dict[str, Any] | None = None
     current_user_id: str | None = None
     try:
-        u = get_current_user(request)
-        current_user_id = u.get("id")
+        current_user = get_current_user(request)
+        current_user_id = current_user.get("id")
     except HTTPException:
         pass
 
-    if current_user_id:
-        namespace = str(payload.get("namespace", "")).strip()
-        name = str(payload.get("name", "")).strip()
-        if namespace and name:
-            root_dir = str(_ALGORITHMS_ROOT / "users" / current_user_id)
-        payload["owner_id"] = current_user_id
-
     entry_name = str(payload.get("entry", "main.py")).strip() or "main.py"
     export_name = str((payload.get("exports") or [""])[0] or "").strip()
+    namespace = str(payload.get("namespace", "")).strip()
+    name = str(payload.get("name", "")).strip()
+    creating_public = bool(
+        current_user
+        and current_user.get("role") == "admin"
+        and str(payload.get("publish_status") or "draft").strip().lower() == "published"
+    )
+    owner_id = "system" if creating_public or not current_user_id else current_user_id
+    conflict_export = export_name or name
+    if namespace and conflict_export:
+        entry_id = f"{namespace}.{conflict_export}"
+        existing_same_owner = _entry_by_owner(registry, entry_id, owner_id)
+        if existing_same_owner is not None:
+            if owner_id == "system":
+                raise HTTPException(status_code=409, detail="同名公有算法已存在")
+            raise HTTPException(status_code=409, detail="您已有同名算法，请在已有版本上修改")
+        if owner_id == "system":
+            public_existing = registry.get_by_id(entry_id)
+            if (
+                public_existing is not None
+                and str(getattr(public_existing, "owner_id", "system") or "system") == "system"
+                and _read_entry_publish_status(public_existing) == "published"
+            ):
+                raise HTTPException(status_code=409, detail="同名公有算法已存在")
+
+    if owner_id != "system":
+        if namespace and name:
+            root_dir = str(_ALGORITHMS_ROOT / "users" / owner_id)
+        payload["owner_id"] = owner_id
+    else:
+        payload.pop("owner_id", None)
+
     if export_name:
         for file_item in files:
             relative_path = str(file_item.get("relative_path") or file_item.get("filename") or "").strip().replace("\\", "/")

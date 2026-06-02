@@ -14,6 +14,7 @@
     }
 
     window.api = api;
+    window.withTimeout = withTimeout;
     window.showToast = showToast;
     window.switchPage = switchPage;
     window.renderPage = renderPage;

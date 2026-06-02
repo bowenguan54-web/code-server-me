@@ -12,7 +12,7 @@ import logging
 import os
 import tempfile
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -61,6 +61,7 @@ _config = _load_config()
 
 registry = AlgorithmRegistry()
 _watcher: FileWatcher | None = None
+_cleanup_task: asyncio.Task[None] | None = None
 
 
 # ── Lifespan ───────────────────────────────────────────────────────────────────
@@ -68,7 +69,7 @@ _watcher: FileWatcher | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _watcher
+    global _watcher, _cleanup_task
 
     ensure_algolib_installed()
 
@@ -105,15 +106,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if resolved:
         _watcher = FileWatcher(registry, on_change=_broadcast, on_delete=_broadcast)
         _watcher.start(resolved)
-
-    # 启动临时上传文件清理任务：每 30 分钟清理一次超过 60 分钟的文件。
-    asyncio.create_task(_cleanup_temp_uploads())
+    _cleanup_task = asyncio.create_task(_cleanup_temp_uploads())
 
     yield
 
     # Shutdown.
+    if _cleanup_task is not None:
+        _cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _cleanup_task
+        _cleanup_task = None
     if _watcher is not None:
         _watcher.stop()
+        _watcher = None
 
 
 async def _cleanup_temp_uploads() -> None:

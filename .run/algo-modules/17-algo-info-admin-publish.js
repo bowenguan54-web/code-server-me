@@ -88,9 +88,9 @@ print(result)`;
           <h4 style="margin:16px 0 8px">修改记录</h4>
           <div class="output" style="max-height:240px;overflow:auto">
             <table class="api-table" style="font-size:13px">
-              <thead><tr><th>操作人</th><th>时间</th><th>动作</th></tr></thead>
+              <thead><tr><th>操作人</th><th>时间</th><th>动作</th><th>版本变化</th><th>备注</th></tr></thead>
               <tbody id="infoHistoryBody">
-                <tr><td colspan="3" style="text-align:center;color:var(--text-dim)">加载中...</td></tr>
+                <tr><td colspan="5" style="text-align:center;color:var(--text-dim)">加载中...</td></tr>
               </tbody>
             </table>
           </div>
@@ -105,30 +105,24 @@ print(result)`;
 
     function formatAlgorithmHistoryAction(record) {
       const actionType = record.action_type || record.status || "";
-      const fromVersion = record.from_version || "";
-      const toVersion = record.to_version || "";
-      const reason = record.reason || "";
       switch (actionType) {
         case "code_save": return "保存代码";
+        case "draft_save": return "保存草稿";
         case "submit":
         case "reviewing":
-          return `提交审核${toVersion ? " → v" + toVersion : ""}`;
+          return "提交审核";
         case "approve":
         case "approved":
-          return fromVersion && toVersion
-            ? `审核通过 v${fromVersion} → v${toVersion}`
-            : "审核通过";
+          return "审核通过";
         case "reject":
         case "rejected":
-          return `驳回${reason ? "：" + reason : ""}`;
+          return "驳回";
         case "publish":
         case "published":
         case "new_publish":
-          return `正式发布${toVersion ? " v" + toVersion : ""}`;
+          return "正式发布";
         case "iteration":
-          return fromVersion && toVersion
-            ? `正式发布 v${fromVersion} → v${toVersion}`
-            : "正式发布";
+          return "版本迭代";
         case "withdraw":
         case "draft":
           return "撤回审核";
@@ -140,28 +134,58 @@ print(result)`;
       }
     }
 
+    function formatAlgorithmHistoryVersion(record) {
+      const fromVersion = String(record.from_version || "").trim();
+      const toVersion = String(record.to_version || "").trim();
+      if (fromVersion && toVersion && fromVersion !== toVersion) return `${fromVersion} → ${toVersion}`;
+      if (toVersion) return toVersion;
+      if (fromVersion) return fromVersion;
+      return "-";
+    }
+
+    function formatAlgorithmHistoryTime(timestamp) {
+      if (!timestamp) return "-";
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) return "-";
+      const pad = value => String(value).padStart(2, "0");
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function truncateAlgorithmHistoryReason(reason) {
+      const text = String(reason || "").trim();
+      if (!text) return "-";
+      return text.length > 30 ? `${text.slice(0, 30)}...` : text;
+    }
+
     async function loadAlgorithmHistory(id) {
       const tbody = qs("#infoHistoryBody");
       if (!tbody) return;
+      const emptyHtml = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim)">暂无修改记录</td></tr>';
       if (!id) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim)">暂无修改记录</td></tr>';
+        tbody.innerHTML = emptyHtml;
         return;
       }
       try {
         const data = await api(`/api/v1/algorithms/${safeId(id)}/publish-history`);
-        const history = (Array.isArray(data.history) ? data.history : []).slice().reverse().slice(0, 50);
+        const history = (Array.isArray(data.history) ? data.history : [])
+          .slice()
+          .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+          .slice(0, 50);
         if (!history.length) {
-          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim)">暂无修改记录</td></tr>';
+          tbody.innerHTML = emptyHtml;
           return;
         }
         tbody.innerHTML = history.map(record => {
-          const time = record.timestamp ? new Date(record.timestamp).toLocaleString("zh-CN") : "-";
           const operator = record.operator_name || record.operator || "system";
+          const time = formatAlgorithmHistoryTime(record.timestamp);
           const action = formatAlgorithmHistoryAction(record);
-          return `<tr><td>${esc(operator)}</td><td>${esc(time)}</td><td>${esc(action)}</td></tr>`;
+          const version = formatAlgorithmHistoryVersion(record);
+          const note = truncateAlgorithmHistoryReason(record.reason);
+          const fullNote = String(record.reason || "").trim();
+          return `<tr><td>${esc(operator)}</td><td>${esc(time)}</td><td>${esc(action)}</td><td>${esc(version)}</td><td title="${esc(fullNote)}">${esc(note)}</td></tr>`;
         }).join("");
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim)">加载失败</td></tr>';
+        tbody.innerHTML = emptyHtml;
       }
     }
 

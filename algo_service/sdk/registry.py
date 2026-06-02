@@ -63,6 +63,7 @@ class AlgorithmPackage:
     zh_tags: list[str] = field(default_factory=list)
     published: bool = True
     module_kind: str = "component"
+    owner_id: str = "system"
     is_package: bool = True
 
     def to_dict(self) -> dict[str, Any]:
@@ -82,6 +83,7 @@ class AlgorithmPackage:
             "zh_tags": self.zh_tags,
             "published": self.published,
             "module_kind": self.module_kind,
+            "owner_id": self.owner_id,
             "is_package": self.is_package,
         }
 
@@ -113,7 +115,7 @@ class AlgorithmEntry:
 
 class AlgorithmRegistry:
     def __init__(self) -> None:
-        self._store: dict[str, AlgorithmEntry] = {}
+        self._store: dict[str, list[AlgorithmEntry]] = {}
         self._packages: dict[str, AlgorithmPackage] = {}
         self._watch_roots: list[str] = []
 
@@ -254,6 +256,7 @@ class AlgorithmRegistry:
                 elif isinstance(item, dict) and str(item.get("name", "")).strip():
                     exports.append(str(item.get("name")).strip())
 
+        pkg_owner_id = str(manifest.get("owner_id", "system")).strip() or "system"
         package = AlgorithmPackage(
             package_id=package_id,
             name=name,
@@ -269,11 +272,11 @@ class AlgorithmRegistry:
             zh_tags=[str(tag).strip() for tag in manifest.get("zh_tags", []) if str(tag).strip()],
             published=bool(manifest.get("published", True)),
             module_kind=normalize_module_kind(manifest.get("module_kind", manifest.get("type", "component"))),
+            owner_id=pkg_owner_id,
         )
-        pkg_owner_id = str(manifest.get("owner_id", "system")).strip() or "system"
         pkg_widget_overrides = manifest.get("widget_overrides") if isinstance(manifest.get("widget_overrides"), dict) else {}
 
-        self._replace_package_entries(package.package_id)
+        self._replace_package_entries(package.package_id, pkg_owner_id)
         self._packages[package.package_id] = package
         self._register_package_entries(package, ast_parser, owner_id=pkg_owner_id, widget_overrides=pkg_widget_overrides)
         return package
@@ -322,7 +325,7 @@ class AlgorithmRegistry:
         package = self._find_package_by_path(package_root)
         root = self._find_watch_root(package_root) or package_root
         if package is not None:
-            self._replace_package_entries(package.package_id)
+            self._replace_package_entries(package.package_id, package.owner_id)
         manifest_path = os.path.join(package_root, "algopack.json")
         if not os.path.exists(manifest_path):
             if package is not None:
@@ -330,10 +333,22 @@ class AlgorithmRegistry:
             return None
         return self._scan_package_dir(package_root, root, ast_parser)
 
-    def _replace_package_entries(self, package_id: str) -> None:
-        keys = [key for key, value in self._store.items() if value.package_id == package_id]
-        for key in keys:
-            self._store.pop(key, None)
+    def _replace_package_entries(self, package_id: str, owner_id: str | None = None) -> None:
+        """Remove package entries for one owner without touching same-id entries from others."""
+
+        for entry_id, entries in list(self._store.items()):
+            remaining = [
+                entry
+                for entry in entries
+                if not (
+                    entry.package_id == package_id
+                    and (owner_id is None or (getattr(entry, "owner_id", "system") or "system") == owner_id)
+                )
+            ]
+            if remaining:
+                self._store[entry_id] = remaining
+            else:
+                self._store.pop(entry_id, None)
 
     def _find_watch_root(self, path_value: str) -> str | None:
         abs_path = os.path.abspath(path_value)
@@ -545,13 +560,10 @@ class AlgorithmRegistry:
     # Mutation
     # ------------------------------------------------------------------
 
-    def _entry_store_key(self, entry: AlgorithmEntry) -> str:
-        """Return the internal key used to keep public and private entries apart."""
+    def _iter_entries(self) -> list[AlgorithmEntry]:
+        """Return all entries flattened from the id -> owner list store."""
 
-        owner_id = (getattr(entry, "owner_id", "system") or "system").strip()
-        if owner_id and owner_id != "system":
-            return f"{entry.id}@@{owner_id}"
-        return entry.id
+        return [entry for entries in self._store.values() for entry in entries]
 
     @staticmethod
     def _split_store_key(algorithm_id: str) -> tuple[str, str | None]:
@@ -564,15 +576,54 @@ class AlgorithmRegistry:
         return base, owner_id or None
 
     def register(self, entry: AlgorithmEntry) -> None:
-        key = self._entry_store_key(entry)
-        self._store[key] = entry
-        logger.debug("Registered: %s", key)
+        owner_id = (getattr(entry, "owner_id", "system") or "system").strip() or "system"
+        bucket = self._store.setdefault(entry.id, [])
+        for index, existing in enumerate(bucket):
+            existing_owner = (getattr(existing, "owner_id", "system") or "system").strip() or "system"
+            if existing_owner == owner_id:
+                bucket[index] = entry
+                logger.debug("Replaced: %s@@%s", entry.id, owner_id)
+                return
+        bucket.append(entry)
+        logger.debug("Registered: %s@@%s", entry.id, owner_id)
+
+    def add_entry(self, entry: AlgorithmEntry) -> None:
+        """Backward-compatible alias for register()."""
+
+        self.register(entry)
+
+    def remove(self, entry_id: str, owner_id: str | None = None) -> None:
+        """Remove one owner-specific entry, or all entries for an id when owner is omitted."""
+
+        base_id, owner_hint = self._split_store_key(entry_id)
+        target_owner = owner_id or owner_hint
+        if not target_owner:
+            self._store.pop(base_id, None)
+            return
+        entries = self._store.get(base_id, [])
+        remaining = [
+            entry
+            for entry in entries
+            if (getattr(entry, "owner_id", "system") or "system").strip() != target_owner
+        ]
+        if remaining:
+            self._store[base_id] = remaining
+        else:
+            self._store.pop(base_id, None)
+
+    def unregister(self, entry_id: str, owner_id: str | None = None) -> None:
+        """Backward-compatible alias for remove()."""
+
+        self.remove(entry_id, owner_id)
 
     def unregister_by_file(self, file_path: str) -> None:
         abs_path = os.path.abspath(file_path)
-        keys = [key for key, value in self._store.items() if value.source_file == abs_path]
-        for key in keys:
-            del self._store[key]
+        for entry_id, entries in list(self._store.items()):
+            remaining = [entry for entry in entries if os.path.abspath(entry.source_file) != abs_path]
+            if remaining:
+                self._store[entry_id] = remaining
+            else:
+                self._store.pop(entry_id, None)
 
     # ------------------------------------------------------------------
     # Queries
@@ -581,14 +632,14 @@ class AlgorithmRegistry:
     def search_by_prefix(self, prefix: str) -> list[AlgorithmEntry]:
         keyword = prefix.lower()
         return sorted(
-            (entry for entry in self._store.values() if entry.call_prefix.lower().startswith(keyword)),
+            (entry for entry in self._iter_entries() if entry.call_prefix.lower().startswith(keyword)),
             key=lambda entry: entry.call_prefix,
         )
 
     def search_by_chinese(self, keyword: str) -> list[AlgorithmEntry]:
         needle = keyword.lower()
         scored: list[tuple[int, AlgorithmEntry]] = []
-        for entry in self._store.values():
+        for entry in self._iter_entries():
             score = 0
             if needle in entry.zh_name.lower():
                 score += 3
@@ -604,27 +655,41 @@ class AlgorithmRegistry:
         return [entry for _, entry in scored]
 
     def get_all(self) -> list[AlgorithmEntry]:
-        return sorted(self._store.values(), key=lambda entry: entry.call_prefix)
+        return sorted(
+            self._iter_entries(),
+            key=lambda entry: (
+                entry.call_prefix,
+                0 if (getattr(entry, "owner_id", "system") or "system") == "system" else 1,
+                getattr(entry, "owner_id", "system") or "system",
+            ),
+        )
 
     def get_by_id(self, algorithm_id: str) -> AlgorithmEntry | None:
-        key = algorithm_id.strip()
-        exact = self._store.get(key)
-        if exact is not None:
-            return exact
-        base_id, owner_hint = self._split_store_key(key)
+        base_id, owner_hint = self._split_store_key(algorithm_id)
         if owner_hint:
-            return next((entry for entry in self._store.values() if entry.id == base_id and getattr(entry, "owner_id", "system") == owner_hint), None)
-        public = self._store.get(base_id)
-        if public is not None:
-            return public
-        candidates = [entry for entry in self._store.values() if entry.id == base_id]
-        return next((entry for entry in candidates if getattr(entry, "owner_id", "system") == "system"), None) or (candidates[0] if candidates else None)
+            return self.get_by_id_and_owner(base_id, owner_hint)
+        candidates = self._store.get(base_id, [])
+        public = next(
+            (entry for entry in candidates if (getattr(entry, "owner_id", "system") or "system") == "system"),
+            None,
+        )
+        return public or (candidates[0] if candidates else None)
+
+    def get_by_id_and_owner(self, entry_id: str, owner_id: str) -> AlgorithmEntry | None:
+        """Return the entry for an exact id and owner_id pair."""
+
+        base_id, owner_hint = self._split_store_key(entry_id)
+        target_owner = owner_hint or (owner_id.strip() or "system")
+        for entry in self._store.get(base_id, []):
+            if (getattr(entry, "owner_id", "system") or "system") == target_owner:
+                return entry
+        return None
 
     def get_by_namespace(self, namespace: str) -> list[AlgorithmEntry]:
-        return [entry for entry in self._store.values() if entry.namespace == namespace]
+        return [entry for entry in self._iter_entries() if entry.namespace == namespace]
 
     def get_by_type(self, type_filter: str) -> list[AlgorithmEntry]:
-        return [entry for entry in self._store.values() if entry.type == type_filter]
+        return [entry for entry in self._iter_entries() if entry.type == type_filter]
 
     def to_completion_json(self) -> list[dict[str, Any]]:
         return [
@@ -657,7 +722,7 @@ class AlgorithmRegistry:
 
     @property
     def count(self) -> int:
-        return len(self._store)
+        return sum(len(entries) for entries in self._store.values())
 
     @property
     def package_count(self) -> int:

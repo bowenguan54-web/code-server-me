@@ -23,7 +23,78 @@
       return merged;
     }
 
-    async function _saveAsPrivateDraft() {
+    function _findExistingPrivateDraftForCurrentUser(funcName, category, page) {
+      const parent = typeof parentPageOf === "function" ? parentPageOf(page) : page;
+      const pools = [page, parent, "my-algos", "components", "templates"].filter(Boolean);
+      const items = [];
+      pools.forEach(key => {
+        (state.data[key] || []).forEach(item => {
+          if (item && !items.some(existing => existing.id === item.id)) items.push(item);
+        });
+      });
+      return items.find(item => {
+        if (!ownsAlgorithm(item)) return false;
+        if (namespaceFunction(item) !== funcName) return false;
+        const itemNamespace = item.namespace || "";
+        const itemGroup = typeof groupKey === "function" ? groupKey(item, page) : "";
+        return itemNamespace === category || itemGroup === category;
+      }) || null;
+    }
+
+    async function _updateExistingPrivateDraft(existingDraft, files, skipReload) {
+      const existingPackageId = existingDraft.packageId || existingDraft.package_id;
+      if (existingPackageId) {
+        for (const file of files) {
+          await api(`/api/v1/packages/${safeId(existingPackageId)}/files/${safeId(file.filename)}`, {
+            method: "POST",
+            body: JSON.stringify({ content: file.content || "" })
+          });
+        }
+      } else {
+        for (const file of files) {
+          try {
+            await api(`/api/v1/algorithm-source/${safeId(existingDraft.id)}/files/${safeId(file.filename)}`, {
+              method: "POST",
+              body: JSON.stringify({ content: file.content || "" })
+            });
+          } catch (err) {
+            const message = String(err?.message || "");
+            if (!message.includes("不存在") && !message.includes("404")) throw err;
+            await api(`/api/v1/algorithm-source/${safeId(existingDraft.id)}/add-file`, {
+              method: "POST",
+              body: JSON.stringify({ filename: file.filename, content: file.content || "" })
+            });
+          }
+        }
+      }
+      state.editing.id = existingDraft.id;
+      state.editing.algo = existingDraft;
+      state.highlightId = existingDraft.id;
+      if (existingPackageId) {
+        state.editing.package = { ...(state.editing.package || {}), package_id: existingPackageId };
+      }
+      await bumpVersionAfterCodeSave(existingDraft, false);
+      if (!skipReload) {
+        const list = await reloadEditorListData(state.editing.page);
+        const fresh = list.find(item => item.id === state.editing.id) || list.find(item =>
+          ownsAlgorithm(item) &&
+          namespaceFunction(item) === namespaceFunction(existingDraft) &&
+          (item.namespace || "") === (existingDraft.namespace || "")
+        );
+        if (fresh) {
+          state.editing.id = fresh.id;
+          state.editing.algo = fresh;
+          state.highlightId = fresh.id;
+        }
+        refreshEditorStatusButtons();
+      }
+      const nsInput = qs("#nsInput");
+      if (nsInput) nsInput.value = namespaceFunction(state.editing.algo || existingDraft);
+      showToast("\u79c1\u6709\u8349\u7a3f\u5df2\u66f4\u65b0");
+      return state.editing.algo || existingDraft;
+    }
+
+    async function _saveAsPrivateDraft(skipReload = false) {
       const algo = state.editing?.algo;
       if (!algo) return;
       const files = Array.from(state.models.entries()).map(([filename, model]) => ({
@@ -51,12 +122,28 @@
         return String(code || "").replace(new RegExp(`(def\\s+)${escapeRegExp(fromName)}(\\s*\\()`, "m"), `$1${toName}$2`);
       };
       const packageId = state.editing.algo.packageId || state.editing.package?.package_id;
+      const draftFiles = files.map(file => ({
+        filename: file.filename,
+        relative_path: file.relative_path || file.filename,
+        content: file === entryFile ? renameEntryFunction(file.content || "", oldFuncName, funcName) : (file.content || ""),
+        isEntry: !!file.isEntry
+      }));
+      const existingDraft = _findExistingPrivateDraftForCurrentUser(funcName, category, state.editing.page);
+      if (existingDraft) {
+        try {
+          return await _updateExistingPrivateDraft(existingDraft, draftFiles, skipReload);
+        } catch (err) {
+          showToast(err.message);
+          return;
+        }
+      }
+
       if (packageId) {
         const entryName = entryFile?.filename || state.currentFile || "main.py";
-        const packageFiles = files.map(file => ({
+        const packageFiles = draftFiles.map(file => ({
           filename: file.filename,
           relative_path: file.relative_path || file.filename,
-          content: file === entryFile ? renameEntryFunction(file.content || "", oldFuncName, funcName) : (file.content || "")
+          content: file.content || ""
         }));
         try {
           const result = await api("/api/v1/packages/create", {
@@ -80,6 +167,11 @@
             })
           });
           const newPackage = result.package;
+          if (skipReload) {
+            state.highlightId = newPackage?.package_id || state.highlightId;
+            showToast("\u5df2\u53e6\u5b58\u4e3a\u60a8\u7684\u79c1\u6709\u8349\u7a3f\uff08\u591a\u6587\u4ef6\uff09");
+            return newPackage;
+          }
           const list = await reloadEditorListData(state.editing.page);
           const newAlgo = list.find(item =>
             (item.packageId === newPackage?.package_id || item.package_id === newPackage?.package_id) &&
@@ -91,24 +183,22 @@
             ownsAlgorithm(item)
           );
           if (newAlgo) {
-            showToast("✅ 已另存为您的私有草稿（多文件）");
             state.highlightId = newAlgo.id;
             state.editing.id = newAlgo.id;
             state.editing.algo = newAlgo;
             state.editing.package = newPackage || state.editing.package;
-            refreshEditorStatusButtons();
           } else {
             state.editing.package = newPackage || state.editing.package;
-            showToast("✅ 已另存为您的私有草稿（多文件）");
-            refreshEditorStatusButtons();
           }
+          showToast("\u5df2\u53e6\u5b58\u4e3a\u60a8\u7684\u79c1\u6709\u8349\u7a3f\uff08\u591a\u6587\u4ef6\uff09");
+          refreshEditorStatusButtons();
         } catch (err) {
           showToast(err.message);
         }
         return;
       }
 
-      const entryContent = renameEntryFunction(entryFile?.content || "", oldFuncName, funcName);
+      const entryContent = draftFiles.find(file => file.isEntry)?.content || draftFiles.find(file => file.filename === entryFile?.filename)?.content || "";
       try {
         const result = await api("/api/v1/algorithms/create", {
           method: "POST",
@@ -129,20 +219,24 @@
         });
         const newAlgo = result.algorithm;
         if (newAlgo) {
-          for (const file of files) {
-            if (!file || file === entryFile) continue;
+          for (const file of draftFiles) {
+            if (!file || file.filename === entryFile?.filename) continue;
             await api(`/api/v1/algorithm-source/${safeId(newAlgo.id)}/add-file`, {
               method: "POST",
               body: JSON.stringify({ filename: file.filename, content: file.content })
             });
           }
+          if (skipReload) {
+            state.highlightId = newAlgo.id;
+            showToast("\u5df2\u53e6\u5b58\u4e3a\u60a8\u7684\u79c1\u6709\u8349\u7a3f");
+            return newAlgo;
+          }
           state.editing.id = newAlgo.id;
           state.editing.algo = newAlgo;
           await reloadEditorListData(state.editing.page);
           state.highlightId = newAlgo.id;
-          showToast("✅ 已另存为您的私有草稿");
+          showToast("\u5df2\u53e6\u5b58\u4e3a\u60a8\u7684\u79c1\u6709\u8349\u7a3f");
           refreshEditorStatusButtons();
-          // Update namespace display to new algo
           const nsInput = qs("#nsInput");
           if (nsInput) nsInput.value = namespaceFunction(newAlgo);
         }
@@ -172,10 +266,14 @@
     }
 
     async function saveEditorAll() {
+      let saveResult = null;
       if (state.blockEditor) {
         await saveBlockEditor();
       } else {
-        await saveCurrentFile();
+        saveResult = await saveCurrentFile();
+      }
+      if (saveResult?.savedAsPrivateDraft) {
+        return;
       }
       const input = qs("#nsInput");
       if (state.editing?.algo && input && input.value.trim()) {
@@ -185,14 +283,14 @@
       }
     }
 
-    async function saveCurrentFile() {
+    async function saveCurrentFile(forClose = false) {
       if (!state.editing || !state.currentFile) return;
       const content = state.models.get(state.currentFile)?.getValue() || "";
       const packageId = state.editing.algo.packageId || state.editing.package?.package_id;
       const isOwner = state.currentUser?.role === "admin" || canManageAlgorithm(state.editing.algo);
       if (!isOwner) {
-        await _saveAsPrivateDraft();
-        return;
+        const draft = await _saveAsPrivateDraft(!!forClose);
+        return { savedAsPrivateDraft: true, draft };
       }
       if (!packageId) {
         try {
@@ -212,7 +310,7 @@
         } catch (error) {
           showToast(error.message);
         }
-        return;
+        return { savedAsPrivateDraft: false };
       }
       try {
         await api(`/api/v1/packages/${safeId(packageId)}/files/${safeId(state.currentFile)}`, {
@@ -224,6 +322,7 @@
       } catch (error) {
         showToast(error.message);
       }
+      return { savedAsPrivateDraft: false };
     }
 
     async function registerCompletionProvider() {
@@ -344,7 +443,7 @@
       if (state.blockEditor) {
         await saveBlockEditor();
       } else {
-        await saveCurrentFile();
+        await saveCurrentFile(true);
       }
       closeEditor();
     }

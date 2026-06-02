@@ -3,18 +3,18 @@
   "call_prefix": "alg.custom.my_algorithm",
   "base_status": "draft",
   "status": "reviewing",
-  "review_kind": "new_publish",
-  "target_public_id": "",
-  "target_public_call_prefix": "",
-  "base_public_version": "",
-  "version_bump_type": "keep",
-  "version_bump": "1.0.1",
+  "review_kind": "version_iteration",
+  "target_public_id": "custom.my_algorithm",
+  "target_public_call_prefix": "alg.custom.my_algorithm",
+  "base_public_version": "1.0.1",
+  "version_bump_type": "patch",
+  "version_bump": "1.0.2",
   "metadata": {},
   "files": [
     {
       "filename": "main.py",
       "relative_path": "main.py",
-      "content": "from .preprocess import clean_values\nfrom .model import score_values\n\n\ndef my_algorithm(data: list[float], threshold: float = 0.5) -> dict:\n    values = clean_values(data)\n    scores = score_values(values)\n    passed = [value for value, score in zip(values, scores) if score >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"valid_count\": len(values),\n        \"scores\": scores,\n        \"passed\": passed,\n        \"threshold\": threshold,\n    }\n"
+      "content": "from .preprocess import clean_values\nfrom .model import score_values\n\n\ndef my_algorithm(data: list[float], threshold: float = 0.5) -> dict:\n    values = clean_values(data)\n    scores = score_values(values)\n    passed = [value for value, score in zip(values, scores) if score >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"valid_count\": len(values),\n        \"scores\": scores,\n        \"passed\": passed,\n\n    }\n"
     },
     {
       "filename": "model.py",
@@ -27,5 +27,5 @@
       "content": "def clean_values(data: list[float]) -> list[float]:\n    values = []\n    for item in data:\n        if item is None:\n            continue\n        values.append(float(item))\n    return values\n"
     }
   ],
-  "updated_at": "2026-05-21T02:50:02.504628+00:00"
+  "updated_at": "2026-05-25T09:23:09.791837+00:00"
 }

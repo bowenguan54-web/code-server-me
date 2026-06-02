@@ -18,79 +18,115 @@
     async function approveReview(id) {
       let draft = null;
       let publicFiles = [];
+      let submitCheck = null;
       try {
         const data = await api(`/api/v1/algorithms/${safeId(id)}/review-draft`);
         draft = data?.draft || null;
       } catch (error) {
         draft = null;
       }
-      const isIteration = draft?.review_kind === "version_iteration";
-      const baseVer = draft?.base_public_version || "1.0.0";
+      try {
+        submitCheck = await api(`/api/v1/algorithms/${safeId(id)}/submit-check`);
+      } catch (error) {
+        submitCheck = null;
+      }
+
+      const draftKind = draft?.review_kind || "new_publish";
+      const isIteration = draftKind === "version_iteration" || !!submitCheck?.isVersionIteration;
+      const publicAlgorithm = submitCheck?.publicAlgorithm || null;
+      const hasNewPublishConflict = !!(submitCheck?.hasConflict && !submitCheck?.isVersionIteration);
+      const baseVer = submitCheck?.baseVersion || draft?.base_public_version || publicAlgorithm?.version || "1.0.0";
 
       const bumpV = (ver, type) => {
-        const [ma, mi, pa] = parseVersion(ver);
+        const [ma, mi, pa] = parseVersion(ver || "1.0.0");
         if (type === "major") return `${ma + 1}.0.0`;
         if (type === "minor") return `${ma}.${mi + 1}.0`;
         return `${ma}.${mi}.${pa + 1}`;
       };
-      const options = isIteration ? [
-        { type: "patch", value: bumpV(baseVer, "patch"), label: `补丁版本：${baseVer} → ${bumpV(baseVer, "patch")}` },
-        { type: "minor", value: bumpV(baseVer, "minor"), label: `次版本：${baseVer} → ${bumpV(baseVer, "minor")}` },
-        { type: "major", value: bumpV(baseVer, "major"), label: `主版本：${baseVer} → ${bumpV(baseVer, "major")}` },
-      ] : [];
+      const versionOptions = (submitCheck?.versionOptions && submitCheck.versionOptions.length)
+        ? submitCheck.versionOptions
+        : [
+          { type: "patch", value: bumpV(baseVer, "patch"), label: `\u8865\u4e01\u7248\u672c\uff1a${baseVer} \u2192 ${bumpV(baseVer, "patch")}` },
+          { type: "minor", value: bumpV(baseVer, "minor"), label: `\u6b21\u7248\u672c\uff1a${baseVer} \u2192 ${bumpV(baseVer, "minor")}` },
+          { type: "major", value: bumpV(baseVer, "major"), label: `\u4e3b\u7248\u672c\uff1a${baseVer} \u2192 ${bumpV(baseVer, "major")}` },
+        ];
 
-      if (isIteration && draft.target_public_id) {
+      if (isIteration && (draft?.target_public_id || publicAlgorithm?.id)) {
         try {
-          const src = await api(`/api/v1/algorithm-source/${safeId(draft.target_public_id)}`);
+          const targetId = draft?.target_public_id || publicAlgorithm?.id;
+          const src = await api(`/api/v1/algorithm-source/${safeId(targetId)}`);
           publicFiles = src.folder_files || [];
         } catch (_) { /* ignore */ }
       }
 
       let diffHtml = "";
       if (isIteration) {
-        const draftFiles = draft.files || [];
+        const draftFiles = draft?.files || [];
         const entryPublic = publicFiles.find(f => f.is_entry) || publicFiles[0];
         const entryDraft = draftFiles.find(f => f.filename === entryPublic?.filename) || draftFiles[0];
         if (entryPublic || entryDraft) {
           diffHtml = `
             <div class="form-row" style="grid-column:1/-1">
-              <label>代码对比 <span style="color:var(--text-dim);font-size:12px">左：当前公有版本 v${esc(baseVer)} &nbsp;|&nbsp; 右：新提交版本</span></label>
+              <label>\u4ee3\u7801\u5bf9\u6bd4 <span style="color:var(--text-dim);font-size:12px">\u5de6\uff1a\u5f53\u524d\u516c\u6709\u7248\u672c v${esc(baseVer)} &nbsp;|&nbsp; \u53f3\uff1a\u65b0\u63d0\u4ea4\u7248\u672c</span></label>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:340px">
                 <div>
-                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryPublic?.relative_path || entryPublic?.filename) || "（无）")}</div>
-                  <pre style="margin:0;padding:10px;background:var(--bg-deep);border-radius:6px;font-size:11px;overflow:auto;max-height:310px;border:1px solid var(--line)">${esc(entryPublic?.content || "（无文件）")}</pre>
+                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryPublic?.relative_path || entryPublic?.filename) || "\uff08\u65e0\uff09")}</div>
+                  <pre style="margin:0;padding:10px;background:var(--bg-deep);border-radius:6px;font-size:11px;overflow:auto;max-height:310px;border:1px solid var(--line)">${esc(entryPublic?.content || "\uff08\u65e0\u6587\u4ef6\uff09")}</pre>
                 </div>
                 <div>
-                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryDraft?.relative_path || entryDraft?.filename) || "（无）")}</div>
-                  <pre style="margin:0;padding:10px;background:var(--bg-deep);border-radius:6px;font-size:11px;overflow:auto;max-height:310px;border:1px solid rgba(88,166,255,.5)">${esc(entryDraft?.content || "（无文件）")}</pre>
+                  <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">${esc((entryDraft?.relative_path || entryDraft?.filename) || "\uff08\u65e0\uff09")}</div>
+                  <pre style="margin:0;padding:10px;background:var(--bg-deep);border-radius:6px;font-size:11px;overflow:auto;max-height:310px;border:1px solid rgba(88,166,255,.5)">${esc(entryDraft?.content || "\uff08\u65e0\u6587\u4ef6\uff09")}</pre>
                 </div>
               </div>
             </div>`;
         }
       }
 
+      const kindHtml = `
+        <div class="form-row" style="grid-column:1/-1">
+          <label>\u5ba1\u6838\u7c7b\u578b</label>
+          <div class="notice ${isIteration ? "warning" : ""}" style="margin:0">
+            ${isIteration
+              ? `\u7248\u672c\u8fed\u4ee3\uff1a\u8be5\u63d0\u4ea4\u5c06\u66f4\u65b0\u73b0\u6709\u516c\u6709\u7b97\u6cd5 ${esc(draft?.target_public_call_prefix || publicAlgorithm?.callPrefix || publicAlgorithm?.displayNamespace || "")}`
+              : "\u65b0\u5efa\u53d1\u5e03\uff1a\u8be5\u63d0\u4ea4\u901a\u8fc7\u540e\u5c06\u53d1\u5e03\u4e3a\u65b0\u7684\u516c\u6709\u7b97\u6cd5"}
+          </div>
+        </div>`;
+
+      const conflictHtml = hasNewPublishConflict ? `
+        <div class="form-row" style="grid-column:1/-1">
+          <div class="notice danger" style="margin:0">
+            \u5df2\u5b58\u5728\u540c\u540d\u516c\u6709\u7b97\u6cd5 ${esc(publicAlgorithm?.callPrefix || publicAlgorithm?.displayNamespace || publicAlgorithm?.id || "")}\uff0c\u5f53\u524d\u63d0\u4ea4\u4e0d\u80fd\u4f5c\u4e3a\u65b0\u7b97\u6cd5\u53d1\u5e03\u3002\u8bf7\u9a73\u56de\u5e76\u8981\u6c42\u63d0\u4ea4\u8005\u4fee\u6539\u547d\u540d\u7a7a\u95f4\uff0c\u6216\u91cd\u65b0\u63d0\u4ea4\u4e3a\u7248\u672c\u8fed\u4ee3\u3002
+          </div>
+        </div>` : "";
+
       const versionHtml = isIteration ? `
         <div class="form-row" style="grid-column:1/-1">
-          <label>目标公有算法 <span style="color:var(--text-dim);font-size:12px">${esc(draft.target_public_call_prefix || "")}</span></label>
-          <div class="notice warning" style="margin:0 0 8px">该提交将覆盖现有公有算法的代码，请核对无误后选择版本号并通过。</div>
+          <label>\u76ee\u6807\u7248\u672c</label>
           <select id="approveVersionBump" style="width:100%;min-width:260px">
-            ${options.map((o, i) => `<option value="${esc(o.value)}" data-type="${esc(o.type)}"${i === 0 ? " selected" : ""}>${esc(o.label)}</option>`).join("")}
+            ${versionOptions.map((o, i) => `<option value="${esc(o.value)}" data-type="${esc(o.type)}"${i === 0 ? " selected" : ""}>${esc(o.label)}</option>`).join("")}
           </select>
         </div>
-      ` : "";
+      ` : `
+        <div class="form-row" style="grid-column:1/-1">
+          <label>\u53d1\u5e03\u7248\u672c</label>
+          <input id="approveVersionBump" data-type="patch" value="${esc(draft?.metadata?.version || "1.0.0")}" placeholder="1.0.0" style="width:100%" />
+        </div>
+      `;
 
       qs("#modalRoot").classList.remove("hidden");
       qs("#modalRoot").innerHTML = `
-        <div class="modal" style="max-width:${isIteration ? "900px" : "480px"}">
-          <h3>审核通过确认</h3>
-          <p style="color:var(--text-dim);margin:0 0 12px">确认通过审核？通过后将自动发布，无需再手动正式发布。</p>
+        <div class="modal" style="max-width:${isIteration ? "900px" : "560px"}">
+          <h3>\u5ba1\u6838\u901a\u8fc7\u786e\u8ba4</h3>
+          <p style="color:var(--text-dim);margin:0 0 12px">\u786e\u8ba4\u901a\u8fc7\u5ba1\u6838\uff1f\u901a\u8fc7\u540e\u5c06\u81ea\u52a8\u53d1\u5e03\uff0c\u65e0\u9700\u518d\u624b\u52a8\u6b63\u5f0f\u53d1\u5e03\u3002</p>
           <div class="form-grid">
+            ${kindHtml}
+            ${conflictHtml}
             ${diffHtml}
             ${versionHtml}
           </div>
           <div class="modal-actions">
-            <button onclick="window.closeModal()">取消</button>
-            <button class="success" onclick="window.confirmApproveReview('${esc(id)}')">确认通过</button>
+            <button onclick="window.closeModal()">\u53d6\u6d88</button>
+            <button class="success" ${hasNewPublishConflict ? "disabled" : ""} onclick="window.confirmApproveReview('${esc(id)}')">\u786e\u8ba4\u901a\u8fc7</button>
           </div>
         </div>
       `;
@@ -98,16 +134,19 @@
 
     async function confirmApproveReview(id) {
       const versionSelect = qs("#approveVersionBump");
-      const body = versionSelect ? {
-        version_bump: versionSelect.value,
-        version_bump_type: versionSelect.selectedOptions?.[0]?.dataset?.type || "patch"
-      } : {};
+      const selected = versionSelect?.selectedOptions?.[0];
+      const body = {
+        version_bump: versionSelect?.value || "",
+        version_bump_type: selected?.dataset?.type || versionSelect?.dataset?.type || "patch",
+        reason: "\u5ba1\u6838\u901a\u8fc7"
+      };
       closeModal();
       try {
         const result = await api(`/api/v1/algorithms/${safeId(id)}/approve`, { method: "POST", body: JSON.stringify(body) });
-        showToast(result?.autoPublished ? "审核已通过并自动发布" : "审核已通过");
+        showToast(result?.autoPublished ? "\u5ba1\u6838\u5df2\u901a\u8fc7\u5e76\u81ea\u52a8\u53d1\u5e03" : "\u5ba1\u6838\u5df2\u901a\u8fc7");
+        await loadModuleData("components");
         if (state.page === "review") await renderReviewPage();
-        else { await loadModuleData("components"); renderCards("components"); }
+        else if (state.page === "components" || state.page === "templates") renderCards(state.page);
       } catch (error) {
         showToast(error.message);
       }
