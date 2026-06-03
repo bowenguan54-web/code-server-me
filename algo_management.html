@@ -1,6 +1,12 @@
 ﻿<!doctype html>
 <html lang="zh-CN">
 <head>
+  <script>
+    (function () {
+      var target = "src/browser/pages/algo-lib.html" + window.location.search + window.location.hash;
+      window.location.replace(target);
+    })();
+  </script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AlgoLib 算法管理平台</title>

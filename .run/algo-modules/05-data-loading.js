@@ -89,6 +89,15 @@
         <section id="stats" class="stat-bar"></section>
         <section id="list">${skeletonHtml()}</section>
       `;
+      const clearStaleSkeleton = (message) => {
+        if (state._moduleRenderToken !== renderToken || state.page !== page) return;
+        const listEl = qs("#list");
+        if (!listEl) return;
+        if (listEl.querySelector(".skeleton") && !listEl.querySelector(".card, .folder-section, .empty")) {
+          listEl.innerHTML = `<div class="empty">${esc(message || "数据加载未完成，请刷新页面重试")}</div>`;
+        }
+      };
+      window.setTimeout(() => clearStaleSkeleton("数据加载超时，请刷新页面重试"), 16000);
       withTimeout(loadModuleData(page), 15000, "数据加载超时，请刷新页面重试")
         .then(() => {
           if (state._moduleRenderToken !== renderToken || state.page !== page) return;
@@ -112,6 +121,9 @@
           if (state._moduleRenderToken !== renderToken || state.page !== page) return;
           const listEl = qs("#list");
           if (listEl) listEl.innerHTML = `<div class="empty">${esc(error.message || error)}</div>`;
+        })
+        .finally(() => {
+          clearStaleSkeleton("当前分类下暂无算法");
         });
     }
 

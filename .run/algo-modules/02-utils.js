@@ -23,10 +23,19 @@
     function parseScalarToken(token) {
       const text = String(token ?? "").trim();
       if (!text) return "";
+      const unquoted = text.replace(/^["'“”‘’]|["'“”‘’]$/g, "").trim();
+      if (unquoted !== text) return parseScalarToken(unquoted);
       if (/^(true|false)$/i.test(text)) return text.toLowerCase() === "true";
       if (/^null$/i.test(text)) return null;
       if (!Number.isNaN(Number(text)) && /^[-+]?\d+(\.\d+)?$/.test(text)) return Number(text);
       return text;
+    }
+    function normalizeLooseValueText(value) {
+      return String(value ?? "")
+        .trim()
+        .replace(/[，、；;]/g, ",")
+        .replace(/[“”]/g, '"')
+        .replace(/[‘’]/g, "'");
     }
     function parseSimpleCsv(text) {
       const lines = String(text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean);
@@ -43,21 +52,26 @@
       return rows.map(row => row.map(parseScalarToken));
     }
     function parseLooseList(text) {
-      const raw = String(text ?? "").trim();
+      const raw = normalizeLooseValueText(text);
       if (!raw) return [];
+      let candidate = raw;
+      if (/^\{[\s\S]*\}$/.test(candidate) && !/:/.test(candidate)) {
+        candidate = `[${candidate.slice(1, -1)}]`;
+      }
       try {
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(candidate);
         return Array.isArray(parsed) ? parsed : [parsed];
       } catch (_error) {
-        if (/\r?\n/.test(raw) && raw.includes(",")) {
-          const csvRows = parseSimpleCsv(raw);
+        if (/\r?\n/.test(candidate) && candidate.includes(",")) {
+          const csvRows = parseSimpleCsv(candidate);
           if (Array.isArray(csvRows) && csvRows.length && (Array.isArray(csvRows[0]) || typeof csvRows[0] === "object")) return csvRows;
         }
-        return raw.split(/[\r\n,]+/).map(item => item.trim()).filter(Boolean).map(parseScalarToken);
+        const listText = /^\[[\s\S]*\]$/.test(candidate) ? candidate.slice(1, -1) : candidate;
+        return listText.split(/[\r\n,]+/).map(item => item.trim()).filter(Boolean).map(parseScalarToken);
       }
     }
     function parseLooseDict(text) {
-      const raw = String(text ?? "").trim();
+      const raw = normalizeLooseValueText(text);
       if (!raw) return {};
       try {
         const parsed = JSON.parse(raw);
@@ -147,7 +161,14 @@
         response = await fetch(BASE + path, fetchOptions);
       } catch (error) {
         const isTimeout = error.name === "TimeoutError" || error.name === "AbortError";
-        throw new Error(isTimeout ? "\u8bf7\u6c42\u8d85\u65f6\uff0c\u8bf7\u68c0\u67e5\u670d\u52a1\u662f\u5426\u6b63\u5e38\u8fd0\u884c" : (error.message || "\u7f51\u7edc\u9519\u8bef"));
+        const rawMessage = String(error.message || "");
+        if (isTimeout) {
+          throw new Error("\u8bf7\u6c42\u8d85\u65f6\uff0c\u8bf7\u68c0\u67e5\u670d\u52a1\u662f\u5426\u6b63\u5e38\u8fd0\u884c");
+        }
+        if (/failed to fetch|networkerror|load failed/i.test(rawMessage)) {
+          throw new Error("\u65e0\u6cd5\u8fde\u63a5\u540e\u7aef\u670d\u52a1\uff0c\u8bf7\u786e\u8ba4\u540e\u7aef\u6b63\u5728\u8fd0\u884c\u540e\u91cd\u8bd5\u3002");
+        }
+        throw new Error(rawMessage || "\u7f51\u7edc\u9519\u8bef");
       } finally {
         if (timeoutId) window.clearTimeout(timeoutId);
       }

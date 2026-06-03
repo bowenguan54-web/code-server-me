@@ -33,6 +33,12 @@ from .algorithms import (
     get_registry,
 )
 from ..sdk.auth_utils import get_current_user
+from ..sdk.change_logs import (
+    make_change_log,
+    manifest_change_logs,
+    load_manifest as load_change_log_manifest,
+    merge_pending_public_change_logs_to_public,
+)
 from ..sdk.registry import AlgorithmEntry, AlgorithmRegistry
 
 router = APIRouter(prefix="/api/v1", tags=["publish"])
@@ -246,6 +252,67 @@ def _review_metadata(entry: AlgorithmEntry, body: ReasonBody | None, target_vers
     return metadata
 
 
+def _operator_user(operator: str, operator_name: str) -> dict[str, Any]:
+    return {"id": operator or "system", "username": operator_name or operator or "system"}
+
+
+def _entry_pending_public_change_logs(entry: AlgorithmEntry) -> list[dict[str, Any]]:
+    try:
+        logs = manifest_change_logs(load_change_log_manifest(_entry_config_path(entry)))
+    except (OSError, RuntimeError):
+        return []
+    return [item for item in logs.get("pendingPublicChangeLogs", []) if isinstance(item, dict)]
+
+
+def _submit_pending_public_logs(
+    entry: AlgorithmEntry,
+    public_entry: AlgorithmEntry | None,
+    review_kind: str,
+    target_version: str,
+    operator: str,
+    operator_name: str,
+) -> list[dict[str, Any]]:
+    pending_logs = _entry_pending_public_change_logs(entry)
+    if pending_logs:
+        return pending_logs
+    if review_kind == "version_iteration" or public_entry is not None:
+        return [
+            make_change_log(
+                "edit_algorithm",
+                _operator_user(operator, operator_name),
+                version_before=str((public_entry.version if public_entry else entry.version) or ""),
+                version_after=str(target_version or ""),
+                remark="编辑公有算法，等待审核发布",
+            )
+        ]
+    return [
+        make_change_log(
+            "create_algorithm",
+            _operator_user(operator, operator_name),
+            version_before="",
+            version_after=str(target_version or entry.version or ""),
+            remark="新建公有算法，等待审核发布",
+        )
+    ]
+
+
+def _published_pending_logs(
+    logs: Any,
+    fallback_log: dict[str, Any],
+    from_version: str,
+    to_version: str,
+) -> list[dict[str, Any]]:
+    items = [dict(item) for item in logs if isinstance(item, dict)] if isinstance(logs, list) else []
+    if not items:
+        items = [fallback_log]
+    for item in items:
+        item.setdefault("versionBefore", from_version)
+        item.setdefault("versionAfter", to_version)
+        if not item.get("versionAfter"):
+            item["versionAfter"] = to_version
+    return items
+
+
 def _save_submit_review_draft(
     entry: AlgorithmEntry,
     registry: AlgorithmRegistry,
@@ -266,6 +333,14 @@ def _save_submit_review_draft(
     version_change = body.version_change or body.version_bump_type
     if review_kind == "version_iteration" and public_entry is not None:
         target_version = target_version or public_entry.version
+    pending_public_logs = _submit_pending_public_logs(
+        entry,
+        public_entry,
+        review_kind,
+        target_version,
+        operator,
+        operator_name,
+    )
     snapshot_files = [
         {
             "filename": str(item.get("filename") or item.get("relative_path") or ""),
@@ -293,6 +368,7 @@ def _save_submit_review_draft(
         "version_bump": target_version,
         "files": snapshot_files,
         "metadata": metadata,
+        "pendingPublicChangeLogs": pending_public_logs,
     }
     _save_review_draft(entry, draft)
     return target_version, version_change, review_kind
@@ -513,6 +589,28 @@ def _approve_version_iteration(
 
     target_entry = _apply_review_files_to_entry(target_entry, draft.get("files", []), metadata, registry)
     config_path = _write_published_manifest(target_entry, metadata, new_version)
+    merge_pending_public_change_logs_to_public(
+        config_path,
+        fallback_log=make_change_log(
+            "edit_algorithm",
+            _operator_user(operator, operator_name),
+            version_before=from_version,
+            version_after=new_version,
+            remark="本次编辑已审核发布",
+        ),
+        pending_logs=_published_pending_logs(
+            draft.get("pendingPublicChangeLogs"),
+            make_change_log(
+                "edit_algorithm",
+                _operator_user(operator, operator_name),
+                version_before=from_version,
+                version_after=new_version,
+                remark="本次编辑已审核发布",
+            ),
+            from_version,
+            new_version,
+        ),
+    )
     _append_history(
         target_entry,
         "published",
@@ -598,6 +696,28 @@ def _approve_new_publish(
         if key in metadata:
             config[key] = metadata[key]
     _save_json(config_path, config)
+    merge_pending_public_change_logs_to_public(
+        config_path,
+        fallback_log=make_change_log(
+            "create_algorithm",
+            _operator_user(operator, operator_name),
+            version_before="",
+            version_after=version,
+            remark="本次新建已审核发布",
+        ),
+        pending_logs=_published_pending_logs(
+            draft.get("pendingPublicChangeLogs"),
+            make_change_log(
+                "create_algorithm",
+                _operator_user(operator, operator_name),
+                version_before="",
+                version_after=version,
+                remark="本次新建已审核发布",
+            ),
+            "",
+            version,
+        ),
+    )
     _rescan_all(registry)
     refreshed = _entry_by_owner(registry, entry.id, "system") or registry.get_by_id(entry.id) or entry
     _append_history(

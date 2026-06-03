@@ -1,19 +1,46 @@
 {
   "name": "my_algorith",
-  "zh_name": "自定义算法",
-  "version": "1.0.1",
+  "zh_name": "my_algorith",
+  "version": "1.0.3",
   "namespace": "custom",
   "entry": "main.py",
   "exports": [
     "my_algorith"
   ],
-  "zh_description": "说明算法用途、输入输出和适用场景。",
-  "zh_tags": [
-    "自定义",
-    "组件"
-  ],
+  "zh_description": "在这里编写算法逻辑。",
+  "zh_tags": [],
   "dependencies": {},
   "published": true,
   "publish_status": "published",
-  "module_kind": "component"
+  "module_kind": "component",
+  "privateChangeLogs": [],
+  "publicChangeLogs": [
+    {
+      "id": "log_b1605f609c1a",
+      "operatorId": "usr_admin",
+      "operatorName": "管理员",
+      "operatorRole": "admin",
+      "action": "edit_algorithm",
+      "actionText": "编辑算法",
+      "time": "2026-06-03T09:46:14.918397+00:00",
+      "versionBefore": "1.0.1",
+      "versionAfter": "1.0.1",
+      "remark": "编辑公有算法"
+    },
+    {
+      "id": "log_5f00c712806c",
+      "operatorId": "usr_zhangsan",
+      "operatorName": "张三",
+      "operatorRole": "user",
+      "action": "edit_algorithm",
+      "actionText": "编辑算法",
+      "time": "2026-06-03T11:53:57.365719+00:00",
+      "versionBefore": "1.0.2",
+      "versionAfter": "1.0.3",
+      "remark": "本次编辑已审核发布"
+    }
+  ],
+  "pendingPublicChangeLogs": [],
+  "input_example": "",
+  "widget_overrides": {}
 }

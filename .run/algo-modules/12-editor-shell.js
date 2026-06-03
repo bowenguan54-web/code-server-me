@@ -9,8 +9,19 @@
       rememberMainScroll(returnPage);
       const collection = state.data[page] || [];
       const item = collection.find(entry => entry.id === id) || { id };
-      await openEditor(item, page, expandTest);
-      if (state.editing) state.editing.returnPage = returnPage;
+      const openKey = `${page}:${id}`;
+      if (state._openingEditorKey === openKey) return;
+      state._openingEditorKey = openKey;
+      showToast("正在打开编辑器...");
+      try {
+        await openEditor(item, page, expandTest);
+        if (state.editing) state.editing.returnPage = returnPage;
+      } catch (error) {
+        showToast(error.message || "打开编辑器失败");
+        if (!state.editing) switchPage(returnPage);
+      } finally {
+        state._openingEditorKey = "";
+      }
     }
 
     async function openEditor(item, page, expandTest = false) {
@@ -145,10 +156,57 @@
 
     async function loadMonaco() {
       if (state.monacoReady) return state.monacoReady;
-      state.monacoReady = new Promise(resolve => {
-        const staticBase = window._ALGO_STATIC_BASE || window._ALGO_BASE || "http://127.0.0.1:8000";
-        require.config({ paths: { vs: `${staticBase}/static/vendor/monaco-editor@0.45.0/min/vs` } });
-        require(["vs/editor/editor.main"], () => {
+      state.monacoReady = new Promise(async (resolve, reject) => {
+        const monacoPath = "monaco-editor@0.45.0/min/vs";
+        const normalizeBase = value => String(value || "").replace(/\/$/, "");
+        const staticBase = normalizeBase(window._ALGO_STATIC_BASE || window._ALGO_BASE || "http://127.0.0.1:8000");
+        const candidates = [];
+        const pushCandidate = base => {
+          const normalized = normalizeBase(base);
+          if (normalized && !candidates.includes(normalized)) candidates.push(normalized);
+        };
+        try { pushCandidate(new URL(`../static/vendor/${monacoPath}`, window.location.href).href); } catch (_) {}
+        try { pushCandidate(new URL(`./static/vendor/${monacoPath}`, window.location.href).href); } catch (_) {}
+        pushCandidate(`${staticBase}/static/vendor/${monacoPath}`);
+        pushCandidate(`http://127.0.0.1:8000/static/vendor/${monacoPath}`);
+
+        const ensureRequireLoader = () => {
+          if (window.require && typeof window.require.config === "function") {
+            return Promise.resolve(window._ALGO_MONACO_VS_BASE || candidates[0]);
+          }
+          return new Promise((loaderResolve, loaderReject) => {
+            let index = 0;
+            const tryNext = () => {
+              if (window.require && typeof window.require.config === "function") {
+                loaderResolve(window._ALGO_MONACO_VS_BASE || candidates[Math.max(0, index - 1)] || candidates[0]);
+                return;
+              }
+              const vsBase = candidates[index++];
+              if (!vsBase) {
+                loaderReject(new Error("Monaco loader 加载失败，请确认 src/browser/static/vendor/monaco-editor@0.45.0/min/vs/loader.js 可访问"));
+                return;
+              }
+              const script = document.createElement("script");
+              script.src = `${vsBase}/loader.js`;
+              script.onload = () => {
+                window._ALGO_MONACO_VS_BASE = vsBase;
+                if (window.require && typeof window.require.config === "function") loaderResolve(vsBase);
+                else tryNext();
+              };
+              script.onerror = () => {
+                script.remove();
+                tryNext();
+              };
+              document.head.appendChild(script);
+            };
+            tryNext();
+          });
+        };
+
+        try {
+          const vsBase = normalizeBase(await ensureRequireLoader());
+          window.require.config({ paths: { vs: vsBase } });
+          window.require(["vs/editor/editor.main"], () => {
           monaco.editor.defineTheme("algolib-dark", {
             base: "vs-dark",
             inherit: true,
@@ -175,7 +233,11 @@
           });
           state.monaco = monaco;
           resolve(monaco);
-        });
+          }, err => reject(err instanceof Error ? err : new Error(String(err || "Monaco Editor 加载失败"))));
+        } catch (error) {
+          state.monacoReady = null;
+          reject(error);
+        }
       });
       return state.monacoReady;
     }

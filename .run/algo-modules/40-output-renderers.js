@@ -348,13 +348,62 @@ function renderOutputImages(container, result) {
   container.appendChild(grid);
 }
 
+let _echartsLoadPromise = null;
+
+function _echartsCandidateUrls() {
+  const urls = [];
+  const push = value => {
+    if (value && !urls.includes(value)) urls.push(value);
+  };
+  push("../static/vendor/echarts.min.js");
+  push("./static/vendor/echarts.min.js");
+  push("/static/vendor/echarts.min.js");
+  if (typeof window !== "undefined") {
+    const staticBase = window._ALGO_STATIC_BASE || window._ALGO_BASE || "";
+    if (staticBase) push(String(staticBase).replace(/\/$/, "") + "/static/vendor/echarts.min.js");
+  }
+  push("http://127.0.0.1:8000/static/vendor/echarts.min.js");
+  return urls;
+}
+
+function _loadScriptSequentially(urls, index) {
+  if (typeof echarts !== "undefined") return Promise.resolve(true);
+  if (index >= urls.length) return Promise.resolve(false);
+  return new Promise(resolve => {
+    const script = document.createElement("script");
+    script.src = urls[index];
+    script.async = true;
+    script.onload = () => resolve(typeof echarts !== "undefined");
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  }).then(loaded => loaded ? true : _loadScriptSequentially(urls, index + 1));
+}
+
+function ensureEchartsLoaded() {
+  if (typeof echarts !== "undefined") return Promise.resolve(true);
+  if (!_echartsLoadPromise) {
+    _echartsLoadPromise = _loadScriptSequentially(_echartsCandidateUrls(), 0).then(loaded => {
+      if (!loaded) _echartsLoadPromise = null;
+      return loaded;
+    });
+  }
+  return _echartsLoadPromise;
+}
+
 function renderEchartsOption(container, result, option) {
   if (typeof echarts === "undefined") {
-    container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">页面未加载 ECharts 库，无法绘制图表。<br>降级显示 JSON 数据：</div>';
-    const jsonDiv = document.createElement("div");
-    jsonDiv.className = "output-json";
-    jsonDiv.textContent = JSON.stringify(result, null, 2);
-    container.appendChild(jsonDiv);
+    container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">???? ECharts ???...</div>';
+    ensureEchartsLoaded().then(loaded => {
+      if (loaded) {
+        renderEchartsOption(container, result, option);
+        return;
+      }
+      container.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:40px">????? ECharts ?????????<br>???? JSON ???</div>';
+      const jsonDiv = document.createElement("div");
+      jsonDiv.className = "output-json";
+      jsonDiv.textContent = JSON.stringify(result, null, 2);
+      container.appendChild(jsonDiv);
+    });
     return;
   }
   const chartDiv = document.createElement("div");
@@ -373,7 +422,6 @@ function renderEchartsOption(container, result, option) {
   setTimeout(() => chart.resize(), 100);
   window.addEventListener("resize", () => chart.resize(), { passive: true });
 }
-
 function buildSeriesChartOption(result, seriesType) {
   const makeOption = (xData, series) => ({
     tooltip: { trigger: "axis" },

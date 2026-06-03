@@ -10,6 +10,54 @@
       return [...(state.data.components || []), ...(state.data.templates || []), ...(state.data["my-algos"] || [])].find(a => a.id === id) || {};
     }
 
+    function isTransientFetchError(error) {
+      const message = String(error?.message || "");
+      return /Failed to fetch|NetworkError|Load failed|AbortError|TimeoutError/i.test(message)
+        || message.includes("\u65e0\u6cd5\u8fde\u63a5\u540e\u7aef\u670d\u52a1")
+        || message.includes("\u8bf7\u6c42\u8d85\u65f6");
+    }
+
+    function delay(ms) {
+      return new Promise(resolve => window.setTimeout(resolve, ms));
+    }
+
+    async function apiOnceMore(path, options = {}, retryDelay = 500) {
+      try {
+        return await api(path, options);
+      } catch (error) {
+        if (!isTransientFetchError(error)) throw error;
+        await delay(retryDelay);
+        return api(path, options);
+      }
+    }
+
+    async function refreshSubmitItemStatus(id) {
+      const pages = Array.from(new Set(["my-algos", "components", "templates", state.page].filter(Boolean)));
+      for (const page of pages) {
+        try { await loadModuleData(page); } catch (_) {}
+      }
+      return findAlgorithmInState(id);
+    }
+
+    async function submitReviewRequestWithConfirmation(id, payload) {
+      const submitPath = `/api/v1/algorithms/${safeId(id)}/submit`;
+      try {
+        return await api(submitPath, { method: "POST", body: JSON.stringify(payload) });
+      } catch (error) {
+        if (!isTransientFetchError(error)) throw error;
+        let refreshed = await refreshSubmitItemStatus(id);
+        if (getStatus(refreshed) === "reviewing") return { success: true, algorithm: refreshed };
+        await delay(500);
+        try {
+          return await api(submitPath, { method: "POST", body: JSON.stringify(payload) });
+        } catch (retryError) {
+          refreshed = await refreshSubmitItemStatus(id);
+          if (getStatus(refreshed) === "reviewing") return { success: true, algorithm: refreshed };
+          throw retryError;
+        }
+      }
+    }
+
     async function openSubmitModal(id) {
       const item = findAlgorithmInState(id);
       if (!item.id && state.editing?.id === id) Object.assign(item, state.editing.algo || {});
@@ -18,11 +66,15 @@
         return;
       }
       let submitCheck = { hasConflict: false, versionOptions: null };
+      let submitCheckWarning = "";
       try {
-        submitCheck = await api(`/api/v1/algorithms/${safeId(id)}/submit-check`);
+        submitCheck = await apiOnceMore(`/api/v1/algorithms/${safeId(id)}/submit-check`);
       } catch (error) {
-        showToast(error.message);
-        return;
+        if (!isTransientFetchError(error)) {
+          showToast(error.message);
+          return;
+        }
+        submitCheckWarning = `<div class="notice warning" style="grid-column:1/-1;margin:0">\u6682\u65f6\u65e0\u6cd5\u83b7\u53d6\u7248\u672c\u548c\u547d\u540d\u51b2\u7a81\u4fe1\u606f\uff0c\u4f46\u4ecd\u53ef\u7ee7\u7eed\u63d0\u4ea4\uff1b\u540e\u7aef\u4f1a\u5728\u63d0\u4ea4\u65f6\u518d\u6b21\u6821\u9a8c\u3002</div>`;
       }
       const isLinkedIteration = !!(item.targetPublicId || item.targetPublicCallPrefix || submitCheck.isVersionIteration);
       const currentVer = submitCheck.baseVersion || item.version || "1.0.0";
@@ -46,6 +98,7 @@
         <div class="modal">
           <h3>提交审核</h3>
           <div class="form-grid">
+            ${submitCheckWarning}
             ${conflictHtml}
             <div class="form-row"><label>版本迭代方式</label>
               <select id="srVersionBump">
@@ -86,23 +139,29 @@
         if (desc && desc !== (item.zhDescription || "")) patch.zh_description = desc;
         if (tagsRaw && JSON.stringify(tags) !== JSON.stringify(item.zhTags || [])) patch.zh_tags = tags;
         if (Object.keys(patch).length) {
-          await api(`/api/v1/algorithms/${safeId(id)}/metadata`, { method: "PATCH", body: JSON.stringify(patch) });
+          await apiOnceMore(`/api/v1/algorithms/${safeId(id)}/metadata`, { method: "PATCH", body: JSON.stringify(patch) });
         }
-        await api(`/api/v1/algorithms/${safeId(id)}/submit`, {
-          method: "POST",
-          body: JSON.stringify({ version_bump: version, version_bump_type: versionType, is_version_iteration: isVersionIteration })
+        await submitReviewRequestWithConfirmation(id, {
+          version_bump: version,
+          version_bump_type: versionType,
+          is_version_iteration: isVersionIteration
         });
-        showToast("已提交审核");
+        showToast("\u5df2\u63d0\u4ea4\u5ba1\u6838");
         const targetPage = state.editing?.page || (state.page === "templates" ? "templates" : (state.page === "my-algos" ? "my-algos" : "components"));
-        await loadModuleData(targetPage);
-        if (state.editing && state.editing.id === id) {
-          const updated = findAlgorithmInState(id);
-          if (updated) state.editing.algo = { ...state.editing.algo, ...updated };
-          refreshEditorStatusButtons();
-        } else if (state.page === "review") {
-          await renderReviewPage();
-        } else {
-          renderCards(targetPage);
+        try {
+          await loadModuleData(targetPage);
+          if (state.editing && state.editing.id === id) {
+            const updated = findAlgorithmInState(id);
+            if (updated) state.editing.algo = { ...state.editing.algo, ...updated };
+            refreshEditorStatusButtons();
+          } else if (state.page === "review") {
+            await renderReviewPage();
+          } else {
+            renderCards(targetPage);
+          }
+        } catch (refreshError) {
+          console.warn("refresh after submit failed", refreshError);
+          showToast("\u5df2\u63d0\u4ea4\u5ba1\u6838\uff0c\u5217\u8868\u7a0d\u540e\u5237\u65b0");
         }
       } catch (error) {
         showToast(error.message);
@@ -177,3 +236,4 @@
         showToast(error.message);
       }
     }
+

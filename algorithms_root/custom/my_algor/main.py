@@ -3,7 +3,7 @@ from algo_service.sdk.decorators import algo_meta
     zh_name="my_algor",
     zh_description="在这里编写算法逻辑。",
     zh_tags=[],
-    version="1.0.1",
+    version="1.1.0",
 )
 def my_algor(data: list, threshold: float = 0.5) -> dict:
     """在这里编写算法逻辑。
@@ -15,6 +15,5 @@ def my_algor(data: list, threshold: float = 0.5) -> dict:
     passed = [item for item in data if float(item) >= threshold]
     return {
         "input_count": len(data),
-        "passed_count": len(passed),
-
+        "passed_count": len(passed),        
     }

@@ -600,3 +600,116 @@ ode --check 通过；后端 8000 返回 200，code-server 8080 返回 302；接�
 - 排查 uvicorn Ctrl+C 停不掉：当前 8000 端口进程命令行为 `uvicorn ... --reload`；Windows 下 reload 父子进程叠加项目自身 watchdog，容易出现子进程残留或 shutdown 卡顿。
 - 修改 `algo_service/main.py`：显式保存并在 shutdown 时取消临时上传清理后台任务；修改 `algo_service/sdk/file_watcher.py`：watchdog observer 停止时 join 最多等待 5 秒，避免 Ctrl+C 被文件监听线程无限阻塞。
 - 已运行 `node --check .run/algo-modules/02-utils.js`、`node --check .run/algo-modules/05-data-loading.js`、`python -m py_compile algo_service/main.py algo_service/sdk/file_watcher.py`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-06-02 20:20:35 +08:00
+- 修复扩展输出面板 ECharts 加载：计划将 extensions/algolib-manager/src/panels/OutputPanel.ts 从 CDN 引用改为 Webview 本地 media 资源，并复用 src/browser/static/vendor/echarts.min.js。
+
+## 2026-06-02 20:22:28 +08:00
+- 修改 extensions/algolib-manager/src/panels/OutputPanel.ts：输出 Webview 改为通过 webview.asWebviewUri() 加载本地 media/echarts.min.js，移除 ECharts CDN 依赖，并统一使用 ECharts 检测与准确降级文案。
+- 复制 src/browser/static/vendor/echarts.min.js 到 extensions/algolib-manager/media/echarts.min.js；运行 
+pm run build 更新 extensions/algolib-manager/dist/extension.js。
+- 验证：
+ode --check extensions/algolib-manager/dist/extension.js 通过；确认 OutputPanel 不再引用 cdn.jsdelivr.net/npm/echarts。
+
+## 2026-06-02 20:40:46 +08:00
+- 修复浏览器版 AlgoLib 图表页 ECharts 加载：.run/algo-modules/40-output-renderers.js 新增 ensureEchartsLoaded()，当 window.echarts 缺失时按相对静态路径、页面静态路径、后端 /static 路径依次补加载，成功后自动重绘图表。
+- 修改 src/browser/pages/algo-lib.html 的离线 vendor 预加载：优先相对 ../static/vendor/，失败回退到后端 http://127.0.0.1:8000/static/vendor/。
+- 生成 docs/ALGOLIB_CODEBASE_AUDIT.md，说明 lgo_management.html 是历史 standalone 快照，并梳理核心功能、构建产物、临时脚本和可清理候选项。
+- 验证：ash .run/build-algo-lib.sh all 已运行；
+ode --check 检查模块和 bundle 通过；/static/vendor/echarts.min.js 后端返回 200。
+
+## 2026-06-02 21:05:00 +08:00
+- 排查按钮点击后“没反应/卡顿”：`openAdminPublishModal()` 原本先等待 `review-draft` 和 `submit-check` 两个接口返回后才渲染弹窗，后端稍慢时用户看不到任何反馈；`openEditorById()` 也缺少失败恢复，源码接口失败时会静默中断。
+- 修改 `.run/algo-modules/17-algo-info-admin-publish.js`：点击“正式发布”后立即显示“正在准备正式发布”弹窗；确认发布后保持“正在正式发布”加载弹窗；发布后的列表刷新改为去重并发加载，避免 components/templates/currentPage 串行重复刷新。
+- 修改 `.run/algo-modules/12-editor-shell.js`：打开编辑器时立即 toast“正在打开编辑器...”，同一条目重复点击会被合并；源码加载失败时显示错误并退回原页面，避免半开状态必须刷新。
+- 已运行 `node --check .run/algo-modules/12-editor-shell.js`、`node --check .run/algo-modules/17-algo-info-admin-publish.js`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-06-03 09:20:00 +08:00
+- 修复编辑器打开时报 `require is not defined`：根因是 Monaco AMD loader (`vs/loader.js`) 未先加载成功或加载时序不稳定，`loadMonaco()` 直接调用 `require.config()` 会抛错。
+- 修改 `.run/algo-modules/12-editor-shell.js`：`loadMonaco()` 现在会先检查 `window.require`，缺失时动态按页面相对静态目录、后端 `/static/vendor/`、`http://127.0.0.1:8000/static/vendor/` 顺序加载 `monaco-editor@0.45.0/min/vs/loader.js`，成功后再执行 `window.require.config()` 和加载 `vs/editor/editor.main`。
+- 本地确认 `src/browser/static/vendor/monaco-editor@0.45.0/min/vs/loader.js` 和 `editor/editor.main.js` 存在。
+- 已运行 `node --check .run/algo-modules/12-editor-shell.js`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`，并确认 `src/browser/pages/algo-lib.html` 已注入新逻辑。
+
+## 2026-06-03 10:35:00 +08:00
+- 新增 `algo_service/sdk/change_logs.py`，引入独立于 `publish_history.json` 的 `privateChangeLogs` / `publicChangeLogs` / `pendingPublicChangeLogs` 工具函数；保留原审核/发布审计历史不变。
+- 修改 `algo_service/routers/algorithms.py`：`_entry_dict()` 返回三类 change logs；新建私有算法记录“新建算法”；编辑私有算法记录 `privateChangeLogs`；面向公有发布的编辑记录进入 `pendingPublicChangeLogs`。
+- 修改 `algo_service/routers/packages.py`：package 创建/保存同步写入对应 change logs，并修正 package manifest 路径使用 `root_path`。
+- 修改 `algo_service/routers/publish.py`：提交审核时把 pending public logs 保存进 review draft；审核通过版本迭代/新发布时只把 pending 合并进目标 publicChangeLogs，继续保留 `_append_history()` 审核发布记录。
+- 修改 `.run/algo-modules/17-algo-info-admin-publish.js`：基本信息弹窗“修改记录”不再调用 publish-history；公有算法展示 `publicChangeLogs`，私有算法展示 `privateChangeLogs`，永不展示 pending。
+- 已运行 `python -m py_compile algo_service/sdk/change_logs.py algo_service/routers/algorithms.py algo_service/routers/packages.py algo_service/routers/publish.py`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-06-03 11:15:00 +08:00
+- 排查“保存”提示 Failed to fetch：当前 8000 端口由 `uvicorn algo_service.main:app --host 127.0.0.1 --port 8000 --reload` 启动，reload 监听整个仓库；保存公有算法另存私有草稿会写入 `algorithms_root/users/...`，触发 uvicorn reload，导致当前 POST 连接被中断，浏览器只显示 Failed to fetch。
+- 修改 `.run/algo-modules/02-utils.js`：网络层 `Failed to fetch` 现在提示使用 `--reload-dir algo_service`，指出保存算法文件时后端被 reload 中断的原因。
+- 新增 `scripts/start-algolib-backend.ps1`：Windows 推荐启动脚本，默认使用 `--reload --reload-dir algo_service`，避免监听算法运行时目录；支持 `-NoReload`。
+- 更新 `docs/ALGOLIB_CODEBASE_AUDIT.md` 的后端启动说明，推荐使用新脚本或手动加 `--reload-dir algo_service`。
+- 已运行 `node --check .run/algo-modules/02-utils.js`、PowerShell 脚本解析检查、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+
+## 2026-06-03 11:40:00 +08:00
+- 排查“编辑模式保存没反应 / 保存并返回后列表卡骨架屏”：保存函数只用 toast 提示，按钮无忙碌态；`saveAndCloseEditor()` 不管保存是否真正成功都会关闭编辑器；列表页在异常/竞态下可能保留 skeleton。
+- 修改 `.run/algo-modules/14-editor-save-namespace.js`：保存与保存并退出按钮增加忙碌态；`saveCurrentFile()` 返回 `{ok}` 状态；保存失败不再自动关闭编辑器；另存私有草稿成功会返回新草稿对象，避免误判。
+- 修改 `.run/algo-modules/05-data-loading.js`：列表页加载增加 `clearStaleSkeleton()` 双保险，超时/异常/空数据都会把骨架屏替换为明确提示。
+- 已运行 `node --check .run/algo-modules/05-data-loading.js`、`node --check .run/algo-modules/14-editor-save-namespace.js`、`python -m py_compile ...`、`bash .run/build-algo-lib.sh all`、`node --check .run/algo-lib-check.js`、`node --check .run/algo-lib-inline-check.js`。
+- 仍检测到当前后端进程使用全仓库 `uvicorn ... --reload`，保存算法文件可能触发后端重启；需改用 `scripts/start-algolib-backend.ps1` 或 `--reload-dir algo_service`。
+
+## 2026-06-03 16:10:25
+- 修复第一次点击“提交审核”偶发显示无法连接后端的问题。
+- 恢复并修正 .run/algo-modules/20-review-submit.js：补全被截断的 confirmSubmitReview，修复非法正则，给 submit-check 和 submit 请求增加一次重试。
+- submit 请求在瞬时网络错误后会刷新算法状态；若后端实际已切到 reviewing，则按提交成功处理，避免“第一次报错、第二次成功”的误导体验。
+- 调整 .run/algo-modules/02-utils.js 的通用 fetch 错误提示，不再错误暗示必须使用 uvicorn --reload。
+- 已运行 bash .run/build-algo-lib.sh all，完成构建与注入；已通过 node --check .run/algo-lib-check.js 和 .run/algo-lib-inline-check.js。
+
+## 2026-06-03 16:18:29
+- Debug 第一次点击“提交审核”提示无法连接后端、第二次成功的问题：确认前端生成文件不再包含“请重启后端”旧提示；实际生效 POST 路由为 algorithms.py 中先注册的 /algorithms/{id}/submit。
+- 根因修复：提交审核是非幂等 POST，不能盲目重试；第一次请求若后端已切到 reviewing 但响应被浏览器判为网络失败，第二次重试会撞到 reviewing 状态并产生误导错误。
+- 修改 .run/algo-modules/20-review-submit.js：新增 submitReviewRequestWithConfirmation()，首次网络异常后先刷新算法状态，若已为 reviewing 则按成功处理；未成功才重试一次，重试后仍会再次确认状态。
+- 已运行 ash .run/build-algo-lib.sh all 注入 HTML，并通过 
+ode --check .run/algo-lib-check.js、
+ode --check .run/algo-lib-inline-check.js。
+
+## 2026-06-03 16:44:27
+- 继续 debug 第一次点击“提交审核”提示无法连接后端的问题：确认后端 /health 正常，问题发生在弹窗打开前的 submit-check 预检查阶段。
+- 修改 .run/algo-modules/20-review-submit.js：submit-check 若出现瞬时网络错误，不再 toast 阻断，而是降级打开提交弹窗，并在弹窗内提示“暂时无法获取版本和命名冲突信息”；真正提交时仍由后端校验。
+- confirmSubmitReview() 的 metadata PATCH 改为带一次重试；提交成功后的列表刷新失败不再覆盖成功结果，只提示“已提交审核，列表稍后刷新”。
+- 已运行 ash .run/build-algo-lib.sh all，并通过 
+ode --check .run/algo-lib-check.js 与 .run/algo-lib-inline-check.js。
+
+## 2026-06-03 17:08:23
+- 排查“依然提示无法连接后端”：确认后端 /health 正常，正式入口 src/browser/pages/algo-lib.html 已包含提交审核降级逻辑。
+- 根因是根目录旧快照 lgo_management.html 仍包含旧版 openSubmitModal()，会在 submit-check 失败时直接 toast 并阻断；用户若误打开该文件会继续复现旧问题。
+- 修改 lgo_management.html：在 <head> 顶部加入自动跳转到 src/browser/pages/algo-lib.html，避免继续使用旧快照入口。
+
+## 2026-06-03 17:40:37
+- 修复点击“提交审核”前 metadata PATCH 500：后端 egistry.update_package_manifest() 在私有 package 仅更新 version/metadata 时，错误按全局 watch root 计算目标目录，试图移动到 lgorithms_root/custom/my_algor 并撞上已有公有算法。
+- 修改 lgo_service/sdk/registry.py：记录 manifest 更新前的 namespace/name；只有 namespace/name 真的变化时才移动目录；普通元数据更新原地写入 algopack.json。私有 package 改名时仍保留在用户私有目录的扁平路径下。
+- 已运行 python -m py_compile algo_service/sdk/registry.py，并用临时 registry 场景验证私有 package 更新 version 不会移动到公有目录。
+
+## 2026-06-03 17:56:58
+- 修复审核通过后版本迭代不显示所选版本：实际生效路由是 lgo_service/routers/algorithms.py，多文件 package 的版本来自 lgopack.json；审核通过此前只更新入口函数 @algo_meta，未同步 package manifest。
+- 新增 _write_entry_publish_metadata() 并在版本迭代发布路径调用，确保 ersion/zh_name/zh_description/zh_tags/input_example/widget_overrides 写回目标公有算法 manifest，列表版本随所选版本更新。
+- 修复 admin 编辑公有算法直写公有文件：.run/algo-modules/14-editor-save-namespace.js 中保存文件/命名空间时，只要正在编辑的是公有算法，无论是否 admin，都先 _saveAsPrivateDraft()。
+- 支持 admin 保存公有算法为私有草稿后直接“正式发布”：publish_algorithm() 读取版本发布请求体；_do_publish_algorithm() 在没有 review_draft 但私有草稿带 	arget_public_id 时，自动用当前草稿文件生成版本迭代草稿并应用到目标公有算法。
+- 已运行 python -m py_compile algo_service/routers/algorithms.py、
+ode --check .run/algo-modules/14-editor-save-namespace.js、ash .run/build-algo-lib.sh all、
+ode --check .run/algo-lib-check.js、
+ode --check .run/algo-lib-inline-check.js。
+
+## 2026-06-03 18:18:34
+- 修复“基本信息 / 修改记录”中审核后的编辑记录缺失：实际生效的 submit/approve/publish 路径在 algo_service/routers/algorithms.py，提交审核时此前没有把 pendingPublicChangeLogs 写入 review draft，发布时也没有合并到目标公有算法 publicChangeLogs。
+- submit_algorithm_review() 现在保存提交者 operator/operator_name，并把当前私有草稿的 pendingPublicChangeLogs 一起写入 review draft；缺失时按版本迭代/新发布补一条待发布修改记录。
+- _do_publish_algorithm() 在版本迭代发布时按目标公有算法旧版本和所选新版本正规化 pending 日志，再合并到目标公有算法 publicChangeLogs，避免继续显示管理员兜底记录或旧版本号。
+- admin direct publish 的 synthetic draft 也携带 pendingPublicChangeLogs，确保管理员先另存私有草稿再正式发布时修改记录一致。
+- 修复 .run/algo-modules/17-algo-info-admin-publish.js 的版本变化显示，使用 Unicode 箭头并恢复“暂无修改记录/未知用户”中文兜底文案。
+- 已运行 python -m py_compile algo_service/routers/algorithms.py、node --check .run/algo-modules/17-algo-info-admin-publish.js、bash .run/build-algo-lib.sh all、node --check .run/algo-lib-check.js、node --check .run/algo-lib-inline-check.js。
+
+## 2026-06-03 19:58:12
+- 将“基本信息 / 修改记录”的版本变化箭头改为 HTML 实体 &#8594; 渲染，避免浏览器/字体/缓存场景下 Unicode 箭头显示成问号。
+- 备注列确认仍来自 private/public change log 的 remark 字段，不混用审核通过/驳回意见；审核意见继续保留在 publish_history 审核记录体系。
+- 已运行 node --check .run/algo-modules/17-algo-info-admin-publish.js、python -m py_compile algo_service/routers/algorithms.py、bash .run/build-algo-lib.sh all、node --check .run/algo-lib-check.js、node --check .run/algo-lib-inline-check.js。
+
+## 2026-06-03 20:18:51
+- 调整编辑器底部面板：点击“参数配置”时进入独立配置模式，只渲染“识别参数 / 保存参数配置 / 参数控件配置”，不再混入旧的函数测试、加载示例、运行输出区域；点击“测试”仍进入测试模式。
+- 增强 parseParamValueByType 的列表/字典宽松解析：支持中文逗号、顿号、中文引号，并将无冒号的 `{0.1，0.2，0.9}` 当作列表解析为 `[0.1, 0.2, 0.9]`。
+- 修复编辑器保存参数示例时优先按用户选择的 widget 类型解析，避免 list 示例被按字符串保存成带多层双引号的值。
+- “格式化”按钮现在按控件类型调用 parseParamValueByType，可格式化 `{0.1，0.2，0.9}` 这类宽松列表输入。
+- 已运行 node --check .run/algo-modules/02-utils.js、node --check .run/algo-modules/15-editor-inline-test-panel.js、bash .run/build-algo-lib.sh all、node --check .run/algo-lib-check.js、node --check .run/algo-lib-inline-check.js。

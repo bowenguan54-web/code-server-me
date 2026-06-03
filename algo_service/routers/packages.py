@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from .algorithms import (
+    _append_algorithm_change_log_for_save,
     _append_entry_version,
     _entry_by_owner,
     _read_entry_publish_status,
@@ -17,6 +18,12 @@ from .algorithms import (
     get_registry,
 )
 from ..sdk.auth_utils import get_current_user
+from ..sdk.change_logs import (
+    append_pending_public_change_log,
+    append_private_change_log,
+    append_public_change_log,
+    make_change_log,
+)
 from ..sdk.registry import AlgorithmRegistry
 
 _ALGORITHMS_ROOT = Path(__file__).resolve().parents[2] / "algorithms_root"
@@ -158,6 +165,7 @@ async def save_package_file(
                 )
             except HTTPException:
                 raise
+            _append_algorithm_change_log_for_save(entry, user)
     return {"success": True, "functions_detected": functions}
 
 
@@ -238,6 +246,44 @@ async def create_package(
         package = registry.create_package(payload, files, root_dir)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    manifest_path = Path(package.root_path) / "algopack.json"
+    version = str(payload.get("version") or "1.0.0")
+    target_public_id = str(payload.get("target_public_id") or "").strip()
+    try:
+        if owner_id != "system":
+            if target_public_id:
+                append_pending_public_change_log(
+                    manifest_path,
+                    make_change_log(
+                        "edit_algorithm",
+                        current_user,
+                        version_before=version,
+                        version_after=version,
+                        remark="编辑公有算法，等待审核发布",
+                    ),
+                )
+            else:
+                append_private_change_log(
+                    manifest_path,
+                    make_change_log(
+                        "create_algorithm",
+                        current_user,
+                        version_after=version,
+                        remark="新建私有算法",
+                    ),
+                )
+        elif str(payload.get("publish_status") or "draft").strip().lower() == "published":
+            append_public_change_log(
+                manifest_path,
+                make_change_log(
+                    "create_algorithm",
+                    current_user,
+                    version_after=version,
+                    remark="新建公有算法",
+                ),
+            )
+    except OSError:
+        pass
     for export_name in package.exports:
         entry = registry.get_by_id(f"{package.namespace}.{export_name}")
         if entry is not None:

@@ -513,14 +513,24 @@ class AlgorithmRegistry:
 
         manifest_path = Path(package.root_path, "algopack.json")
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        old_namespace = str(manifest.get("namespace", package.namespace)).strip() or package.namespace
+        old_name = str(manifest.get("name", package.name)).strip() or package.name
+        owner_id = str(manifest.get("owner_id", getattr(package, "owner_id", "system")) or "system").strip() or "system"
         for key, value in payload.items():
             manifest[key] = value
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
         new_namespace = str(manifest.get("namespace", package.namespace)).strip() or package.namespace
         new_name = str(manifest.get("name", package.name)).strip() or package.name
-        target_root = Path(self._find_watch_root(package.root_path) or package.root_path).resolve().joinpath(*new_namespace.split("."), new_name)
         current_root = Path(package.root_path).resolve()
+        namespace_or_name_changed = new_namespace != old_namespace or new_name != old_name
+        if namespace_or_name_changed:
+            if owner_id != "system":
+                target_root = current_root.parent / f"{new_namespace.replace('.', '_')}_{new_name}"
+            else:
+                target_root = Path(self._find_watch_root(package.root_path) or current_root.parent).resolve().joinpath(*new_namespace.split("."), new_name)
+        else:
+            target_root = current_root
         if current_root != target_root:
             target_root.parent.mkdir(parents=True, exist_ok=True)
             if target_root.exists():

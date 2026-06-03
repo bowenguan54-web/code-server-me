@@ -192,10 +192,12 @@
           }
           showToast("\u5df2\u53e6\u5b58\u4e3a\u60a8\u7684\u79c1\u6709\u8349\u7a3f\uff08\u591a\u6587\u4ef6\uff09");
           refreshEditorStatusButtons();
+          return state.editing.algo || newPackage;
         } catch (err) {
           showToast(err.message);
+          return null;
         }
-        return;
+        return null;
       }
 
       const entryContent = draftFiles.find(file => file.isEntry)?.content || draftFiles.find(file => file.filename === entryFile?.filename)?.content || "";
@@ -239,10 +241,13 @@
           refreshEditorStatusButtons();
           const nsInput = qs("#nsInput");
           if (nsInput) nsInput.value = namespaceFunction(newAlgo);
+          return newAlgo;
         }
       } catch (err) {
         showToast(err.message);
+        return null;
       }
+      return null;
     }
 
     function nextPatchVersion(value) {
@@ -265,21 +270,37 @@
       }
     }
 
+    function setEditorSaveBusy(isBusy, message = "保存中...") {
+      qsa('button[onclick="window.saveEditorAll()"],button[onclick="window.saveAndCloseEditor()"]').forEach(btn => {
+        if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+        btn.disabled = !!isBusy;
+        btn.textContent = isBusy ? message : btn.dataset.originalText;
+      });
+    }
+
     async function saveEditorAll() {
-      let saveResult = null;
-      if (state.blockEditor) {
-        await saveBlockEditor();
-      } else {
-        saveResult = await saveCurrentFile();
-      }
-      if (saveResult?.savedAsPrivateDraft) {
-        return;
-      }
-      const input = qs("#nsInput");
-      if (state.editing?.algo && input && input.value.trim()) {
-        const desired = `${namespacePrefix(state.editing.algo)}${input.value.trim()}`;
-        const current = state.editing.algo.callPrefix || state.editing.algo.displayNamespace || `alg.${state.editing.algo.namespace || ""}.${state.editing.algo.funcName || ""}`;
-        if (desired !== current) await saveNamespace();
+      setEditorSaveBusy(true);
+      try {
+        let saveResult = null;
+        if (state.blockEditor) {
+          await saveBlockEditor();
+          saveResult = { ok: true };
+        } else {
+          saveResult = await saveCurrentFile();
+        }
+        if (saveResult && saveResult.ok === false) return saveResult;
+        if (saveResult?.savedAsPrivateDraft) {
+          return saveResult;
+        }
+        const input = qs("#nsInput");
+        if (state.editing?.algo && input && input.value.trim()) {
+          const desired = `${namespacePrefix(state.editing.algo)}${input.value.trim()}`;
+          const current = state.editing.algo.callPrefix || state.editing.algo.displayNamespace || `alg.${state.editing.algo.namespace || ""}.${state.editing.algo.funcName || ""}`;
+          if (desired !== current) await saveNamespace();
+        }
+        return saveResult || { ok: true };
+      } finally {
+        setEditorSaveBusy(false);
       }
     }
 
@@ -287,10 +308,12 @@
       if (!state.editing || !state.currentFile) return;
       const content = state.models.get(state.currentFile)?.getValue() || "";
       const packageId = state.editing.algo.packageId || state.editing.package?.package_id;
-      const isOwner = state.currentUser?.role === "admin" || canManageAlgorithm(state.editing.algo);
-      if (!isOwner) {
+      const isPublicEditing = typeof isPublicItem === "function" ? isPublicItem(state.editing.algo) : String(state.editing.algo.ownerId || state.editing.algo.owner_id || "system") === "system";
+      const isOwner = canManageAlgorithm(state.editing.algo);
+      if (isPublicEditing || !isOwner) {
         const draft = await _saveAsPrivateDraft(!!forClose);
-        return { savedAsPrivateDraft: true, draft };
+        if (!draft) return { savedAsPrivateDraft: false, ok: false };
+        return { savedAsPrivateDraft: true, draft, ok: true };
       }
       if (!packageId) {
         try {
@@ -309,8 +332,9 @@
           refreshEditorStatusButtons();
         } catch (error) {
           showToast(error.message);
+          return { savedAsPrivateDraft: false, ok: false };
         }
-        return { savedAsPrivateDraft: false };
+        return { savedAsPrivateDraft: false, ok: true };
       }
       try {
         await api(`/api/v1/packages/${safeId(packageId)}/files/${safeId(state.currentFile)}`, {
@@ -321,8 +345,9 @@
         showToast(`文件已保存，版本已更新为 ${state.editing.algo.version || "新版本"}`);
       } catch (error) {
         showToast(error.message);
+        return { savedAsPrivateDraft: false, ok: false };
       }
-      return { savedAsPrivateDraft: false };
+      return { savedAsPrivateDraft: false, ok: true };
     }
 
     async function registerCompletionProvider() {
@@ -389,6 +414,11 @@
 
     async function saveNamespace() {
       if (!validateNamespace()) return;
+      const isPublicEditing = typeof isPublicItem === "function" ? isPublicItem(state.editing.algo) : String(state.editing.algo.ownerId || state.editing.algo.owner_id || "system") === "system";
+      if (isPublicEditing) {
+        await _saveAsPrivateDraft();
+        return;
+      }
       const isOwner = canManageAlgorithm(state.editing.algo);
       if (!isOwner) {
         await _saveAsPrivateDraft();
@@ -440,10 +470,17 @@
     }
 
     async function saveAndCloseEditor() {
-      if (state.blockEditor) {
-        await saveBlockEditor();
-      } else {
-        await saveCurrentFile(true);
+      setEditorSaveBusy(true, "保存并退出中...");
+      try {
+        let result = { ok: true };
+        if (state.blockEditor) {
+          await saveBlockEditor();
+        } else {
+          result = await saveCurrentFile(true);
+        }
+        if (result && result.ok === false) return;
+        closeEditor();
+      } finally {
+        setEditorSaveBusy(false);
       }
-      closeEditor();
     }

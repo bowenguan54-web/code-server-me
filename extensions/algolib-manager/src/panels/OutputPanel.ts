@@ -55,11 +55,14 @@ export class OutputPanel {
     const cssUri = this.panel!.webview.asWebviewUri(
       vscode.Uri.joinPath(context.extensionUri, 'media', 'shared.css')
     );
+    const echartsUri = this.panel!.webview.asWebviewUri(
+      vscode.Uri.joinPath(context.extensionUri, 'media', 'echarts.min.js')
+    );
     return `<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline' https://cdn.jsdelivr.net; script-src ${cspSource} 'unsafe-inline' https://cdn.jsdelivr.net; img-src ${cspSource} data:; font-src ${cspSource};" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource} 'unsafe-inline'; img-src ${cspSource} data: blob:; font-src ${cspSource};" />
 <link rel="stylesheet" href="${cssUri}"/>
 <title>AlgoLib 输出</title>
 <style>
@@ -72,7 +75,9 @@ body { padding: 10px; }
 .out-result.failure { border-color: #f14c4c; }
 .result-label { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
 .elapsed { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
-#chart-container { width: 100%; min-height: 300px; }
+#chart-container { width: 100%; min-height: 360px; }
+.chart-box { width: 100%; height: 360px; }
+.chart-fallback { color: var(--text-dim); padding: 12px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 4px; white-space: pre-wrap; }
 </style>
 </head>
 <body>
@@ -84,7 +89,7 @@ body { padding: 10px; }
 <div id="output-area"></div>
 <div id="result-area"></div>
 <div id="chart-container" style="display:none;"></div>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="${echartsUri}"></script>
 <script>
 const vscode = acquireVsCodeApi();
 const outputArea = document.getElementById('output-area');
@@ -125,13 +130,23 @@ function renderResult(data) {
       chartContainer.style.display = 'block';
       chartContainer.innerHTML = '';
       const chartEl = document.createElement('div');
-      chartEl.style.cssText = 'width:100%;height:350px;';
+      chartEl.className = 'chart-box';
       chartContainer.appendChild(chartEl);
-      try {
-        const chart = echarts.init(chartEl);
-        chart.setOption(data.result.option);
-      } catch (e) {
-        chartEl.textContent = '图表渲染失败: ' + String(e);
+      if (typeof echarts === 'undefined') {
+        const fallback = document.createElement('div');
+        fallback.className = 'chart-fallback';
+        fallback.textContent = '页面未加载 ECharts 库，无法绘制图表。\\n降级显示 JSON 数据：\\n' + JSON.stringify(data.result, null, 2);
+        chartContainer.innerHTML = '';
+        chartContainer.appendChild(fallback);
+      } else {
+        try {
+          const chart = echarts.init(chartEl);
+          chart.setOption(data.result.option);
+          window.addEventListener('resize', () => chart.resize());
+          setTimeout(() => chart.resize(), 50);
+        } catch (e) {
+          chartEl.textContent = '图表渲染失败: ' + String(e);
+        }
       }
     } else if (outputType === 'table' && Array.isArray(data.result.rows)) {
       renderTable(div, data.result.columns || [], data.result.rows);

@@ -1,19 +1,37 @@
 {
   "name": "my_algor",
-  "zh_name": "自定义算法",
-  "version": "1.0.0",
+  "zh_name": "my_algor",
+  "version": "1.1.0",
   "namespace": "custom",
   "entry": "main.py",
   "exports": [
     "my_algor"
   ],
-  "zh_description": "说明算法用途、输入输出和适用场景。",
-  "zh_tags": [
-    "自定义",
-    "组件"
-  ],
+  "zh_description": "在这里编写算法逻辑。",
+  "zh_tags": [],
   "dependencies": {},
   "published": true,
   "publish_status": "published",
-  "module_kind": "component"
+  "module_kind": "component",
+  "privateChangeLogs": [],
+  "publicChangeLogs": [
+    {
+      "id": "log_2502d950408e",
+      "operatorId": "usr_admin",
+      "operatorName": "管理员",
+      "operatorRole": "admin",
+      "action": "edit_algorithm",
+      "actionText": "编辑算法",
+      "time": "2026-06-03T09:46:24.638035+00:00",
+      "versionBefore": "1.0.0",
+      "versionAfter": "1.0.0",
+      "remark": "编辑公有算法"
+    }
+  ],
+  "pendingPublicChangeLogs": [],
+  "input_example": "{\"data\":[0.1,0.5,0.9],\"threshold\":0.2}",
+  "widget_overrides": {
+    "data": "list",
+    "threshold": "float"
+  }
 }

@@ -7,7 +7,7 @@ from .model import score_values
     zh_name="复杂算法示例",
     zh_description="多文件复杂算法入口，演示预处理、模型逻辑和结果封装。",
     zh_tags=["复杂算法", "多文件"],
-    version="1.0.0",
+    version="1.0.2",
 )
 def my_algorithm(data: list[float], threshold: float = 0.5) -> dict:
     values = clean_values(data)
@@ -18,5 +18,5 @@ def my_algorithm(data: list[float], threshold: float = 0.5) -> dict:
         "valid_count": len(values),
         "scores": scores,
         "passed": passed,
-        "threshold": threshold,
+
     }

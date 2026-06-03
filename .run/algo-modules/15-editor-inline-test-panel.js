@@ -19,6 +19,7 @@
     }
 
     function toggleTestPanel() {
+      state.editorPanelMode = "test";
       const next = (state.testHeight || 0) > 0 ? 0 : 220;
       setTestHeight(next);
     }
@@ -93,6 +94,18 @@
     function renderTestPanel() {
       const panel = qs("#testPanel");
       if (!panel || !state.editing) return;
+      if (state.editorPanelMode === "config") {
+        panel.innerHTML = `
+          <div class="control-row" style="margin:8px 0 12px;gap:8px;align-items:center">
+            <button onclick="window.recognizeEditorParams()">识别参数</button>
+            <button onclick="window.saveEditorParamConfig()">保存参数配置</button>
+            <span style="color:var(--text-dim);font-size:12px">可从当前代码重新识别参数，修改控件类型和输入示例</span>
+          </div>
+          <div id="editorWidgetConfig" class="widget-config-list"></div>
+        `;
+        if (state.editorWidgetParams?.length) renderEditorWidgetConfigRows(state.editorWidgetParams);
+        return;
+      }
       const functions = currentFunctions();
       panel.innerHTML = `
         <select id="funcSelect" onchange="window.renderParams()">
@@ -242,6 +255,7 @@
         showToast("未打开算法");
         return;
       }
+      state.editorPanelMode = "config";
       setTestHeight(Math.max(state.testHeight || 0, 300));
       renderTestPanel();
       window.setTimeout(() => {
@@ -348,8 +362,10 @@
     function formatEditorParamExample(paramName) {
       const input = qsa("[data-editor-example]").find(el => el.dataset.editorExample === paramName);
       if (!input) return;
+      const param = (state.editorWidgetParams || []).find(item => item.name === paramName);
+      const widget = (state.editorWidgetOverrides || {})[paramName] || param?.widget || param?.type || "str";
       try {
-        input.value = JSON.stringify(JSON.parse(input.value), null, 2);
+        input.value = JSON.stringify(parseParamValueByType(widget, input.value), null, 2);
         onEditorParamExampleChange(input);
       } catch (_error) {
         showToast("JSON 格式错误");
@@ -375,7 +391,7 @@
         const raw = (state.editorParamExamples || {})[param.name];
         if (raw === undefined || raw === null || raw === "") return;
         const widget = overrides[param.name] || param.widget || param.type || "str";
-        examples[param.name] = parseParamValueByType(param.type || widget, raw);
+        examples[param.name] = parseParamValueByType(widget || param.type, raw);
       });
       const inputExample = JSON.stringify(examples);
       try {

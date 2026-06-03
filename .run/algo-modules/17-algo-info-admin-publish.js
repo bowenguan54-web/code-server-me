@@ -100,50 +100,18 @@ print(result)`;
           </div>
         </div>
       `;
-      loadAlgorithmHistory(item.id || item.registryId || item.callPrefix || "");
+      renderAlgorithmChangeLogs(item);
     }
 
-    function formatAlgorithmHistoryAction(record) {
-      const actionType = record.action_type || record.status || "";
-      switch (actionType) {
-        case "code_save": return "保存代码";
-        case "draft_save": return "保存草稿";
-        case "submit":
-        case "reviewing":
-          return "提交审核";
-        case "approve":
-        case "approved":
-          return "审核通过";
-        case "reject":
-        case "rejected":
-          return "驳回";
-        case "publish":
-        case "published":
-        case "new_publish":
-          return "正式发布";
-        case "iteration":
-          return "版本迭代";
-        case "withdraw":
-        case "draft":
-          return "撤回审核";
-        case "deprecate":
-        case "deprecated":
-          return "下架";
-        default:
-          return record.status || record.action_type || "未知操作";
-      }
+    function selectAlgorithmChangeLogs(item) {
+      if (!item) return [];
+      const logs = isPublicItem(item)
+        ? (item.publicChangeLogs || item.public_change_logs || [])
+        : (item.privateChangeLogs || item.private_change_logs || []);
+      return Array.isArray(logs) ? logs.filter(record => record && typeof record === "object") : [];
     }
 
-    function formatAlgorithmHistoryVersion(record) {
-      const fromVersion = String(record.from_version || "").trim();
-      const toVersion = String(record.to_version || "").trim();
-      if (fromVersion && toVersion && fromVersion !== toVersion) return `${fromVersion} → ${toVersion}`;
-      if (toVersion) return toVersion;
-      if (fromVersion) return fromVersion;
-      return "-";
-    }
-
-    function formatAlgorithmHistoryTime(timestamp) {
+    function formatAlgorithmChangeTime(timestamp) {
       if (!timestamp) return "-";
       const date = new Date(timestamp);
       if (Number.isNaN(date.getTime())) return "-";
@@ -151,42 +119,46 @@ print(result)`;
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
     }
 
-    function truncateAlgorithmHistoryReason(reason) {
-      const text = String(reason || "").trim();
+    function formatAlgorithmChangeVersion(record) {
+      const fromVersion = String(record.versionBefore || record.version_before || "").trim();
+      const toVersion = String(record.versionAfter || record.version_after || "").trim();
+      if (fromVersion && toVersion && fromVersion !== toVersion) return `${esc(fromVersion)} &#8594; ${esc(toVersion)}`;
+      if (toVersion) return esc(toVersion);
+      if (fromVersion) return esc(fromVersion);
+      return "-";
+    }
+
+    function truncateAlgorithmChangeRemark(remark) {
+      const text = String(remark || "").trim();
       if (!text) return "-";
       return text.length > 30 ? `${text.slice(0, 30)}...` : text;
     }
 
-    async function loadAlgorithmHistory(id) {
+    function renderAlgorithmChangeLogs(item) {
       const tbody = qs("#infoHistoryBody");
       if (!tbody) return;
       const emptyHtml = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim)">暂无修改记录</td></tr>';
-      if (!id) {
+      const logs = selectAlgorithmChangeLogs(item)
+        .slice()
+        .sort((a, b) => new Date(b.time || b.timestamp || 0).getTime() - new Date(a.time || a.timestamp || 0).getTime())
+        .slice(0, 50);
+      if (!logs.length) {
         tbody.innerHTML = emptyHtml;
         return;
       }
-      try {
-        const data = await api(`/api/v1/algorithms/${safeId(id)}/publish-history`);
-        const history = (Array.isArray(data.history) ? data.history : [])
-          .slice()
-          .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
-          .slice(0, 50);
-        if (!history.length) {
-          tbody.innerHTML = emptyHtml;
-          return;
-        }
-        tbody.innerHTML = history.map(record => {
-          const operator = record.operator_name || record.operator || "system";
-          const time = formatAlgorithmHistoryTime(record.timestamp);
-          const action = formatAlgorithmHistoryAction(record);
-          const version = formatAlgorithmHistoryVersion(record);
-          const note = truncateAlgorithmHistoryReason(record.reason);
-          const fullNote = String(record.reason || "").trim();
-          return `<tr><td>${esc(operator)}</td><td>${esc(time)}</td><td>${esc(action)}</td><td>${esc(version)}</td><td title="${esc(fullNote)}">${esc(note)}</td></tr>`;
-        }).join("");
-      } catch (err) {
-        tbody.innerHTML = emptyHtml;
-      }
+      tbody.innerHTML = logs.map(record => {
+        const operator = record.operatorName || record.operator_name || record.operatorId || record.operator_id || "未知用户";
+        const time = formatAlgorithmChangeTime(record.time || record.timestamp);
+        const action = record.actionText || record.action_text || record.action || "-";
+        const version = formatAlgorithmChangeVersion(record);
+        const fullRemark = String(record.remark || "").trim();
+        const note = truncateAlgorithmChangeRemark(fullRemark);
+        return `<tr><td>${esc(operator)}</td><td>${esc(time)}</td><td>${esc(action)}</td><td>${version}</td><td title="${esc(fullRemark)}">${esc(note)}</td></tr>`;
+      }).join("");
+    }
+
+    async function loadAlgorithmHistory(_id, item) {
+      renderAlgorithmChangeLogs(item || state.editing?.algo || {});
     }
 
     async function saveAlgorithmInfo(id, page) {
@@ -309,6 +281,18 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const item = (state.data.components || []).concat(state.data.templates || []).find(i => i.id === id)
         || (state.editing?.id === id ? state.editing.algo : null);
       if (!item) { showToast("算法不存在"); return; }
+      const modal = qs("#modalRoot");
+      if (modal) {
+        modal.classList.remove("hidden");
+        modal.innerHTML = `
+        <div class="modal" style="max-width:560px">
+          <h3>正在准备正式发布</h3>
+          <p class="desc">正在读取审核草稿、版本信息和命名空间冲突，请稍候...</p>
+          <div class="skeleton" style="height:84px;margin:12px 0"></div>
+          <div class="modal-actions"><button onclick="window.closeModal()">取消</button></div>
+        </div>
+      `;
+      }
       let draftInfo = null;
       try {
         const draftResp = await api(`/api/v1/algorithms/${safeId(id)}/review-draft`);
@@ -354,6 +338,7 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
           </div>
         </div>
       ` : "";
+      if (qs("#modalRoot")?.classList.contains("hidden")) return;
       qs("#modalRoot").classList.remove("hidden");
       qs("#modalRoot").innerHTML = `
         <div class="modal" style="max-width:680px">
@@ -421,7 +406,17 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
       const zh_description = qs("#adminPublishDesc")?.value.trim() || "";
       const zh_tags = (qs("#adminPublishTags")?.value || "").split(",").map(s => s.trim()).filter(Boolean);
       const operator_name = state.currentUser?.display_name || state.currentUser?.displayName || state.currentUser?.username || state.currentUser?.id || "admin";
-      closeModal();
+      const modal = qs("#modalRoot");
+      if (modal) {
+        modal.classList.remove("hidden");
+        modal.innerHTML = `
+        <div class="modal" style="max-width:520px">
+          <h3>正在正式发布</h3>
+          <p class="desc">正在提交发布请求并刷新列表，请稍候...</p>
+          <div class="skeleton" style="height:72px;margin:12px 0"></div>
+        </div>
+      `;
+      }
       try {
         const result = await api(`/api/v1/algorithms/${safeId(id)}/publish`, {
           method: "POST",
@@ -438,19 +433,23 @@ result = ${esc(callPrefix.replace("templates.", "custom."))}(...)</pre>
         showToast("已正式发布");
         const currentPage = state.page;
         const currentParent = typeof parentPageOf === "function" ? parentPageOf(currentPage) : currentPage;
-        await loadModuleData("components");
-        await loadModuleData("templates");
+        const pagesToLoad = new Set(["components", "templates"]);
+        if (currentPage === "my-algos" || currentParent === "components" || currentParent === "templates") {
+          pagesToLoad.add(currentPage);
+        }
+        await Promise.all(Array.from(pagesToLoad).map(pageName => loadModuleData(pageName)));
         if (currentPage === "review") {
           await renderReviewPage();
         } else if (currentPage === "my-algos" || currentParent === "components" || currentParent === "templates") {
-          await loadModuleData(currentPage);
           renderCards(currentPage);
         }
         if (state.editing?.id === id) {
           state.editing.algo = result.algorithm;
           refreshEditorStatusButtons();
         }
+        closeModal();
       } catch (err) {
+        closeModal();
         showToast(err.message || "发布失败");
       }
     }

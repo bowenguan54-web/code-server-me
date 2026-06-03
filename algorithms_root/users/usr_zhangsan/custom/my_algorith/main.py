@@ -1,3 +1,10 @@
+from algo_service.sdk.decorators import algo_meta
+@algo_meta(
+    zh_name="my_algorith",
+    zh_description="在这里编写算法逻辑。",
+    zh_tags=[],
+    version="1.0.3",
+)
 def my_algorith(data: list, threshold: float = 0.5) -> dict:
     """在这里编写算法逻辑。
 

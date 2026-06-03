@@ -152,5 +152,93 @@
       "targetPublicId": "",
       "targetPublicCallPrefix": ""
     }
+  },
+  {
+    "version_id": "ver_0003",
+    "algorithm_id": "custom.my_algorithm",
+    "call_prefix": "alg.custom.my_algorithm",
+    "version": "1.0.1",
+    "action": "version.iterated",
+    "operator": "system",
+    "timestamp": "2026-06-02T12:45:33.292483+00:00",
+    "note": "Version iteration from alg.custom.my_algorithm",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "from .preprocess import clean_values\nfrom .model import score_values\n\n\ndef my_algorithm(data: list[float], threshold: float = 0.5) -> dict:\n    values = clean_values(data)\n    scores = score_values(values)\n    passed = [value for value, score in zip(values, scores) if score >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"valid_count\": len(values),\n        \"scores\": scores,\n        \"passed\": passed,\n\n    }\n"
+      },
+      {
+        "relative_path": "model.py",
+        "content": "def score_values(values: list[float]) -> list[float]:\n    if not values:\n        return []\n    low = min(values)\n    high = max(values)\n    if low == high:\n        return [1.0 for _ in values]\n    return [round((value - low) / (high - low), 6) for value in values]\n"
+      },
+      {
+        "relative_path": "preprocess.py",
+        "content": "def clean_values(data: list[float]) -> list[float]:\n    values = []\n    for item in data:\n        if item is None:\n            continue\n        values.append(float(item))\n    return values\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algorithm",
+      "registryId": "custom.my_algorithm",
+      "callPrefix": "alg.custom.my_algorithm",
+      "callSnippet": "alg.custom.my_algorithm(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algorithm(data: list[float], threshold: float = 0.5) -> dict:\n    values = clean_values(data)\n    scores = score_values(values)\n    passed = [value for value, score in zip(values, scores) if score >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"valid_count\": len(values),\n        \"scores\": scores,\n        \"passed\": passed,\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algorithm",
+      "externalApiPath": "/api/external/v1/custom/my_algorithm",
+      "displayNamespace": "alg.custom.my_algorithm",
+      "zhName": "复杂算法示例",
+      "zhDescription": "多文件复杂算法入口，演示预处理、模型逻辑和结果封装。",
+      "zhTags": [
+        "复杂算法",
+        "多文件"
+      ],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "",
+      "params": [
+        {
+          "name": "data",
+          "type": "list[float]",
+          "default": null,
+          "description": "",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "复杂算法示例",
+      "categoryNamespace": "custom",
+      "version": "1.0.1",
+      "funcName": "my_algorithm",
+      "packageId": "custom.my_algorithm",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algorithm",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algorithm\\main.py",
+      "ownerId": "system",
+      "contributors": [
+        {
+          "operator": "system",
+          "operator_name": "system",
+          "timestamp": "2026-04-27T03:11:18.758968+00:00",
+          "from_version": "",
+          "to_version": "",
+          "action_type": "new_publish"
+        }
+      ],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
   }
 ]

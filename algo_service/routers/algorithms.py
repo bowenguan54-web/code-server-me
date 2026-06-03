@@ -33,6 +33,16 @@ from ..models.schemas import (
 )
 from ..sdk.ast_parser import AstParser
 from ..sdk.auth_utils import get_current_user
+from ..sdk.change_logs import (
+    append_pending_public_change_log,
+    append_private_change_log,
+    append_public_change_log,
+    ensure_change_log_fields,
+    load_manifest as load_change_log_manifest,
+    make_change_log,
+    manifest_change_logs,
+    merge_pending_public_change_logs_to_public,
+)
 from ..sdk.param_inferrer import infer_output_widget
 from ..sdk.registry import AlgorithmEntry, AlgorithmRegistry, normalize_module_kind
 from ..sdk.sse_manager import sse_manager
@@ -146,6 +156,14 @@ def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
     category = _read_entry_category(entry)
     review_draft = _load_review_draft(entry)
     target_public = _entry_target_public(entry)
+    try:
+        change_logs = manifest_change_logs(load_change_log_manifest(_entry_config_path(entry)))
+    except (OSError, RuntimeError):
+        change_logs = {
+            "privateChangeLogs": [],
+            "publicChangeLogs": [],
+            "pendingPublicChangeLogs": [],
+        }
     return {
         "id": _entry_client_id(entry),
         "registryId": entry.id,
@@ -178,11 +196,123 @@ def _entry_dict(entry: AlgorithmEntry) -> dict[str, Any]:
         "sourceFile": entry.source_file,
         "ownerId": getattr(entry, "owner_id", "system"),
         "contributors": _entry_contributors(entry),
+        "privateChangeLogs": change_logs["privateChangeLogs"],
+        "publicChangeLogs": change_logs["publicChangeLogs"],
+        "pendingPublicChangeLogs": change_logs["pendingPublicChangeLogs"],
         "rejectReason": review_draft.get("reject_reason", "") if review_draft else "",
         "reviewKind": review_draft.get("review_kind", "") if review_draft else "",
         "targetPublicId": review_draft.get("target_public_id", "") if review_draft else target_public.get("target_public_id", ""),
         "targetPublicCallPrefix": review_draft.get("target_public_call_prefix", "") if review_draft else target_public.get("target_public_call_prefix", ""),
     }
+
+
+def _append_algorithm_change_log_for_save(
+    entry: AlgorithmEntry,
+    current_user: dict[str, Any] | None,
+    private_remark: str = "编辑私有算法",
+    pending_remark: str = "编辑公有算法，等待审核发布",
+    public_remark: str = "编辑公有算法",
+    force_pending: bool = False,
+) -> None:
+    """Append Basic Info create/edit logs without changing publish history."""
+
+    config_path = _entry_config_path(entry)
+    owner_id = str(getattr(entry, "owner_id", "system") or "system")
+    status = _read_entry_publish_status(entry)
+    target_public = _entry_target_public(entry)
+    has_target_public = bool(
+        str(target_public.get("target_public_id") or "").strip()
+        or str(target_public.get("target_public_call_prefix") or "").strip()
+    )
+    version = str(entry.version or "")
+    try:
+        if force_pending:
+            append_pending_public_change_log(
+                config_path,
+                make_change_log(
+                    "edit_algorithm",
+                    current_user,
+                    version_before=version,
+                    version_after=version,
+                    remark=pending_remark,
+                ),
+            )
+        elif owner_id == "system" and status == "published":
+            append_public_change_log(
+                config_path,
+                make_change_log(
+                    "edit_algorithm",
+                    current_user,
+                    version_before=version,
+                    version_after=version,
+                    remark=public_remark,
+                ),
+            )
+        elif has_target_public or owner_id == "system":
+            append_pending_public_change_log(
+                config_path,
+                make_change_log(
+                    "edit_algorithm",
+                    current_user,
+                    version_before=version,
+                    version_after=version,
+                    remark=pending_remark,
+                ),
+            )
+        else:
+            append_private_change_log(
+                config_path,
+                make_change_log(
+                    "edit_algorithm",
+                    current_user,
+                    version_before=version,
+                    version_after=version,
+                    remark=private_remark,
+                ),
+            )
+    except OSError:
+        pass
+
+
+def _change_log_user_from_draft(draft: dict[str, Any] | None) -> dict[str, Any]:
+    draft = draft or {}
+    operator_id = str(draft.get("operator") or draft.get("operator_id") or "system")
+    return {
+        "id": operator_id,
+        "username": operator_id,
+        "display_name": str(draft.get("operator_name") or operator_id),
+        "role": str(draft.get("operator_role") or ""),
+    }
+
+
+def _entry_pending_public_change_logs(entry: AlgorithmEntry) -> list[dict[str, Any]]:
+    try:
+        logs = manifest_change_logs(load_change_log_manifest(_entry_config_path(entry)))
+    except (OSError, RuntimeError):
+        return []
+    return logs.get("pendingPublicChangeLogs", [])
+
+
+def _normalize_pending_public_logs_for_publish(
+    pending_logs: Any,
+    fallback_log: dict[str, Any],
+    from_version: str,
+    to_version: str,
+    final_remark: str,
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    source = pending_logs if isinstance(pending_logs, list) else []
+    for raw in source:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        item["versionBefore"] = str(from_version or "")
+        item["versionAfter"] = str(to_version or "")
+        remark = str(item.get("remark") or "")
+        if final_remark and (not remark or "等待审核" in remark):
+            item["remark"] = final_remark
+        normalized.append(item)
+    return normalized or [fallback_log]
 
 
 def _review_draft_path(entry: AlgorithmEntry) -> Path:
@@ -1056,6 +1186,25 @@ def _apply_review_files_to_entry(
     return _entry_by_owner(registry, target_entry.id, getattr(target_entry, "owner_id", "system")) or registry.get_by_id(target_entry.id) or target_entry
 
 
+def _write_entry_publish_metadata(entry: AlgorithmEntry, metadata: dict[str, Any], registry: AlgorithmRegistry) -> AlgorithmEntry:
+    """Persist metadata that is not carried by source decorators, especially package version."""
+
+    config_path = _entry_config_path(entry)
+    if not config_path.exists():
+        return entry
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        config = {}
+    for key in ("zh_name", "zh_description", "zh_tags", "version", "input_example", "widget_overrides"):
+        if key in metadata:
+            config[key] = metadata[key]
+    config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    scan_root = str(Path(entry.package_root).parent) if entry.package_root else str(config_path.parent.parent)
+    registry.scan_directory(scan_root)
+    return _entry_by_owner(registry, entry.id, getattr(entry, "owner_id", "system")) or registry.get_by_id(entry.id) or entry
+
+
 def _clear_cached_modules(module_key: str) -> None:
     for key in list(sys.modules.keys()):
         if key == module_key or key.startswith(f"{module_key}."):
@@ -1861,7 +2010,40 @@ async def create_algorithm(
             else:
                 cfg.pop("target_public_id", None)
                 cfg.pop("target_public_call_prefix", None)
+            ensure_change_log_fields(cfg)
             cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+            if target_public_id:
+                append_pending_public_change_log(
+                    cfg_path,
+                    make_change_log(
+                        "edit_algorithm",
+                        current_user,
+                        version_before=str(payload.version or "1.0.0"),
+                        version_after=str(payload.version or "1.0.0"),
+                        remark="编辑公有算法，等待审核发布",
+                    ),
+                )
+            else:
+                append_private_change_log(
+                    cfg_path,
+                    make_change_log(
+                        "create_algorithm",
+                        current_user,
+                        version_after=str(payload.version or "1.0.0"),
+                        remark="新建私有算法",
+                    ),
+                )
+        elif owner_id == "system" and str(payload.publish_status or "draft").strip().lower() == "published":
+            cfg_path = target_folder / "folder_config.json"
+            append_public_change_log(
+                cfg_path,
+                make_change_log(
+                    "create_algorithm",
+                    current_user,
+                    version_after=str(payload.version or "1.0.0"),
+                    remark="新建公有算法",
+                ),
+            )
         source = _upsert_algo_meta(
             payload.code,
             func_name,
@@ -2634,6 +2816,40 @@ async def submit_algorithm_review(
     version_bump = str(body.get("version_bump") or "")
     if review_kind == "version_iteration" and public_entry is not None and not version_bump:
         version_bump = _bump_semver(public_entry.version, bump_type)
+    operator_id = str(current_user.get("id") or current_user.get("username") or "system")
+    operator_name = str(
+        current_user.get("display_name")
+        or current_user.get("displayName")
+        or current_user.get("username")
+        or operator_id
+    )
+    pending_public_logs = _entry_pending_public_change_logs(entry)
+    if not pending_public_logs:
+        if review_kind == "version_iteration" and public_entry is not None:
+            pending_public_logs = [
+                make_change_log(
+                    "edit_algorithm",
+                    current_user,
+                    version_before=str(public_entry.version or ""),
+                    version_after=str(version_bump or public_entry.version or ""),
+                    remark="编辑公有算法，等待审核发布",
+                )
+            ]
+        else:
+            target_version = str(
+                version_bump
+                or (body.get("metadata", {}) if isinstance(body.get("metadata"), dict) else {}).get("version")
+                or entry.version
+                or "1.0.0"
+            )
+            pending_public_logs = [
+                make_change_log(
+                    "create_algorithm",
+                    current_user,
+                    version_after=target_version,
+                    remark="新建公有算法，等待审核发布",
+                )
+            ]
 
     draft: dict[str, Any] = {
         "algorithm_id": entry.id,
@@ -2646,8 +2862,12 @@ async def submit_algorithm_review(
         "base_public_version": public_entry.version if review_kind == "version_iteration" and public_entry is not None else "",
         "version_bump_type": bump_type,
         "version_bump": version_bump,
+        "operator": operator_id,
+        "operator_name": operator_name,
+        "operator_role": str(current_user.get("role") or ""),
         "metadata": body.get("metadata") if isinstance(body.get("metadata"), dict) else {},
         "files": existing["files"],
+        "pendingPublicChangeLogs": pending_public_logs,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     _save_review_draft(entry, draft)
@@ -2814,26 +3034,103 @@ async def publish_algorithm(
     entry = registry.get_by_id(_normalize_call_namespace(algorithm_id)) or registry.get_by_id(algorithm_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"算法不存在：{algorithm_id}")
-    result = await _do_publish_algorithm(entry, registry)
+    try:
+        body: dict[str, Any] = await request.json()
+    except Exception:
+        body = {}
+    result = await _do_publish_algorithm(entry, registry, body)
     return {"success": True, "algorithm": _entry_dict(result)}
 
 
 async def _do_publish_algorithm(
     entry: AlgorithmEntry,
     registry: AlgorithmRegistry,
+    body: dict[str, Any] | None = None,
 ) -> AlgorithmEntry:
     """Core publish logic shared by approve (auto-publish) and publish endpoints."""
 
+    body = body or {}
     draft = _load_review_draft(entry)
+    if not draft:
+        target_public = _entry_target_public(entry)
+        target_public_id = str(target_public.get("target_public_id") or "")
+        target_public_call_prefix = str(target_public.get("target_public_call_prefix") or "")
+        if target_public_id:
+            public_entry = _entry_by_owner(registry, target_public_id, "system") or registry.get_by_id(target_public_id)
+            if public_entry is None:
+                raise HTTPException(status_code=404, detail="没有找到要迭代的公有算法")
+            bump_type = str(body.get("version_bump_type") or body.get("version_change") or "patch")
+            version_bump = str(body.get("version_bump") or body.get("target_version") or _bump_semver(public_entry.version or "1.0.0", bump_type))
+            body_metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+            pending_public_logs = _entry_pending_public_change_logs(entry)
+            if not pending_public_logs:
+                pending_public_logs = [
+                    make_change_log(
+                        "edit_algorithm",
+                        None,
+                        version_before=str(public_entry.version or ""),
+                        version_after=str(version_bump or public_entry.version or ""),
+                        remark="编辑公有算法，等待审核发布",
+                    )
+                ]
+            draft = {
+                "algorithm_id": entry.id,
+                "call_prefix": entry.call_prefix,
+                "base_status": _read_entry_publish_status(entry),
+                "status": "reviewing",
+                "review_kind": "version_iteration",
+                "target_public_id": public_entry.id,
+                "target_public_call_prefix": target_public_call_prefix or public_entry.call_prefix,
+                "base_public_version": public_entry.version,
+                "version_bump_type": bump_type,
+                "version_bump": version_bump,
+                "metadata": {
+                    "zh_name": body_metadata.get("zh_name") or entry.zh_name,
+                    "zh_description": body_metadata.get("zh_description") or entry.zh_description,
+                    "zh_tags": body_metadata.get("zh_tags") if isinstance(body_metadata.get("zh_tags"), list) else entry.zh_tags,
+                    "version": version_bump,
+                    "input_example": entry.input_example,
+                    "widget_overrides": getattr(entry, "widget_overrides", {}) or {},
+                },
+                "files": [
+                    {"filename": file.get("filename"), "relative_path": file.get("relative_path"), "content": file.get("content")}
+                    for file in _folder_files_for_entry(entry)
+                ],
+                "pendingPublicChangeLogs": pending_public_logs,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            _save_review_draft(entry, draft)
     if draft and draft.get("review_kind") == "version_iteration":
         target_public_id = str(draft.get("target_public_id") or entry.id)
         public_entry = _entry_by_owner(registry, target_public_id, "system") or registry.get_by_id(target_public_id)
         if public_entry is None:
             raise HTTPException(status_code=404, detail="没有找到要迭代的公有算法")
+        from_version = str(public_entry.version or draft.get("base_public_version") or "")
         metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
         if draft.get("version_bump"):
             metadata["version"] = str(draft.get("version_bump"))
+        to_version = str(metadata.get("version") or draft.get("version_bump") or from_version)
+        fallback_log = make_change_log(
+            "edit_algorithm",
+            _change_log_user_from_draft(draft),
+            version_before=from_version,
+            version_after=to_version,
+            remark="本次编辑已审核发布",
+        )
+        public_logs = _normalize_pending_public_logs_for_publish(
+            draft.get("pendingPublicChangeLogs"),
+            fallback_log,
+            from_version,
+            to_version,
+            "本次编辑已审核发布",
+        )
         public_entry = _apply_review_files_to_entry(public_entry, draft.get("files", []), metadata, registry)
+        public_entry = _write_entry_publish_metadata(public_entry, metadata, registry)
+        merge_pending_public_change_logs_to_public(
+            _entry_config_path(public_entry),
+            fallback_log=fallback_log,
+            pending_logs=public_logs,
+        )
         public_entry = _update_publish_status(public_entry, "published", registry)
         _delete_review_draft(entry)
         # Delete the private draft entry (no longer needed after version iteration)
@@ -2928,6 +3225,31 @@ async def _do_publish_algorithm(
                     entry = _entry_by_owner(registry, entry.id, "system") or registry.get_by_id(entry.id) or entry
             except (OSError, json.JSONDecodeError) as exc:
                 raise HTTPException(status_code=500, detail=f"发布算法失败（无法移除私有标记）: {exc}") from exc
+    if draft:
+        metadata = draft.get("metadata") if isinstance(draft.get("metadata"), dict) else {}
+        to_version = str(metadata.get("version") or draft.get("version_bump") or entry.version or "1.0.0")
+        fallback_log = make_change_log(
+            "create_algorithm",
+            _change_log_user_from_draft(draft),
+            version_after=to_version,
+            remark="本次新建已审核发布",
+        )
+        public_logs = _normalize_pending_public_logs_for_publish(
+            draft.get("pendingPublicChangeLogs"),
+            fallback_log,
+            "",
+            to_version,
+            "本次新建已审核发布",
+        )
+        try:
+            merge_pending_public_change_logs_to_public(
+                _entry_config_path(entry),
+                fallback_log=fallback_log,
+                pending_logs=public_logs,
+            )
+        except OSError:
+            pass
+        _delete_review_draft(entry)
     return _update_publish_status(entry, "published", registry)
 
 
@@ -3001,6 +3323,18 @@ async def admin_publish_algorithm(
         "zh_tags": metadata_override.get("zh_tags") if isinstance(metadata_override.get("zh_tags"), list) else (existing_metadata.get("zh_tags") if isinstance(existing_metadata.get("zh_tags"), list) else (entry.zh_tags or [])),
         "version": version_bump or entry.version or "1.0.0",
     }
+    existing_pending_logs = existing_draft.get("pendingPublicChangeLogs") if isinstance(existing_draft, dict) else None
+    pending_public_logs = [item for item in existing_pending_logs if isinstance(item, dict)] if isinstance(existing_pending_logs, list) else _entry_pending_public_change_logs(entry)
+    if not pending_public_logs:
+        pending_public_logs = [
+            make_change_log(
+                "edit_algorithm" if is_iteration else "create_algorithm",
+                current_user,
+                version_before=str(public_entry.version if is_iteration and public_entry else ""),
+                version_after=str(metadata.get("version") or ""),
+                remark="编辑公有算法，等待审核发布" if is_iteration else "新建公有算法，等待审核发布",
+            )
+        ]
 
     synthetic_draft: dict[str, Any] = {
         "algorithm_id": entry.id,
@@ -3015,6 +3349,10 @@ async def admin_publish_algorithm(
         "version_bump_type": str(body.get("version_bump_type") or "patch"),
         "metadata": metadata,
         "files": draft_files,
+        "operator": str(current_user.get("id") or current_user.get("username") or "admin"),
+        "operator_name": str(current_user.get("display_name") or current_user.get("displayName") or current_user.get("username") or current_user.get("id") or "admin"),
+        "operator_role": str(current_user.get("role") or "admin"),
+        "pendingPublicChangeLogs": pending_public_logs,
         "approved_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -3246,6 +3584,7 @@ async def save_algorithm_folder_file(
             )
         except HTTPException:
             raise
+        _append_algorithm_change_log_for_save(entry, current_user, force_pending=True)
         merged_files = _merge_review_draft_files(entry, files)
         return {"success": True, "algorithm": _entry_dict(entry), "folder_files": merged_files, "is_draft_mode": True}
     try:
@@ -3281,6 +3620,7 @@ async def save_algorithm_folder_file(
         )
     except HTTPException:
         raise
+    _append_algorithm_change_log_for_save(refreshed, current_user)
     sse_manager.broadcast({"event": "updated", "file": str(target), "algorithms": registry.to_completion_json()})
     return {"success": True, "algorithm": _entry_dict(refreshed), "folder_files": _folder_files_for_entry(refreshed)}
 

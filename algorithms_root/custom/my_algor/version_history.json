@@ -216,5 +216,1257 @@
       "targetPublicId": "",
       "targetPublicCallPrefix": ""
     }
+  },
+  {
+    "version_id": "ver_0004",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T07:29:07.972606+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0005",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T07:51:39.765910+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0006",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T08:38:20.962430+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0007",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T08:39:19.630339+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0008",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T09:04:54.414593+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0009",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T09:05:14.153460+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0010",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T09:34:43.391806+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0011",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T09:34:55.155902+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0012",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T09:37:18.969935+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0013",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T09:45:15.855467+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0014",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "version.iterated",
+    "operator": "system",
+    "timestamp": "2026-06-03T09:45:42.478827+00:00",
+    "note": "Version iteration from alg.custom.my_algor",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0015",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.0",
+    "action": "package.file.saved",
+    "operator": "system",
+    "timestamp": "2026-06-03T09:46:24.632074+00:00",
+    "note": "Saved main.py",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "自定义算法",
+      "categoryNamespace": "custom",
+      "version": "1.0.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0016",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.1",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T11:36:01.709357+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "my_algor",
+      "categoryNamespace": "custom",
+      "version": "1.0.1",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [
+        {
+          "id": "log_2502d950408e",
+          "operatorId": "usr_admin",
+          "operatorName": "管理员",
+          "operatorRole": "admin",
+          "action": "edit_algorithm",
+          "actionText": "编辑算法",
+          "time": "2026-06-03T09:46:24.638035+00:00",
+          "versionBefore": "1.0.0",
+          "versionAfter": "1.0.0",
+          "remark": "编辑公有算法"
+        }
+      ],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0017",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.2",
+    "action": "version.iterated",
+    "operator": "system",
+    "timestamp": "2026-06-03T11:37:07.906322+00:00",
+    "note": "Version iteration from alg.custom.my_algor",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n        \n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n        \n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "my_algor",
+      "categoryNamespace": "custom",
+      "version": "1.0.2",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [
+        {
+          "id": "log_2502d950408e",
+          "operatorId": "usr_admin",
+          "operatorName": "管理员",
+          "operatorRole": "admin",
+          "action": "edit_algorithm",
+          "actionText": "编辑算法",
+          "time": "2026-06-03T09:46:24.638035+00:00",
+          "versionBefore": "1.0.0",
+          "versionAfter": "1.0.0",
+          "remark": "编辑公有算法"
+        }
+      ],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0018",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.0.2",
+    "action": "package.created",
+    "operator": "system",
+    "timestamp": "2026-06-03T11:37:22.002678+00:00",
+    "note": "Created multi-file package",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n        \n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),\n        \n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "my_algor",
+      "categoryNamespace": "custom",
+      "version": "1.0.2",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [
+        {
+          "id": "log_2502d950408e",
+          "operatorId": "usr_admin",
+          "operatorName": "管理员",
+          "operatorRole": "admin",
+          "action": "edit_algorithm",
+          "actionText": "编辑算法",
+          "time": "2026-06-03T09:46:24.638035+00:00",
+          "versionBefore": "1.0.0",
+          "versionAfter": "1.0.0",
+          "remark": "编辑公有算法"
+        }
+      ],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
+  },
+  {
+    "version_id": "ver_0019",
+    "algorithm_id": "custom.my_algor",
+    "call_prefix": "alg.custom.my_algor",
+    "version": "1.1.0",
+    "action": "version.iterated",
+    "operator": "system",
+    "timestamp": "2026-06-03T11:37:34.018461+00:00",
+    "note": "Version iteration from alg.custom.my_algor",
+    "files": [
+      {
+        "relative_path": "main.py",
+        "content": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),        \n    }\n"
+      },
+      {
+        "relative_path": "utils.py",
+        "content": "# 辅助工具模块\n"
+      }
+    ],
+    "metadata": {
+      "id": "custom.my_algor",
+      "registryId": "custom.my_algor",
+      "callPrefix": "alg.custom.my_algor",
+      "callSnippet": "alg.custom.my_algor(${1:data}, ${2:threshold})",
+      "snippetBody": "def my_algor(data: list, threshold: float = 0.5) -> dict:\n    \"\"\"在这里编写算法逻辑。\n\n    Args:\n        data: 输入数据。\n        threshold: 阈值参数。\n    \"\"\"\n    passed = [item for item in data if float(item) >= threshold]\n    return {\n        \"input_count\": len(data),\n        \"passed_count\": len(passed),        \n    }",
+      "type": "component",
+      "moduleKind": "component",
+      "lifecycleStatus": "published",
+      "publishStatus": "published",
+      "hasReviewDraft": false,
+      "reviewStatus": "",
+      "apiPath": "/api/v1/invoke/alg.custom.my_algor",
+      "externalApiPath": "/api/external/v1/custom/my_algor",
+      "displayNamespace": "alg.custom.my_algor",
+      "zhName": "my_algor",
+      "zhDescription": "在这里编写算法逻辑。",
+      "zhTags": [],
+      "inputExample": "",
+      "widgetOverrides": {},
+      "enDescription": "在这里编写算法逻辑。",
+      "params": [
+        {
+          "name": "data",
+          "type": "list",
+          "default": null,
+          "description": "输入数据。",
+          "widget_hint": "list"
+        },
+        {
+          "name": "threshold",
+          "type": "float",
+          "default": "0.5",
+          "description": "阈值参数。",
+          "widget_hint": "float"
+        }
+      ],
+      "namespace": "custom",
+      "categoryZhName": "my_algor",
+      "categoryNamespace": "custom",
+      "version": "1.1.0",
+      "funcName": "my_algor",
+      "packageId": "custom.my_algor",
+      "packageRoot": "E:\\code-server-me\\algorithms_root\\custom\\my_algor",
+      "sourceFile": "E:\\code-server-me\\algorithms_root\\custom\\my_algor\\main.py",
+      "ownerId": "system",
+      "contributors": [],
+      "privateChangeLogs": [],
+      "publicChangeLogs": [
+        {
+          "id": "log_2502d950408e",
+          "operatorId": "usr_admin",
+          "operatorName": "管理员",
+          "operatorRole": "admin",
+          "action": "edit_algorithm",
+          "actionText": "编辑算法",
+          "time": "2026-06-03T09:46:24.638035+00:00",
+          "versionBefore": "1.0.0",
+          "versionAfter": "1.0.0",
+          "remark": "编辑公有算法"
+        }
+      ],
+      "pendingPublicChangeLogs": [],
+      "rejectReason": "",
+      "reviewKind": "",
+      "targetPublicId": "",
+      "targetPublicCallPrefix": ""
+    }
   }
 ]
